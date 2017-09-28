@@ -47,7 +47,7 @@ impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>>
 
     pub fn create_with_path(path: &Path, handle: &Handle, params: CreateParams) -> io::Result<UHIDDevice<PollEventedRead<RawDeviceFile<File>>>> {
         let fd = fcntl::open(path, fcntl::O_RDWR | fcntl::O_CLOEXEC | fcntl::O_NONBLOCK, nix::sys::stat::S_IRUSR | nix::sys::stat::S_IWUSR | nix::sys::stat::S_IRGRP | nix::sys::stat::S_IWGRP).map_err(|err| io::Error::new(io::ErrorKind::Other, format!("Cannot open uhid-cdev {}: {}", path.to_str().unwrap(), err)))?;
-        let mut file: File = unsafe { File::from_raw_fd(fd) };
+        let file: File = unsafe { File::from_raw_fd(fd) };
         let device_file: RawDeviceFile<File> = RawDeviceFile::new(file);
         let io: PollEventedRead<RawDeviceFile<File>> = device_file.into_io(handle)?;
         Ok(Self::create_with(io, params))
