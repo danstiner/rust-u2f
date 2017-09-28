@@ -1,7 +1,15 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
-name = "uhid"
+name = "tokio-uhid"
 version = "0.1.0"
+[build-dependencies]
+bindgen = "0.29.0"
 
 [dependencies]
+bitflags = "1.0.0"
+bytes = "0.4.5"
+futures = "0.1.15"
+quick-error = "1.2.1"
 tokio-core = "0.1.9"
+tokio-file-unix = "0.4.0"
+tokio-io = "0.1.3"
