@@ -2,7 +2,7 @@ use std::{fmt, io};
 
 use tokio_io::{AsyncRead, AsyncWrite};
 use futures::{Async, AsyncSink, Poll, Stream, Sink, StartSend};
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BytesMut};
 
 /// Decoding of frames via buffers.
 ///
@@ -159,12 +159,6 @@ impl<T, E, D> Sink for RawDevice<T, E, D>
     type SinkError = E::Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        match self.inner.flush() {
-            Ok(()) => {},
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => return Ok(AsyncSink::NotReady(item)),
-            Err(e) => return Err(e.into()),
-        };
-
         let mut buffer = BytesMut::new();
         try!(self.encoder.encode(item, &mut buffer));
         let bytes = buffer.take();

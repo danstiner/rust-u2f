@@ -6,13 +6,16 @@ extern crate futures;
 #[macro_use]
 extern crate quick_error;
 extern crate tokio_core;
-#[macro_use]
 extern crate tokio_io;
 extern crate tokio_file_unix;
+extern crate mio;
+extern crate nix;
 
+mod raw_device_file;
 mod raw_device;
 mod uhid_codec;
 mod uhid_device;
+mod poll_evented_read_wrapper;
 
 pub use uhid_device::UHIDDevice;
 pub use uhid_device::CreateParams;
