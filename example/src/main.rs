@@ -5,6 +5,7 @@ extern crate futures;
 use std::io;
 
 use futures::future::Future;
+
 use tokio_uhid::{Bus, CreateParams, UHIDDevice};
 
 const RDESC: [u8; 85] = [
