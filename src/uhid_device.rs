@@ -1,24 +1,19 @@
 // use std::io;
 use std::path::Path;
 use std::fs::File;
-use std::fs::OpenOptions;
 use std::os::unix::io::FromRawFd;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 
-use mio::unix::EventedFd;
-use tokio_core::reactor::{Handle, PollEvented};
-use tokio_core;
-use tokio_file_unix;
+use tokio_core::reactor::Handle;
 use futures;
-use futures::{future, Future};
-use futures::{Async, stream, Stream, Sink, IntoFuture, Poll, StartSend};
+use futures::Future;
+use futures::{Stream, Sink, Poll, StartSend};
 use tokio_io::{AsyncRead, AsyncWrite};
 use nix::fcntl;
 use nix;
-use mio::event::Evented;
 
 use uhid_codec::*;
-use raw_device::{Encoder, Decoder, RawDevice};
+use raw_device::{Encoder, RawDevice};
 use raw_device_file::RawDeviceFile;
 use poll_evented_read_wrapper::PollEventedRead;
 

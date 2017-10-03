@@ -13,7 +13,6 @@ use futures::{Async, Poll};
 use mio::event::Evented;
 use mio::Ready;
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_core;
 use tokio_core::reactor::{Handle, Remote, PollEvented};
 
 /// A concrete implementation of a stream of readiness notifications for I/O

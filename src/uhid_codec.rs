@@ -5,10 +5,6 @@ use std::mem;
 use std::slice;
 
 use bytes::BytesMut;
-use tokio_core::io::{Io, Codec, EasyBuf};
-use tokio_io::{AsyncRead, AsyncWrite};
-use futures::{future, Future};
-use futures::{stream, Stream, Sink, IntoFuture, Poll};
 
 use raw_device::{Encoder, Decoder};
 use uhid_linux_bindings as bindings;

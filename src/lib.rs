@@ -7,7 +7,6 @@ extern crate futures;
 extern crate quick_error;
 extern crate tokio_core;
 extern crate tokio_io;
-extern crate tokio_file_unix;
 extern crate mio;
 extern crate nix;
 extern crate uhid_linux_bindings;

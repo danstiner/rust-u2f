@@ -1,11 +1,8 @@
-// use std::io;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::io::{self, Read, Write};
+use std::io;
 
-use bytes::{BufMut, BytesMut};
 use mio;
 use tokio_core::reactor::{Handle, PollEvented};
-use tokio_io::{AsyncRead, AsyncWrite};
 
 use poll_evented_read_wrapper::PollEventedRead;
 
