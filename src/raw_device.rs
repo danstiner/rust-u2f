@@ -1,21 +1,18 @@
 use std::{fmt, io};
+use std::io::Write;
 
-use tokio_io::{AsyncRead, AsyncWrite};
-use futures::{Async, AsyncSink, Poll, Stream, Sink, StartSend};
 use bytes::{Buf, BytesMut};
+use futures::{Async, Poll, Stream};
+use tokio_io::{AsyncRead};
 
-/// Decoding of frames via buffers.
+/// Decoding of items in buffers.
 ///
-/// This trait is used when constructing an instance of `Framed` or
-/// `FramedRead`. An implementation of `Decoder` takes a byte stream that has
-/// already been buffered in `src` and decodes the data into a stream of
-/// `Self::Item` frames.
+/// An implementation of `Decoder` takes a buffer of bytes and is expected
+/// to decode exactly one item. Any other result should be considered an error.
 ///
-/// Implementations are able to track state on `self`, which enables
-/// implementing stateful streaming parsers. In many cases, though, this type
-/// will simply be a unit struct (e.g. `struct HttpDecoder`).
+/// Implementations are able to track state on `self`.
 pub trait Decoder {
-    /// The type of decoded frames.
+    /// The type of decoded items.
     type Item;
 
     /// The type of unrecoverable frame decoding errors.
@@ -63,25 +60,38 @@ pub trait Decoder {
     fn read_len(&self) -> usize;
 }
 
-/// Trait of helper objects to write out messages as bytes, for use with
-/// `FramedWrite`.
+/// Trait of helper objects to write out items as bytes.
 pub trait Encoder {
     /// The type of items consumed by the `Encoder`
     type Item;
 
     /// The type of encoding errors.
     ///
-    /// `FramedWrite` requires `Encoder`s errors to implement `From<io::Error>`
-    /// in the interest letting it return `Error`s directly.
+    /// Required to implement `From<io::Error>` so it can be
+    /// used as the error type of a Sink that does I/O.
     type Error: From<io::Error>;
 
-    /// Encodes a frame into the buffer provided.
+    /// Encodes an item into the buffer provided.
     ///
-    /// This method will encode `msg` into the byte buffer provided by `buf`.
-    /// The `buf` provided is an internal buffer of the `Framed` instance and
-    /// will be written out when possible.
-    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut)
+    /// This method will encode `item` into the byte buffer provided by `buf`.
+    /// The `buf` provided may be re-used for subsequent encodings.
+    fn encode(&mut self, item: Self::Item, buf: &mut BytesMut)
               -> Result<(), Self::Error>;
+}
+
+/// Synchronous sink for items
+pub trait SyncSink {
+    type SinkItem;
+    type SinkError;
+
+    fn send(
+        &mut self, 
+        item: Self::SinkItem
+    ) -> Result<(), Self::SinkError>;
+
+    fn close(&mut self) -> Result<(), Self::SinkError> {
+        Ok(())
+    }
 }
 
 pub struct RawDevice<T, E, D> {
@@ -93,7 +103,7 @@ pub struct RawDevice<T, E, D> {
 // ===== impl RawDevice =====
 
 impl<T, E, D> RawDevice<T, E, D>
-    where T: AsyncRead + AsyncWrite,
+    where T: AsyncRead + Write,
           E: Encoder,
           D: Decoder,
 {
@@ -107,23 +117,13 @@ impl<T, E, D> RawDevice<T, E, D>
 }
 
 
-impl<T: io::Write, E, D> io::Write for RawDevice<T, E, D> {
+impl<T: Write, E, D> Write for RawDevice<T, E, D> {
     fn write(&mut self, src: &[u8]) -> io::Result<usize> {
         self.inner.write(src)
     }
 
     fn flush(&mut self) -> io::Result<()> {
         self.inner.flush()
-    }
-}
-
-impl<T: AsyncWrite, E, D> AsyncWrite for RawDevice<T, E, D> {
-    fn shutdown(&mut self) -> Poll<(), io::Error> {
-        self.inner.shutdown()
-    }
-
-    fn write_buf<B: Buf>(&mut self, buf: &mut B) -> Poll<usize, io::Error> {
-        self.inner.write_buf(buf)
     }
 }
 
@@ -151,33 +151,24 @@ impl<T, E, D> Stream for RawDevice<T, E, D>
     }
 }
 
-impl<T, E, D> Sink for RawDevice<T, E, D>
-    where T: AsyncWrite,
+impl<T, E, D> SyncSink for RawDevice<T, E, D>
+    where T: Write,
           E: Encoder,
 {
     type SinkItem = E::Item;
     type SinkError = E::Error;
 
-    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+    fn send(&mut self, item: Self::SinkItem) -> Result<(), Self::SinkError> {
         let mut buffer = BytesMut::new();
         try!(self.encoder.encode(item, &mut buffer));
         let bytes = buffer.take();
 
         match self.inner.write(&bytes) {
-            Ok(0) =>  Err(io::Error::new(io::ErrorKind::WriteZero, "failed to write frame to transport").into()),
-            Ok(n) if n == bytes.len() => Ok(AsyncSink::Ready),
-            Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "failed to write entire frame to transport").into()),
+            Ok(0) =>  Err(io::Error::new(io::ErrorKind::WriteZero, "failed to write item to transport").into()),
+            Ok(n) if n == bytes.len() => Ok(()),
+            Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "failed to write entire item to transport").into()),
             Err(e) => Err(e.into()),
         }
-    }
-
-    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        Ok(Async::Ready(()))
-    }
-
-    fn close(&mut self) -> Poll<(), Self::SinkError> {
-        try_ready!(self.poll_complete());
-        Ok(try!(self.inner.shutdown()))
     }
 }
 
@@ -187,7 +178,7 @@ impl<T, E, D> fmt::Debug for RawDevice<T, E, D>
           D: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("FramedRead")
+        f.debug_struct("RawDevice")
             .field("inner", &self.inner)
             .field("encoder", &self.encoder)
             .field("decoder", &self.decoder)

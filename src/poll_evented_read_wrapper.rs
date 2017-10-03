@@ -9,10 +9,10 @@
 use std::fmt;
 use std::io::{self, Read, Write};
 
-use futures::{Async, Poll};
+use futures::Async;
 use mio::event::Evented;
 use mio::Ready;
-use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_io::{AsyncRead};
 use tokio_core::reactor::{Handle, Remote, PollEvented};
 
 /// A concrete implementation of a stream of readiness notifications for I/O
@@ -223,10 +223,4 @@ impl<E: Write> Write for PollEventedRead<E> {
 }
 
 impl<E: Read> AsyncRead for PollEventedRead<E> {
-}
-
-impl<E: Write> AsyncWrite for PollEventedRead<E> {
-    fn shutdown(&mut self) -> Poll<(), io::Error> {
-        Ok(().into())
-    }
 }

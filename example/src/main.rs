@@ -4,8 +4,6 @@ extern crate uhid_linux_tokio;
 
 use std::io;
 
-use futures::future::Future;
-
 use uhid_linux_tokio::{Bus, CreateParams, UHIDDevice};
 
 const RDESC: [u8; 85] = [
@@ -81,6 +79,6 @@ fn main() {
     let mut input = String::new();
     loop {
         io::stdin().read_line(&mut input).unwrap();
-        uhid_device = uhid_device.send_input(&data).wait().unwrap();
+        uhid_device.send_input(&data).unwrap();
     }
 }

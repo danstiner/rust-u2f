@@ -13,7 +13,7 @@ use nix::fcntl;
 use nix;
 
 use uhid_codec::*;
-use raw_device::{Encoder, RawDevice};
+use raw_device::{Encoder, RawDevice, SyncSink};
 use raw_device_file::RawDeviceFile;
 use poll_evented_read_wrapper::PollEventedRead;
 
@@ -32,6 +32,7 @@ pub struct CreateParams {
     pub country: u32,
     pub data: Vec<u8>,
 }
+
 // ===== impl UHIDDevice =====
 
 impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>>
@@ -50,13 +51,13 @@ impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>>
 }
 
 impl<T> UHIDDevice<T>
-    where T: AsyncRead + AsyncWrite,
+    where T: AsyncRead + Write,
 {
     fn create_with(inner: T, params: CreateParams) -> UHIDDevice<T> {
-        let device = UHIDDevice {
-            inner: RawDevice::new(inner, UHIDCodec, UHIDCodec),
+        let mut device = UHIDDevice {
+                inner: RawDevice::new(inner, UHIDCodec, UHIDCodec)
         };
-        device.send(InputEvent::Create {
+        device.inner.send(InputEvent::Create {
             name: params.name,
             phys: params.phys,
             uniq: params.uniq,
@@ -66,30 +67,17 @@ impl<T> UHIDDevice<T>
             version: params.version,
             country: params.country,
             data: params.data,
-        }).wait().unwrap()
+        }).unwrap();
+        device
     }
 
-    pub fn send_input(self, data: &[u8]) -> futures::sink::Send<Self> {
-        self.send(InputEvent::Input { data: data.to_vec() })
-    }
-}
-
-impl<T> Sink for UHIDDevice<T>
-    where T: AsyncWrite,
-{
-    type SinkItem = <UHIDCodec as Encoder>::Item;
-    type SinkError = <UHIDCodec as Encoder>::Error;
-
-    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        self.inner.start_send(item)
+    pub fn send_input(&mut self, data: &[u8]) -> Result<(), <UHIDCodec as Encoder>::Error> {
+        self.inner.send(InputEvent::Input { data: data.to_vec() })
     }
 
-    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        self.inner.poll_complete()
-    }
-
-    fn close(&mut self) -> Poll<(), Self::SinkError> {
-        self.send(InputEvent::Destroy).wait()?;
-        Ok(try!(self.inner.shutdown()))
+    pub fn destory(mut self) -> Result<(), <UHIDCodec as Encoder>::Error> {
+        self.inner.send(InputEvent::Destroy)?;
+        self.inner.close()?;
+        Ok(())
     }
 }
