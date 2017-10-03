@@ -10,6 +10,7 @@ extern crate tokio_io;
 extern crate tokio_file_unix;
 extern crate mio;
 extern crate nix;
+extern crate uhid_linux_bindings;
 
 mod raw_device_file;
 mod raw_device;

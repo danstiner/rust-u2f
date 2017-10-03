@@ -11,10 +11,7 @@ use futures::{future, Future};
 use futures::{stream, Stream, Sink, IntoFuture, Poll};
 
 use raw_device::{Encoder, Decoder};
-
-mod bindings {
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-}
+use uhid_linux_bindings as bindings;
 
 quick_error! {
     #[derive(Debug)]

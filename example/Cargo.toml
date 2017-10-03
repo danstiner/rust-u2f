@@ -4,8 +4,8 @@ name = "example"
 version = "0.1.0"
 
 [dependencies]
-futures = "0.1.16"
+futures = "0.1.15"
 tokio-core = "0.1.9"
 
-[dependencies.tokio-uhid]
+[dependencies.uhid-linux-tokio]
 path = "../"
