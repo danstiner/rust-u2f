@@ -13,7 +13,7 @@ use nix::fcntl;
 use nix;
 
 use uhid_codec::*;
-use raw_device::{Encoder, RawDevice, SyncSink};
+use raw_device::{Encoder, Decoder, RawDevice, SyncSink};
 use raw_device_file::RawDeviceFile;
 use poll_evented_read_wrapper::PollEventedRead;
 
@@ -79,5 +79,16 @@ impl<T> UHIDDevice<T>
         self.inner.send(InputEvent::Destroy)?;
         self.inner.close()?;
         Ok(())
+    }
+}
+
+impl<T> Stream for UHIDDevice<T>
+    where T: AsyncRead,
+{
+    type Item = <UHIDCodec as Decoder>::Item;
+    type Error = <UHIDCodec as Decoder>::Error;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        self.inner.poll()
     }
 }
