@@ -1,0 +1,17 @@
+[package]
+authors = ["Daniel Stiner <danstiner@gmail.com>"]
+name = "uhid-linux-tokio"
+version = "0.1.0"
+
+[dependencies]
+bitflags = "1.0.0"
+bytes = "0.4.5"
+futures = "0.1.15"
+mio = "0.6.10"
+nix = "0.9.0"
+quick-error = "1.2.1"
+tokio-core = "0.1.9"
+tokio-io = "0.1.3"
+
+[dependencies.uhid-linux-bindings]
+path = "../uhid-linux-bindings"
