@@ -1,9 +1,10 @@
-use std::{fmt, io};
+use std::fmt;
+use std::io;
 use std::io::Write;
 
-use bytes::{Buf, BytesMut};
+use bytes::BytesMut;
 use futures::{Async, Poll, Stream};
-use tokio_io::{AsyncRead};
+use tokio_io::AsyncRead;
 
 /// Decoding of items in buffers.
 ///
@@ -75,8 +76,7 @@ pub trait Encoder {
     ///
     /// This method will encode `item` into the byte buffer provided by `buf`.
     /// The `buf` provided may be re-used for subsequent encodings.
-    fn encode(&mut self, item: Self::Item, buf: &mut BytesMut)
-              -> Result<(), Self::Error>;
+    fn encode(&mut self, item: Self::Item, buf: &mut BytesMut) -> Result<(), Self::Error>;
 }
 
 /// Synchronous sink for items
@@ -84,10 +84,7 @@ pub trait SyncSink {
     type SinkItem;
     type SinkError;
 
-    fn send(
-        &mut self, 
-        item: Self::SinkItem
-    ) -> Result<(), Self::SinkError>;
+    fn send(&mut self, item: Self::SinkItem) -> Result<(), Self::SinkError>;
 
     fn close(&mut self) -> Result<(), Self::SinkError> {
         Ok(())
@@ -103,9 +100,10 @@ pub struct RawDevice<T, E, D> {
 // ===== impl RawDevice =====
 
 impl<T, E, D> RawDevice<T, E, D>
-    where T: AsyncRead + Write,
-          E: Encoder,
-          D: Decoder,
+where
+    T: AsyncRead + Write,
+    E: Encoder,
+    D: Decoder,
 {
     pub fn new(inner: T, encoder: E, decoder: D) -> RawDevice<T, E, D> {
         RawDevice {
@@ -115,7 +113,6 @@ impl<T, E, D> RawDevice<T, E, D>
         }
     }
 }
-
 
 impl<T: Write, E, D> Write for RawDevice<T, E, D> {
     fn write(&mut self, src: &[u8]) -> io::Result<usize> {
@@ -128,8 +125,9 @@ impl<T: Write, E, D> Write for RawDevice<T, E, D> {
 }
 
 impl<T, E, D> Stream for RawDevice<T, E, D>
-    where T: AsyncRead,
-          D: Decoder,
+where
+    T: AsyncRead,
+    D: Decoder,
 {
     type Item = D::Item;
     type Error = D::Error;
@@ -141,19 +139,22 @@ impl<T, E, D> Stream for RawDevice<T, E, D>
             Ok(0) => Ok(Async::Ready(None)),
             Ok(n) => {
                 if n != read_len {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, "short read").into())
+                    return Err(
+                        io::Error::new(io::ErrorKind::InvalidData, "short read").into(),
+                    );
                 }
                 let frame = self.decoder.decode(&mut buffer)?;
                 return Ok(Async::Ready(Some(frame)));
-            },
+            }
             Err(e) => return Err(e.into()),
         }
     }
 }
 
 impl<T, E, D> SyncSink for RawDevice<T, E, D>
-    where T: Write,
-          E: Encoder,
+where
+    T: Write,
+    E: Encoder,
 {
     type SinkItem = E::Item;
     type SinkError = E::Error;
@@ -164,18 +165,29 @@ impl<T, E, D> SyncSink for RawDevice<T, E, D>
         let bytes = buffer.take();
 
         match self.inner.write(&bytes) {
-            Ok(0) =>  Err(io::Error::new(io::ErrorKind::WriteZero, "failed to write item to transport").into()),
+            Ok(0) => Err(
+                io::Error::new(
+                    io::ErrorKind::WriteZero,
+                    "failed to write item to transport",
+                ).into(),
+            ),
             Ok(n) if n == bytes.len() => Ok(()),
-            Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "failed to write entire item to transport").into()),
+            Ok(_) => Err(
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    "failed to write entire item to transport",
+                ).into(),
+            ),
             Err(e) => Err(e.into()),
         }
     }
 }
 
 impl<T, E, D> fmt::Debug for RawDevice<T, E, D>
-    where T: fmt::Debug,
-          E: fmt::Debug,
-          D: fmt::Debug,
+where
+    T: fmt::Debug,
+    E: fmt::Debug,
+    D: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("RawDevice")

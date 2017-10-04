@@ -86,15 +86,8 @@ pub enum InputEvent {
     },
     Destroy,
     Input { data: Vec<u8> },
-    GetReportReply {
-        id: u32,
-        err: u16,
-        data: Vec<u8>,
-    },
-    SetReportReply {
-        id: u32,
-        err: u16,
-    }
+    GetReportReply { id: u32, err: u16, data: Vec<u8> },
+    SetReportReply { id: u32, err: u16 },
 }
 
 pub enum OutputEvent {
@@ -113,7 +106,7 @@ pub enum OutputEvent {
         report_number: u8,
         report_type: ReportType,
         data: Vec<u8>,
-    }
+    },
 }
 
 #[derive(Debug, Default)]
@@ -236,7 +229,8 @@ fn decode_event(event: bindings::uhid_event) -> Result<OutputEvent, StreamError>
                 OutputEvent::GetReport {
                     id: payload.id,
                     report_number: payload.rnum,
-                    report_type: mem::transmute(payload.rtype) }
+                    report_type: mem::transmute(payload.rtype),
+                }
             }),
             bindings::uhid_event_type::UHID_SET_REPORT => Ok(unsafe {
                 let payload = event.u.set_report.as_ref();
@@ -247,7 +241,7 @@ fn decode_event(event: bindings::uhid_event) -> Result<OutputEvent, StreamError>
                     data: slice::from_raw_parts(
                         &payload.data[0] as *const u8,
                         payload.size as usize,
-                    ).to_vec()
+                    ).to_vec(),
                 }
             }),
             _ => Err(StreamError::UnknownEventType(event.type_)),

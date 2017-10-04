@@ -14,7 +14,7 @@ impl<F: AsRawFd> RawDeviceFile<F> {
     /// `tokio_core::reactor::Evented`
     /// ```
     pub fn new(file: F) -> Self {
-         RawDeviceFile(file)
+        RawDeviceFile(file)
     }
 
     /// Converts into a pollable object that supports `tokio_io::AsyncRead`
@@ -40,8 +40,7 @@ impl<F: AsRawFd + io::Read> RawDeviceFile<F> {
     /// fn into_reader(File<StdFile<StdinLock>>, &Handle) -> Result<impl AsyncRead + BufRead>;
     /// fn into_reader(File<impl AsRawFd + Read>, &Handle) -> Result<impl AsyncRead + BufRead>;
     /// ```
-    pub fn into_reader(self, handle: &Handle)
-                       -> io::Result<io::BufReader<PollEventedRead<Self>>> {
+    pub fn into_reader(self, handle: &Handle) -> io::Result<io::BufReader<PollEventedRead<Self>>> {
         Ok(io::BufReader::new(self.into_io(handle)?))
     }
 }
@@ -53,23 +52,28 @@ impl<F: AsRawFd> AsRawFd for RawDeviceFile<F> {
 }
 
 impl<F: AsRawFd> mio::Evented for RawDeviceFile<F> {
-    fn register(&self, poll: &mio::Poll, token: mio::Token,
-                interest: mio::Ready, opts: mio::PollOpt)
-                -> io::Result<()> {
-        mio::unix::EventedFd(&self.as_raw_fd())
-                  .register(poll, token, interest, opts)
+    fn register(
+        &self,
+        poll: &mio::Poll,
+        token: mio::Token,
+        interest: mio::Ready,
+        opts: mio::PollOpt,
+    ) -> io::Result<()> {
+        mio::unix::EventedFd(&self.as_raw_fd()).register(poll, token, interest, opts)
     }
 
-    fn reregister(&self, poll: &mio::Poll, token: mio::Token,
-                  interest: mio::Ready, opts: mio::PollOpt)
-                  -> io::Result<()> {
-        mio::unix::EventedFd(&self.as_raw_fd())
-                             .reregister(poll, token, interest, opts)
+    fn reregister(
+        &self,
+        poll: &mio::Poll,
+        token: mio::Token,
+        interest: mio::Ready,
+        opts: mio::PollOpt,
+    ) -> io::Result<()> {
+        mio::unix::EventedFd(&self.as_raw_fd()).reregister(poll, token, interest, opts)
     }
 
     fn deregister(&self, poll: &mio::Poll) -> io::Result<()> {
-        mio::unix::EventedFd(&self.as_raw_fd())
-                             .deregister(poll)
+        mio::unix::EventedFd(&self.as_raw_fd()).deregister(poll)
     }
 }
 

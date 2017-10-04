@@ -12,7 +12,7 @@ use std::io::{self, Read, Write};
 use futures::Async;
 use mio::event::Evented;
 use mio::Ready;
-use tokio_io::{AsyncRead};
+use tokio_io::AsyncRead;
 use tokio_core::reactor::{Handle, Remote, PollEvented};
 
 /// A concrete implementation of a stream of readiness notifications for I/O
@@ -65,8 +65,8 @@ pub struct PollEventedRead<E>(PollEvented<E>);
 impl<E: Evented + fmt::Debug> fmt::Debug for PollEventedRead<E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("PollEventedRead")
-         .field("0", &self.0)
-         .finish()
+            .field("0", &self.0)
+            .finish()
     }
 }
 
@@ -222,5 +222,4 @@ impl<E: Write> Write for PollEventedRead<E> {
     }
 }
 
-impl<E: Read> AsyncRead for PollEventedRead<E> {
-}
+impl<E: Read> AsyncRead for PollEventedRead<E> {}

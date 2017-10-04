@@ -32,14 +32,30 @@ pub struct CreateParams {
 
 // ===== impl UHIDDevice =====
 
-impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>>
-{
-    pub fn create(handle: &Handle, params: CreateParams) -> io::Result<UHIDDevice<PollEventedRead<RawDeviceFile<File>>>> {
+impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>> {
+    pub fn create(
+        handle: &Handle,
+        params: CreateParams,
+    ) -> io::Result<UHIDDevice<PollEventedRead<RawDeviceFile<File>>>> {
         Self::create_with_path(Path::new("/dev/uhid"), handle, params)
     }
 
-    pub fn create_with_path(path: &Path, handle: &Handle, params: CreateParams) -> io::Result<UHIDDevice<PollEventedRead<RawDeviceFile<File>>>> {
-        let fd = fcntl::open(path, fcntl::O_RDWR | fcntl::O_CLOEXEC | fcntl::O_NONBLOCK, nix::sys::stat::S_IRUSR | nix::sys::stat::S_IWUSR | nix::sys::stat::S_IRGRP | nix::sys::stat::S_IWGRP).map_err(|err| io::Error::new(io::ErrorKind::Other, format!("Cannot open uhid-cdev {}: {}", path.to_str().unwrap(), err)))?;
+    pub fn create_with_path(
+        path: &Path,
+        handle: &Handle,
+        params: CreateParams,
+    ) -> io::Result<UHIDDevice<PollEventedRead<RawDeviceFile<File>>>> {
+        let fd = fcntl::open(
+            path,
+            fcntl::O_RDWR | fcntl::O_CLOEXEC | fcntl::O_NONBLOCK,
+            nix::sys::stat::S_IRUSR | nix::sys::stat::S_IWUSR | nix::sys::stat::S_IRGRP |
+                nix::sys::stat::S_IWGRP,
+        ).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Cannot open uhid-cdev {}: {}", path.to_str().unwrap(), err),
+            )
+        })?;
         let file: File = unsafe { File::from_raw_fd(fd) };
         let device_file: RawDeviceFile<File> = RawDeviceFile::new(file);
         let io: PollEventedRead<RawDeviceFile<File>> = device_file.into_io(handle)?;
@@ -48,23 +64,25 @@ impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>>
 }
 
 impl<T> UHIDDevice<T>
-    where T: AsyncRead + Write,
+where
+    T: AsyncRead + Write,
 {
     fn create_with(inner: T, params: CreateParams) -> UHIDDevice<T> {
-        let mut device = UHIDDevice {
-                inner: RawDevice::new(inner, UHIDCodec, UHIDCodec)
-        };
-        device.inner.send(InputEvent::Create {
-            name: params.name,
-            phys: params.phys,
-            uniq: params.uniq,
-            bus: params.bus,
-            vendor: params.vendor,
-            product: params.product,
-            version: params.version,
-            country: params.country,
-            data: params.data,
-        }).unwrap();
+        let mut device = UHIDDevice { inner: RawDevice::new(inner, UHIDCodec, UHIDCodec) };
+        device
+            .inner
+            .send(InputEvent::Create {
+                name: params.name,
+                phys: params.phys,
+                uniq: params.uniq,
+                bus: params.bus,
+                vendor: params.vendor,
+                product: params.product,
+                version: params.version,
+                country: params.country,
+                data: params.data,
+            })
+            .unwrap();
         device
     }
 
@@ -80,7 +98,8 @@ impl<T> UHIDDevice<T>
 }
 
 impl<T> Stream for UHIDDevice<T>
-    where T: AsyncRead,
+where
+    T: AsyncRead,
 {
     type Item = <UHIDCodec as Decoder>::Item;
     type Error = <UHIDCodec as Decoder>::Error;
