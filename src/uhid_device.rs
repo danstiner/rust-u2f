@@ -57,9 +57,8 @@ impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>> {
             )
         })?;
         let file: File = unsafe { File::from_raw_fd(fd) };
-        let device_file: RawDeviceFile<File> = RawDeviceFile::new(file);
-        let io: PollEventedRead<RawDeviceFile<File>> = device_file.into_io(handle)?;
-        Ok(Self::create_with(io, params))
+        let device_file = RawDeviceFile::new(file);
+        Ok(Self::create_with(device_file.into_io(handle)?, params))
     }
 }
 
