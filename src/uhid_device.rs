@@ -1,21 +1,18 @@
-// use std::io;
-use std::path::Path;
 use std::fs::File;
-use std::os::unix::io::FromRawFd;
 use std::io::{self, Write};
+use std::os::unix::io::FromRawFd;
+use std::path::Path;
 
-use tokio_core::reactor::Handle;
-use futures;
-use futures::Future;
-use futures::{Stream, Sink, Poll, StartSend};
-use tokio_io::{AsyncRead, AsyncWrite};
-use nix::fcntl;
+use futures::{Stream, Poll};
 use nix;
+use nix::fcntl;
+use tokio_core::reactor::Handle;
+use tokio_io::AsyncRead;
 
-use uhid_codec::*;
-use raw_device::{Encoder, Decoder, RawDevice, SyncSink};
-use raw_device_file::RawDeviceFile;
 use poll_evented_read_wrapper::PollEventedRead;
+use raw_device_file::RawDeviceFile;
+use raw_device::{Encoder, Decoder, RawDevice, SyncSink};
+use uhid_codec::*;
 
 pub struct UHIDDevice<T> {
     inner: RawDevice<T, UHIDCodec, UHIDCodec>,
