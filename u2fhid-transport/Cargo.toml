@@ -1,6 +1,7 @@
 [package]
+authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "u2fhid-transport"
 version = "0.1.0"
-authors = ["Daniel Stiner <danstiner@gmail.com>"]
 
-[dependencies]
+[dependencies.u2fhid-transport-header]
+path = "../u2fhid-transport-header"
