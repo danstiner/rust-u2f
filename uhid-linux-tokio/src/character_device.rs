@@ -74,22 +74,22 @@ pub trait SyncSink {
     }
 }
 
-pub struct RawDevice<T, E, D> {
+pub struct CharacterDevice<T, E, D> {
     inner: T,
     encoder: E,
     decoder: D,
 }
 
-// ===== impl RawDevice =====
+// ===== impl CharacterDevice =====
 
-impl<T, E, D> RawDevice<T, E, D>
+impl<T, E, D> CharacterDevice<T, E, D>
 where
     T: AsyncRead + Write,
     E: Encoder,
     D: Decoder,
 {
-    pub fn new(inner: T, encoder: E, decoder: D) -> RawDevice<T, E, D> {
-        RawDevice {
+    pub fn new(inner: T, encoder: E, decoder: D) -> CharacterDevice<T, E, D> {
+        CharacterDevice {
             inner: inner,
             encoder: encoder,
             decoder: decoder,
@@ -97,7 +97,7 @@ where
     }
 }
 
-impl<T: Write, E, D> Write for RawDevice<T, E, D> {
+impl<T: Write, E, D> Write for CharacterDevice<T, E, D> {
     fn write(&mut self, src: &[u8]) -> io::Result<usize> {
         self.inner.write(src)
     }
@@ -107,7 +107,7 @@ impl<T: Write, E, D> Write for RawDevice<T, E, D> {
     }
 }
 
-impl<T, E, D> Stream for RawDevice<T, E, D>
+impl<T, E, D> Stream for CharacterDevice<T, E, D>
 where
     T: AsyncRead,
     D: Decoder,
@@ -134,7 +134,7 @@ where
     }
 }
 
-impl<T, E, D> SyncSink for RawDevice<T, E, D>
+impl<T, E, D> SyncSink for CharacterDevice<T, E, D>
 where
     T: Write,
     E: Encoder,
@@ -166,14 +166,14 @@ where
     }
 }
 
-impl<T, E, D> fmt::Debug for RawDevice<T, E, D>
+impl<T, E, D> fmt::Debug for CharacterDevice<T, E, D>
 where
     T: fmt::Debug,
     E: fmt::Debug,
     D: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("RawDevice")
+        f.debug_struct("CharacterDevice")
             .field("inner", &self.inner)
             .field("encoder", &self.encoder)
             .field("decoder", &self.decoder)

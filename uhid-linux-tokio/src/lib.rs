@@ -11,8 +11,8 @@ extern crate mio;
 extern crate nix;
 extern crate uhid_linux_bindings;
 
-mod raw_device_file;
-mod raw_device;
+mod character_device_file;
+mod character_device;
 mod uhid_codec;
 mod uhid_device;
 mod poll_evented_read_wrapper;

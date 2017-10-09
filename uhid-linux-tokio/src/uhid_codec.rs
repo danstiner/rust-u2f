@@ -6,7 +6,7 @@ use std::slice;
 
 use bytes::BytesMut;
 
-use raw_device::{Encoder, Decoder};
+use character_device::{Encoder, Decoder};
 use uhid_linux_bindings as bindings;
 
 quick_error! {

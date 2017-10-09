@@ -7,14 +7,14 @@ use tokio_core::reactor::{Handle, PollEvented};
 use poll_evented_read_wrapper::PollEventedRead;
 
 #[derive(Debug)]
-pub struct RawDeviceFile<F>(F);
+pub struct CharacterDeviceFile<F>(F);
 
-impl<F: AsRawFd> RawDeviceFile<F> {
+impl<F: AsRawFd> CharacterDeviceFile<F> {
     /// Wraps a character device-like object so it can be used with
     /// `tokio_core::reactor::Evented`
     /// ```
     pub fn new(file: F) -> Self {
-        RawDeviceFile(file)
+        CharacterDeviceFile(file)
     }
 
     /// Converts into a pollable object that supports `tokio_io::AsyncRead`
@@ -31,7 +31,7 @@ impl<F: AsRawFd> RawDeviceFile<F> {
     }
 }
 
-impl<F: AsRawFd + io::Read> RawDeviceFile<F> {
+impl<F: AsRawFd + io::Read> CharacterDeviceFile<F> {
     /// Converts into a pollable object that supports `tokio_io::AsyncRead`
     /// and `std::io::BufRead`, making it suitable for `tokio_io::io::read_*`.
     ///
@@ -45,13 +45,13 @@ impl<F: AsRawFd + io::Read> RawDeviceFile<F> {
     }
 }
 
-impl<F: AsRawFd> AsRawFd for RawDeviceFile<F> {
+impl<F: AsRawFd> AsRawFd for CharacterDeviceFile<F> {
     fn as_raw_fd(&self) -> RawFd {
         self.0.as_raw_fd()
     }
 }
 
-impl<F: AsRawFd> mio::Evented for RawDeviceFile<F> {
+impl<F: AsRawFd> mio::Evented for CharacterDeviceFile<F> {
     fn register(
         &self,
         poll: &mio::Poll,
@@ -77,13 +77,13 @@ impl<F: AsRawFd> mio::Evented for RawDeviceFile<F> {
     }
 }
 
-impl<F: io::Read> io::Read for RawDeviceFile<F> {
+impl<F: io::Read> io::Read for CharacterDeviceFile<F> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.0.read(buf)
     }
 }
 
-impl<F: io::Write> io::Write for RawDeviceFile<F> {
+impl<F: io::Write> io::Write for CharacterDeviceFile<F> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0.write(buf)
     }

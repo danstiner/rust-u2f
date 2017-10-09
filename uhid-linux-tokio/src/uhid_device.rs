@@ -10,12 +10,12 @@ use tokio_core::reactor::Handle;
 use tokio_io::AsyncRead;
 
 use poll_evented_read_wrapper::PollEventedRead;
-use raw_device_file::RawDeviceFile;
-use raw_device::{Encoder, Decoder, RawDevice, SyncSink};
+use character_device_file::CharacterDeviceFile;
+use character_device::{Encoder, Decoder, CharacterDevice, SyncSink};
 use uhid_codec::*;
 
 pub struct UHIDDevice<T> {
-    inner: RawDevice<T, UHIDCodec, UHIDCodec>,
+    inner: CharacterDevice<T, UHIDCodec, UHIDCodec>,
 }
 
 pub struct CreateParams {
@@ -32,11 +32,11 @@ pub struct CreateParams {
 
 // ===== impl UHIDDevice =====
 
-impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>> {
+impl UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>> {
     pub fn create(
         handle: &Handle,
         params: CreateParams,
-    ) -> io::Result<UHIDDevice<PollEventedRead<RawDeviceFile<File>>>> {
+    ) -> io::Result<UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>>> {
         Self::create_with_path(Path::new("/dev/uhid"), handle, params)
     }
 
@@ -44,7 +44,7 @@ impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>> {
         path: &Path,
         handle: &Handle,
         params: CreateParams,
-    ) -> io::Result<UHIDDevice<PollEventedRead<RawDeviceFile<File>>>> {
+    ) -> io::Result<UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>>> {
         let fd = fcntl::open(
             path,
             fcntl::O_RDWR | fcntl::O_CLOEXEC | fcntl::O_NONBLOCK,
@@ -57,7 +57,7 @@ impl UHIDDevice<PollEventedRead<RawDeviceFile<File>>> {
             )
         })?;
         let file: File = unsafe { File::from_raw_fd(fd) };
-        let device_file = RawDeviceFile::new(file);
+        let device_file = CharacterDeviceFile::new(file);
         Ok(Self::create_with(device_file.into_io(handle)?, params))
     }
 }
@@ -67,7 +67,7 @@ where
     T: AsyncRead + Write,
 {
     fn create_with(inner: T, params: CreateParams) -> UHIDDevice<T> {
-        let mut device = UHIDDevice { inner: RawDevice::new(inner, UHIDCodec, UHIDCodec) };
+        let mut device = UHIDDevice { inner: CharacterDevice::new(inner, UHIDCodec, UHIDCodec) };
         device
             .inner
             .send(InputEvent::Create {
