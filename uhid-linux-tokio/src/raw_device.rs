@@ -31,30 +31,13 @@ pub trait Decoder {
     /// io::Error` to use I/O errors as this type.
     type Error: From<io::Error>;
 
-    /// Decode a frame from the provided buffer of bytes.
+    /// Decode an item from the provided buffer of bytes.
     ///
-    /// This method is called by `FramedRead` whenever bytes are ready to be
-    /// parsed.  The provided buffer of bytes is what's been read so far, and
-    /// this instance of `Decode` can determine whether an entire frame is in
-    /// the buffer and is ready to be returned.
+    /// The length of the buffer will exactly match the number of bytes
+    /// returned by the last call made to `read_len`.
     ///
-    /// If an entire frame is available, then this instance will remove those
-    /// bytes from the buffer provided and return them as a decoded
-    /// frame. Note that removing bytes from the provided buffer doesn't always
-    /// necessarily copy the bytes, so this should be an efficient operation in
-    /// most circumstances.
-    ///
-    /// If the bytes look valid, but a frame isn't fully available yet, then
-    /// `Ok(None)` is returned. This indicates to the `Framed` instance that
-    /// it needs to read some more bytes before calling this method again.
-    ///
-    /// Note that the bytes provided may be empty. If a previous call to
-    /// `decode` consumed all the bytes in the buffer then `decode` will be
-    /// called again until it returns `None`, indicating that more bytes need to
-    /// be read.
-    ///
-    /// Finally, if the bytes in the buffer are malformed then an error is
-    /// returned indicating why. This informs `Framed` that the stream is now
+    /// If the bytes in the buffer are malformed then an error is
+    /// returned indicating why. This indicates the stream is now
     /// corrupt and should be terminated.
     fn decode(&mut self, src: &mut BytesMut) -> Result<Self::Item, Self::Error>;
 
