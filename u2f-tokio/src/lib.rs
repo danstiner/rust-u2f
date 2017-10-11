@@ -1,5 +1,7 @@
-#[macro_use] extern crate assert_matches;
-#[macro_use] extern crate quick_error;
+#[macro_use]
+extern crate assert_matches;
+#[macro_use]
+extern crate quick_error;
 
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -9,17 +11,17 @@ use std::result::Result;
 type SHA256Hash = [u8; 32];
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-struct ApplicationParameter (SHA256Hash);
+struct ApplicationParameter(SHA256Hash);
 
-struct ChallengeParameter (SHA256Hash);
+struct ChallengeParameter(SHA256Hash);
 
 #[derive(Copy, Clone, Debug)]
-struct KeyHandle ([u8; 32]);
+struct KeyHandle([u8; 32]);
 
 #[derive(Copy, Clone, Debug)]
 struct KeyPair;
 
-trait Signature : AsRef<[u8]> {}
+trait Signature: AsRef<[u8]> {}
 
 #[derive(Copy, Clone, Debug)]
 struct ApplicationKey {
@@ -30,7 +32,7 @@ struct ApplicationKey {
 
 #[derive(Copy, Clone, Debug)]
 struct AttestationCertificate {
-    key_pair: KeyPair
+    key_pair: KeyPair,
 }
 
 #[derive(Debug)]
@@ -42,7 +44,10 @@ trait ApprovalService {
 }
 
 trait CryptoOperations {
-    fn generate_application_key(&self, application: &ApplicationParameter) -> io::Result<ApplicationKey>;
+    fn generate_application_key(
+        &self,
+        application: &ApplicationParameter,
+    ) -> io::Result<ApplicationKey>;
     fn generate_attestation_certificate(&self) -> io::Result<AttestationCertificate>;
     fn sign(&self, key: &KeyPair, data: &[u8]) -> Result<Box<Signature>, SignError>;
 }
@@ -50,8 +55,15 @@ trait CryptoOperations {
 trait SecretStore {
     fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()>;
     fn get_attestation_certificate(&self) -> io::Result<Option<AttestationCertificate>>;
-    fn retrieve_application_key(&self, application: &ApplicationParameter, handle: &KeyHandle) -> io::Result<Option<&ApplicationKey>>;
-    fn set_attestation_certificate(&mut self, attestation_certificate: &AttestationCertificate) -> io::Result<()>;
+    fn retrieve_application_key(
+        &self,
+        application: &ApplicationParameter,
+        handle: &KeyHandle,
+    ) -> io::Result<Option<&ApplicationKey>>;
+    fn set_attestation_certificate(
+        &mut self,
+        attestation_certificate: &AttestationCertificate,
+    ) -> io::Result<()>;
 }
 
 struct Registration {
@@ -82,7 +94,11 @@ struct SoftU2F<'a> {
 }
 
 impl<'a> SoftU2F<'a> {
-    pub fn new(approval: &'a ApprovalService, operations: &'a CryptoOperations, storage: &'a mut SecretStore) -> io::Result<SoftU2F<'a>> {
+    pub fn new(
+        approval: &'a ApprovalService,
+        operations: &'a CryptoOperations,
+        storage: &'a mut SecretStore,
+    ) -> io::Result<SoftU2F<'a>> {
         let attestation_certificate = Self::get_attestation_certificate(operations, storage)?;
 
         Ok(SoftU2F {
@@ -93,32 +109,51 @@ impl<'a> SoftU2F<'a> {
         })
     }
 
-    fn get_attestation_certificate(operations: &CryptoOperations, storage: &mut SecretStore) -> io::Result<AttestationCertificate> {
+    fn get_attestation_certificate(
+        operations: &CryptoOperations,
+        storage: &mut SecretStore,
+    ) -> io::Result<AttestationCertificate> {
         match storage.get_attestation_certificate()? {
             Some(attestation_certificate) => Ok(attestation_certificate),
             None => {
                 let attestation_certificate = operations.generate_attestation_certificate()?;
-                storage.set_attestation_certificate(&attestation_certificate)?;
+                storage.set_attestation_certificate(
+                    &attestation_certificate,
+                )?;
                 Ok(attestation_certificate)
-            },
+            }
         }
     }
 
-    pub fn is_valid_key_handle(&self, key_handle: &KeyHandle, application: &ApplicationParameter) -> io::Result<bool> {
-        match self.storage.retrieve_application_key(application, key_handle)? {
+    pub fn is_valid_key_handle(
+        &self,
+        key_handle: &KeyHandle,
+        application: &ApplicationParameter,
+    ) -> io::Result<bool> {
+        match self.storage.retrieve_application_key(
+            application,
+            key_handle,
+        )? {
             Some(_) => Ok(true),
             None => Ok(false),
         }
     }
 
-    pub fn register(&mut self, application: &ApplicationParameter, challenge: &ChallengeParameter) -> Result<Registration, RegisterError> {
+    pub fn register(
+        &mut self,
+        application: &ApplicationParameter,
+        challenge: &ChallengeParameter,
+    ) -> Result<Registration, RegisterError> {
         if !self.approval.approve_registration(application)? {
-            return Err(RegisterError::ApprovalRequired)
+            return Err(RegisterError::ApprovalRequired);
         }
 
         let application_key = self.operations.generate_application_key(application)?;
         self.storage.add_application_key(&application_key)?;
-        let signature = self.operations.sign(&self.attestation_certificate.key_pair, &[])?;
+        let signature = self.operations.sign(
+            &self.attestation_certificate.key_pair,
+            &[],
+        )?;
 
         Ok(Registration {
             user_public_key: Vec::new(),
@@ -129,7 +164,7 @@ impl<'a> SoftU2F<'a> {
     }
 }
 
-struct RawSignature (Vec<u8>);
+struct RawSignature(Vec<u8>);
 
 impl Signature for RawSignature {}
 
@@ -153,17 +188,18 @@ impl ApprovalService for AlwaysApproveService {
 struct FakeOperations;
 
 impl CryptoOperations for FakeOperations {
-    fn generate_application_key(&self, application: &ApplicationParameter) -> io::Result<ApplicationKey> {
+    fn generate_application_key(
+        &self,
+        application: &ApplicationParameter,
+    ) -> io::Result<ApplicationKey> {
         Ok(ApplicationKey {
             application: *application,
             handle: KeyHandle([0; 32]),
-            key_pair: KeyPair
+            key_pair: KeyPair,
         })
     }
     fn generate_attestation_certificate(&self) -> io::Result<AttestationCertificate> {
-        Ok(AttestationCertificate {
-            key_pair: KeyPair
-        })
+        Ok(AttestationCertificate { key_pair: KeyPair })
     }
     fn sign(&self, key: &KeyPair, data: &[u8]) -> Result<Box<Signature>, SignError> {
         Ok(Box::new(RawSignature(Vec::new())))
@@ -192,10 +228,17 @@ impl SecretStore for InMemoryStorage {
     fn get_attestation_certificate(&self) -> io::Result<Option<AttestationCertificate>> {
         Ok(self.attestation_certificate)
     }
-    fn retrieve_application_key(&self, application: &ApplicationParameter, handle: &KeyHandle) -> io::Result<Option<&ApplicationKey>> {
+    fn retrieve_application_key(
+        &self,
+        application: &ApplicationParameter,
+        handle: &KeyHandle,
+    ) -> io::Result<Option<&ApplicationKey>> {
         Ok(self.application_keys.get(application))
     }
-    fn set_attestation_certificate(&mut self, attestation_certificate: &AttestationCertificate) -> io::Result<()> {
+    fn set_attestation_certificate(
+        &mut self,
+        attestation_certificate: &AttestationCertificate,
+    ) -> io::Result<()> {
         self.attestation_certificate = Some(*attestation_certificate);
         Ok(())
     }
@@ -236,7 +279,10 @@ mod tests {
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let key_handle = KeyHandle(ALL_ZERO_HASH);
 
-        assert_matches!(softu2f.is_valid_key_handle(&key_handle, &application), Ok(false));
+        assert_matches!(
+            softu2f.is_valid_key_handle(&key_handle, &application),
+            Ok(false)
+        );
     }
 
     #[test]
@@ -250,6 +296,9 @@ mod tests {
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
         let registration = softu2f.register(&application, &challenge).unwrap();
 
-        assert_matches!(softu2f.is_valid_key_handle(&registration.key_handle, &application), Ok(true));
+        assert_matches!(
+            softu2f.is_valid_key_handle(&registration.key_handle, &application),
+            Ok(true)
+        );
     }
 }
