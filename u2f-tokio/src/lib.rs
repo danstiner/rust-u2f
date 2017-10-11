@@ -1,6 +1,7 @@
 #[macro_use] extern crate assert_matches;
 
 use std::io;
+use std::result::Result;
 
 type SHA256Hash = [u8; 32];
 
@@ -37,11 +38,39 @@ trait SecureStorage {
     fn set_attestation_certificate(key: &AttestationCertificate) -> io::Result<()>;
 }
 
+struct Registration {
+    user_public_key: Vec<u8>,
+    key_handle: KeyHandle,
+    attestation_certificate: Vec<u8>,
+    signature: Box<Signature>,
+}
+
+#[derive(Debug)]
+enum RegistrationError {}
+
 struct SoftU2F;
 
 impl SoftU2F {
-    pub fn is_valid_key_handle(&self, key_handle: KeyHandle, application: ApplicationParameter) -> io::Result<bool> {
+    pub fn is_valid_key_handle(&self, key_handle: &KeyHandle, application: &ApplicationParameter) -> io::Result<bool> {
         Ok(false)
+    }
+    pub fn register(&mut self, application: &ApplicationParameter, challenge: &ChallengeParameter) -> Result<Registration, RegistrationError> {
+        Ok(Registration {
+            user_public_key: Vec::new(),
+            key_handle: KeyHandle([0; 32]),
+            attestation_certificate: Vec::new(),
+            signature: Box::new(RawSignature(Vec::new())),
+        })
+    }
+}
+
+struct RawSignature (Vec<u8>);
+
+impl Signature for RawSignature {}
+
+impl AsRef<[u8]> for RawSignature {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }
 
@@ -53,9 +82,19 @@ mod tests {
 
     #[test]
     fn is_valid_key_handle_with_invalid_handle_is_false() {
-        let application_parameter = ApplicationParameter(all_zero_hash);
+        let application = ApplicationParameter(all_zero_hash);
         let key_handle = KeyHandle(all_zero_hash);
 
-        assert_matches!(SoftU2F.is_valid_key_handle(key_handle, application_parameter), Ok(false));
+        assert_matches!(SoftU2F.is_valid_key_handle(&key_handle, &application), Ok(false));
+    }
+
+    #[test]
+    fn is_valid_key_handle_with_valid_handle_is_true() {
+        let mut softu2f = SoftU2F;
+        let application = ApplicationParameter(all_zero_hash);
+        let challenge = ChallengeParameter(all_zero_hash);
+        let registration = softu2f.register(&application, &challenge).unwrap();
+
+        assert_matches!(SoftU2F.is_valid_key_handle(&registration.key_handle, &application), Ok(true));
     }
 }
