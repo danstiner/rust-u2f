@@ -1,3 +1,5 @@
+#[macro_use] extern crate assert_matches;
+
 use std::io;
 
 type SHA256Hash = [u8; 32];
@@ -35,9 +37,25 @@ trait SecureStorage {
     fn set_attestation_certificate(key: &AttestationCertificate) -> io::Result<()>;
 }
 
+struct SoftU2F;
+
+impl SoftU2F {
+    pub fn is_valid_key_handle(&self, key_handle: KeyHandle, application: ApplicationParameter) -> io::Result<bool> {
+        Ok(false)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    const all_zero_hash: [u8; 32] = [0; 32];
+
     #[test]
-    fn it_works() {
+    fn is_valid_key_handle_with_invalid_handle_is_false() {
+        let application_parameter = ApplicationParameter(all_zero_hash);
+        let key_handle = KeyHandle(all_zero_hash);
+
+        assert_matches!(SoftU2F.is_valid_key_handle(key_handle, application_parameter), Ok(false));
     }
 }

@@ -1,6 +1,6 @@
 [package]
+authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "u2f-tokio"
 version = "0.1.0"
-authors = ["Daniel Stiner <danstiner@gmail.com>"]
-
 [dependencies]
+assert_matches = "1.1.0"
