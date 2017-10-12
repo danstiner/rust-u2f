@@ -125,6 +125,10 @@ impl<'a> SoftU2F<'a> {
         }
     }
 
+    pub fn get_version_string() -> String {
+        String::from("U2F_V2")
+    }
+
     pub fn is_valid_key_handle(
         &self,
         key_handle: &KeyHandle,
