@@ -4,10 +4,12 @@ extern crate assert_matches;
 extern crate quick_error;
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::io;
 use std::result::Result;
 
+type Counter = u32;
 type SHA256Hash = [u8; 32];
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
@@ -21,7 +23,7 @@ struct KeyHandle([u8; 32]);
 #[derive(Copy, Clone, Debug)]
 struct KeyPair;
 
-trait Signature: AsRef<[u8]> {}
+trait Signature: AsRef<[u8]> + Debug {}
 
 #[derive(Copy, Clone, Debug)]
 struct ApplicationKey {
@@ -55,6 +57,10 @@ trait CryptoOperations {
 trait SecretStore {
     fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()>;
     fn get_attestation_certificate(&self) -> io::Result<Option<AttestationCertificate>>;
+    fn get_then_increment_counter(
+        &mut self,
+        application: &ApplicationParameter,
+    ) -> io::Result<Counter>;
     fn retrieve_application_key(
         &self,
         application: &ApplicationParameter,
@@ -66,11 +72,32 @@ trait SecretStore {
     ) -> io::Result<()>;
 }
 
+#[derive(Debug)]
 struct Registration {
     user_public_key: Vec<u8>,
     key_handle: KeyHandle,
     attestation_certificate: Vec<u8>,
     signature: Box<Signature>,
+}
+
+#[derive(Debug)]
+struct Authentication {
+    counter: Counter,
+    signature: Box<Signature>,
+}
+
+quick_error! {
+    #[derive(Debug)]
+    pub enum AuthenticateError {
+        ApprovalRequired
+        BadKeyHandle
+        Io(err: io::Error) {
+            from()
+        }
+        Signing(err: SignError) {
+            from()
+        }
+    }
 }
 
 quick_error! {
@@ -125,6 +152,35 @@ impl<'a> SoftU2F<'a> {
         }
     }
 
+    pub fn authenticate(
+        &mut self,
+        application: &ApplicationParameter,
+        challenge: &ChallengeParameter,
+        key_handle: &KeyHandle,
+    ) -> Result<Authentication, AuthenticateError> {
+        if !self.approval.approve_authentication(application)? {
+            return Err(AuthenticateError::ApprovalRequired);
+        }
+
+        let application_key = match self.storage.retrieve_application_key(
+            application,
+            key_handle,
+        )? {
+            Some(key) => *key,
+            None => return Err(AuthenticateError::BadKeyHandle),
+        };
+        let counter = self.storage.get_then_increment_counter(application)?;
+        let signature = self.operations.sign(
+            &self.attestation_certificate.key_pair,
+            &[],
+        )?;
+
+        Ok(Authentication {
+            counter: counter,
+            signature: signature,
+        })
+    }
+
     pub fn get_version_string() -> String {
         String::from("U2F_V2")
     }
@@ -168,6 +224,8 @@ impl<'a> SoftU2F<'a> {
     }
 }
 
+
+#[derive(Debug)]
 struct RawSignature(Vec<u8>);
 
 impl Signature for RawSignature {}
@@ -178,14 +236,26 @@ impl AsRef<[u8]> for RawSignature {
     }
 }
 
-struct AlwaysApproveService;
+struct FakeApprovalService {
+    pub should_approve_authentication: bool,
+    pub should_approve_registration: bool,
+}
 
-impl ApprovalService for AlwaysApproveService {
-    fn approve_registration(&self, application: &ApplicationParameter) -> io::Result<bool> {
-        Ok(true)
+impl FakeApprovalService {
+    fn always_approve() -> FakeApprovalService {
+        FakeApprovalService {
+            should_approve_authentication: true,
+            should_approve_registration: true,
+        }
     }
+}
+
+impl ApprovalService for FakeApprovalService {
     fn approve_authentication(&self, application: &ApplicationParameter) -> io::Result<bool> {
-        Ok(true)
+        Ok(self.should_approve_authentication)
+    }
+    fn approve_registration(&self, application: &ApplicationParameter) -> io::Result<bool> {
+        Ok(self.should_approve_registration)
     }
 }
 
@@ -213,6 +283,7 @@ impl CryptoOperations for FakeOperations {
 struct InMemoryStorage {
     application_keys: HashMap<ApplicationParameter, ApplicationKey>,
     attestation_certificate: Option<AttestationCertificate>,
+    counters: HashMap<ApplicationParameter, Counter>,
 }
 
 impl InMemoryStorage {
@@ -220,6 +291,7 @@ impl InMemoryStorage {
         InMemoryStorage {
             application_keys: HashMap::new(),
             attestation_certificate: None,
+            counters: HashMap::new(),
         }
     }
 }
@@ -229,9 +301,26 @@ impl SecretStore for InMemoryStorage {
         self.application_keys.insert(key.application, *key);
         Ok(())
     }
+
     fn get_attestation_certificate(&self) -> io::Result<Option<AttestationCertificate>> {
         Ok(self.attestation_certificate)
     }
+
+    fn get_then_increment_counter(
+        &mut self,
+        application: &ApplicationParameter,
+    ) -> io::Result<Counter> {
+        if let Some(counter) = self.counters.get_mut(application) {
+            let counter_value = *counter;
+            *counter += 1;
+            return Ok(counter_value);
+        }
+
+        let initial_counter = 0;
+        self.counters.insert(*application, initial_counter);
+        Ok(initial_counter)
+    }
+
     fn retrieve_application_key(
         &self,
         application: &ApplicationParameter,
@@ -239,6 +328,7 @@ impl SecretStore for InMemoryStorage {
     ) -> io::Result<Option<&ApplicationKey>> {
         Ok(self.application_keys.get(application))
     }
+
     fn set_attestation_certificate(
         &mut self,
         attestation_certificate: &AttestationCertificate,
@@ -275,7 +365,7 @@ mod tests {
 
     #[test]
     fn is_valid_key_handle_with_invalid_handle_is_false() {
-        let approval = AlwaysApproveService;
+        let approval = FakeApprovalService::always_approve();
         let operations = FakeOperations;
         let mut storage: InMemoryStorage = InMemoryStorage::new();
         let softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
@@ -291,7 +381,7 @@ mod tests {
 
     #[test]
     fn is_valid_key_handle_with_valid_handle_is_true() {
-        let approval = AlwaysApproveService;
+        let approval = FakeApprovalService::always_approve();
         let operations = FakeOperations;
         let mut storage: InMemoryStorage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
@@ -303,6 +393,80 @@ mod tests {
         assert_matches!(
             softu2f.is_valid_key_handle(&registration.key_handle, &application),
             Ok(true)
+        );
+    }
+
+
+    #[test]
+    fn authenticate_with_invalid_handle_errors() {
+        let approval = FakeApprovalService::always_approve();
+        let operations = FakeOperations;
+        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+
+        let application = ApplicationParameter(ALL_ZERO_HASH);
+        let challenge = ChallengeParameter(ALL_ZERO_HASH);
+        let key_handle = KeyHandle(ALL_ZERO_HASH);
+
+        assert_matches!(
+            softu2f.authenticate(&application, &challenge, &key_handle),
+            Err(AuthenticateError::BadKeyHandle)
+        );
+    }
+
+    #[test]
+    fn authenticate_with_valid_handle_succeeds() {
+        let approval = FakeApprovalService::always_approve();
+        let operations = FakeOperations;
+        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+
+        let application = ApplicationParameter(ALL_ZERO_HASH);
+        let challenge = ChallengeParameter(ALL_ZERO_HASH);
+        let registration = softu2f.register(&application, &challenge).unwrap();
+
+        softu2f
+            .authenticate(&application, &challenge, &registration.key_handle)
+            .unwrap();
+    }
+
+    #[test]
+    fn authenticate_with_rejected_approval_errors() {
+        let approval = FakeApprovalService {
+            should_approve_authentication: false,
+            should_approve_registration: true,
+        };
+        let operations = FakeOperations;
+        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+
+        let application = ApplicationParameter(ALL_ZERO_HASH);
+        let challenge = ChallengeParameter(ALL_ZERO_HASH);
+        let registration = softu2f.register(&application, &challenge).unwrap();
+
+        assert_matches!(
+            softu2f.authenticate(&application, &challenge, &registration.key_handle),
+            Err(AuthenticateError::ApprovalRequired)
+        );
+    }
+
+
+    #[test]
+    fn register_with_rejected_approval_errors() {
+        let approval = FakeApprovalService {
+            should_approve_authentication: true,
+            should_approve_registration: false,
+        };
+        let operations = FakeOperations;
+        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+
+        let application = ApplicationParameter(ALL_ZERO_HASH);
+        let challenge = ChallengeParameter(ALL_ZERO_HASH);
+
+        assert_matches!(
+            softu2f.register(&application, &challenge),
+            Err(RegisterError::ApprovalRequired)
         );
     }
 }
