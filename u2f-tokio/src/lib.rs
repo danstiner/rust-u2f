@@ -4,17 +4,21 @@ extern crate assert_matches;
 extern crate quick_error;
 extern crate openssl;
 extern crate rand;
+extern crate byteorder;
 
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::io;
 use std::result::Result;
 
-use openssl::ec::{EcGroup, EcKey};
+use byteorder::{BigEndian, WriteBytesExt};
+use openssl::ec::{self, EcGroup, EcKey};
 use openssl::hash::MessageDigest;
 use openssl::nid;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
+use openssl::bn::BigNumContextRef;
+use openssl::bn::BigNumContext;
 use rand::OsRng;
 use rand::Rand;
 use rand::Rng;
@@ -25,10 +29,28 @@ type SHA256Hash = [u8; 32];
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 struct ApplicationParameter(SHA256Hash);
 
+impl AsRef<[u8]> for ApplicationParameter {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
 struct ChallengeParameter(SHA256Hash);
+
+impl AsRef<[u8]> for ChallengeParameter {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
 
 #[derive(Copy, Clone, Debug)]
 struct KeyHandle([u8; 32]);
+
+impl AsRef<[u8]> for KeyHandle {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
 
 struct Key(EcKey);
 
@@ -188,9 +210,11 @@ impl<'a> SoftU2F<'a> {
             None => return Err(AuthenticateError::BadKeyHandle),
         };
         let counter = self.storage.get_then_increment_counter(application)?;
+        let user_presence_byte = Self::user_presence_byte(true);
+
         let signature = self.operations.sign(
             &application_key.key,
-            &[],
+            &Self::message_to_sign_for_authenticate(application, user_presence_byte, counter, challenge),
         )?;
 
         Ok(Authentication {
@@ -226,11 +250,12 @@ impl<'a> SoftU2F<'a> {
             return Err(RegisterError::ApprovalRequired);
         }
 
+        let mut ctx = BigNumContext::new().unwrap();
         let application_key = self.operations.generate_application_key(application)?;
         self.storage.add_application_key(&application_key)?;
         let signature = self.operations.sign(
             &self.attestation_certificate.key,
-            &[],
+            &Self::message_to_sign_for_register(&application_key, challenge, &mut ctx),
         )?;
 
         Ok(Registration {
@@ -239,6 +264,71 @@ impl<'a> SoftU2F<'a> {
             attestation_certificate: Vec::new(),
             signature: signature,
         })
+    }
+
+    /// User presence byte [1 byte]. Bit 0 indicates whether user presence was verified.
+    /// If Bit 0 is is to 1, then user presence was verified. If Bit 0 is set to 0,
+    /// then user presence was not verified. The values of Bit 1 through 7 shall be 0;
+    /// different values are reserved for future use.
+    fn user_presence_byte(user_present: bool) -> u8 {
+        let mut byte: u8 = 0b0000_0000;
+        if user_present {
+            byte |= 0b0000_0001;
+        }
+        byte
+    }
+
+    fn message_to_sign_for_authenticate(application: &ApplicationParameter, user_presence: u8, counter: Counter, challenge: &ChallengeParameter) -> Vec<u8> {
+        let mut message: Vec<u8> = Vec::new();
+
+        // The application parameter [32 bytes] from the authentication request message.
+        message.extend_from_slice(application.as_ref());
+
+        // The user presence byte [1 byte].
+        message.push(user_presence);
+
+        // The counter [4 bytes].
+        message.write_u32::<BigEndian>(counter).unwrap();
+
+        // The challenge parameter [32 bytes] from the authentication request message.
+        message.extend_from_slice(challenge.as_ref());
+
+        message
+    }
+
+    fn message_to_sign_for_register(application_key: &ApplicationKey, challenge: &ChallengeParameter, ctx: &mut BigNumContext) -> Vec<u8> {
+        let mut message: Vec<u8> = Vec::new();
+
+        // A byte reserved for future use [1 byte] with the value 0x00.
+        message.push(0u8);
+
+        // The application parameter [32 bytes] from the registration request message.
+        message.extend_from_slice(application_key.application.as_ref());
+
+        // The challenge parameter [32 bytes] from the registration request message.
+        message.extend_from_slice(challenge.as_ref());
+
+        // The key handle [variable length].
+        message.extend_from_slice(application_key.handle.as_ref());
+
+        // The user public key [65 bytes].
+        // Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
+        // I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
+        // uncompressed point compression method.
+        message.push(4u8);
+        let raw_public_key = Self::encode_public_key_raw(&application_key.key.0, ctx);
+        message.extend_from_slice(&raw_public_key);
+
+        message
+    }
+
+    fn encode_public_key_raw(ec_key: &EcKey, ctx: &mut BigNumContext) -> Vec<u8> {
+        // Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
+        // I.e. [X (32 bytes), Y (32 bytes)]
+        let group = ec_key.group().unwrap();
+        let form = ec::POINT_CONVERSION_UNCOMPRESSED;
+        let public_key = ec_key.public_key().unwrap();
+        public_key.to_bytes(group, form, ctx).unwrap()
     }
 }
 
