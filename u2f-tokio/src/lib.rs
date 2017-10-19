@@ -2,12 +2,22 @@
 extern crate assert_matches;
 #[macro_use]
 extern crate quick_error;
+extern crate openssl;
+extern crate rand;
 
 use std::collections::HashMap;
-use std::fmt::Debug;
-use std::hash::Hash;
+use std::fmt::{self, Debug};
 use std::io;
 use std::result::Result;
+
+use openssl::ec::{EcGroup, EcKey};
+use openssl::hash::MessageDigest;
+use openssl::nid;
+use openssl::pkey::PKey;
+use openssl::sign::Signer;
+use rand::OsRng;
+use rand::Rand;
+use rand::Rng;
 
 type Counter = u32;
 type SHA256Hash = [u8; 32];
@@ -20,21 +30,32 @@ struct ChallengeParameter(SHA256Hash);
 #[derive(Copy, Clone, Debug)]
 struct KeyHandle([u8; 32]);
 
-#[derive(Copy, Clone, Debug)]
-struct KeyPair;
+struct Key(EcKey);
+
+impl Clone for Key {
+    fn clone(&self) -> Key {
+        Key(self.0.to_owned().unwrap())
+    }
+}
+
+impl Debug for Key {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Key")
+    }
+}
 
 trait Signature: AsRef<[u8]> + Debug {}
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone)]
 struct ApplicationKey {
     application: ApplicationParameter,
     handle: KeyHandle,
-    key_pair: KeyPair,
+    key: Key,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone)]
 struct AttestationCertificate {
-    key_pair: KeyPair,
+    key: Key,
 }
 
 #[derive(Debug)]
@@ -51,12 +72,12 @@ trait CryptoOperations {
         application: &ApplicationParameter,
     ) -> io::Result<ApplicationKey>;
     fn generate_attestation_certificate(&self) -> io::Result<AttestationCertificate>;
-    fn sign(&self, key: &KeyPair, data: &[u8]) -> Result<Box<Signature>, SignError>;
+    fn sign(&self, key: &Key, data: &[u8]) -> Result<Box<Signature>, SignError>;
 }
 
 trait SecretStore {
     fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()>;
-    fn get_attestation_certificate(&self) -> io::Result<Option<AttestationCertificate>>;
+    fn get_attestation_certificate(&self) -> io::Result<Option<&AttestationCertificate>>;
     fn get_then_increment_counter(
         &mut self,
         application: &ApplicationParameter,
@@ -127,7 +148,6 @@ impl<'a> SoftU2F<'a> {
         storage: &'a mut SecretStore,
     ) -> io::Result<SoftU2F<'a>> {
         let attestation_certificate = Self::get_attestation_certificate(operations, storage)?;
-
         Ok(SoftU2F {
             attestation_certificate: attestation_certificate,
             approval: approval,
@@ -140,16 +160,14 @@ impl<'a> SoftU2F<'a> {
         operations: &CryptoOperations,
         storage: &mut SecretStore,
     ) -> io::Result<AttestationCertificate> {
-        match storage.get_attestation_certificate()? {
-            Some(attestation_certificate) => Ok(attestation_certificate),
-            None => {
-                let attestation_certificate = operations.generate_attestation_certificate()?;
-                storage.set_attestation_certificate(
-                    &attestation_certificate,
-                )?;
-                Ok(attestation_certificate)
-            }
+        if let Some(attestation_certificate) = storage.get_attestation_certificate()? {
+            return Ok(attestation_certificate.clone());
         }
+        let attestation_certificate = operations.generate_attestation_certificate()?;
+        storage.set_attestation_certificate(
+            &attestation_certificate,
+        )?;
+        Ok(attestation_certificate)
     }
 
     pub fn authenticate(
@@ -166,12 +184,12 @@ impl<'a> SoftU2F<'a> {
             application,
             key_handle,
         )? {
-            Some(key) => *key,
+            Some(key) => key.clone(),
             None => return Err(AuthenticateError::BadKeyHandle),
         };
         let counter = self.storage.get_then_increment_counter(application)?;
         let signature = self.operations.sign(
-            &self.attestation_certificate.key_pair,
+            &application_key.key,
             &[],
         )?;
 
@@ -211,7 +229,7 @@ impl<'a> SoftU2F<'a> {
         let application_key = self.operations.generate_application_key(application)?;
         self.storage.add_application_key(&application_key)?;
         let signature = self.operations.sign(
-            &self.attestation_certificate.key_pair,
+            &self.attestation_certificate.key,
             &[],
         )?;
 
@@ -224,6 +242,50 @@ impl<'a> SoftU2F<'a> {
     }
 }
 
+struct SecureCryptoOperations;
+
+impl SecureCryptoOperations {
+    fn generate_key() -> Key {
+        let group = EcGroup::from_curve_name(nid::X9_62_PRIME256V1).unwrap();
+        let ec_key = EcKey::generate(&group).unwrap();
+        Key(ec_key)
+    }
+
+    fn generate_key_handle() -> io::Result<KeyHandle> {
+        let mut os_rng = OsRng::new()?;
+        let bytes: [u8; 32] = os_rng.gen();
+        Ok(KeyHandle(bytes))
+    }
+}
+
+impl CryptoOperations for SecureCryptoOperations {
+    fn generate_application_key(
+        &self,
+        application: &ApplicationParameter,
+    ) -> io::Result<ApplicationKey> {
+        let key = Self::generate_key();
+        let handle = Self::generate_key_handle()?;
+        Ok(ApplicationKey {
+            application: *application,
+            handle: handle,
+            key: key,  
+        })
+    }
+
+    fn generate_attestation_certificate(&self) -> io::Result<AttestationCertificate> {
+        let key = Self::generate_key();
+        Ok(AttestationCertificate { key: key })
+    }
+
+    fn sign(&self, key: &Key, data: &[u8]) -> Result<Box<Signature>, SignError> {
+        let ec_key = key.0.to_owned().unwrap();
+        let pkey = PKey::from_ec_key(ec_key).unwrap();
+        let mut signer = Signer::new(MessageDigest::sha256(), &pkey).unwrap();
+        signer.update(data).unwrap();
+        let signature = signer.finish().unwrap();
+        Ok(Box::new(RawSignature(signature)))
+    }
+}
 
 #[derive(Debug)]
 struct RawSignature(Vec<u8>);
@@ -259,27 +321,6 @@ impl ApprovalService for FakeApprovalService {
     }
 }
 
-struct FakeOperations;
-
-impl CryptoOperations for FakeOperations {
-    fn generate_application_key(
-        &self,
-        application: &ApplicationParameter,
-    ) -> io::Result<ApplicationKey> {
-        Ok(ApplicationKey {
-            application: *application,
-            handle: KeyHandle([0; 32]),
-            key_pair: KeyPair,
-        })
-    }
-    fn generate_attestation_certificate(&self) -> io::Result<AttestationCertificate> {
-        Ok(AttestationCertificate { key_pair: KeyPair })
-    }
-    fn sign(&self, key: &KeyPair, data: &[u8]) -> Result<Box<Signature>, SignError> {
-        Ok(Box::new(RawSignature(Vec::new())))
-    }
-}
-
 struct InMemoryStorage {
     application_keys: HashMap<ApplicationParameter, ApplicationKey>,
     attestation_certificate: Option<AttestationCertificate>,
@@ -298,12 +339,12 @@ impl InMemoryStorage {
 
 impl SecretStore for InMemoryStorage {
     fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()> {
-        self.application_keys.insert(key.application, *key);
+        self.application_keys.insert(key.application, key.clone());
         Ok(())
     }
 
-    fn get_attestation_certificate(&self) -> io::Result<Option<AttestationCertificate>> {
-        Ok(self.attestation_certificate)
+    fn get_attestation_certificate(&self) -> io::Result<Option<&AttestationCertificate>> {
+        Ok(self.attestation_certificate.as_ref())
     }
 
     fn get_then_increment_counter(
@@ -333,7 +374,8 @@ impl SecretStore for InMemoryStorage {
         &mut self,
         attestation_certificate: &AttestationCertificate,
     ) -> io::Result<()> {
-        self.attestation_certificate = Some(*attestation_certificate);
+        let c: &AttestationCertificate = attestation_certificate;
+        self.attestation_certificate = Some(c.clone());
         Ok(())
     }
 }
@@ -366,8 +408,8 @@ mod tests {
     #[test]
     fn is_valid_key_handle_with_invalid_handle_is_false() {
         let approval = FakeApprovalService::always_approve();
-        let operations = FakeOperations;
-        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let operations = SecureCryptoOperations;
+        let mut storage = InMemoryStorage::new();
         let softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
@@ -382,8 +424,8 @@ mod tests {
     #[test]
     fn is_valid_key_handle_with_valid_handle_is_true() {
         let approval = FakeApprovalService::always_approve();
-        let operations = FakeOperations;
-        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let operations = SecureCryptoOperations;
+        let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
@@ -400,8 +442,8 @@ mod tests {
     #[test]
     fn authenticate_with_invalid_handle_errors() {
         let approval = FakeApprovalService::always_approve();
-        let operations = FakeOperations;
-        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let operations = SecureCryptoOperations;
+        let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
@@ -417,8 +459,8 @@ mod tests {
     #[test]
     fn authenticate_with_valid_handle_succeeds() {
         let approval = FakeApprovalService::always_approve();
-        let operations = FakeOperations;
-        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let operations = SecureCryptoOperations;
+        let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
@@ -436,8 +478,8 @@ mod tests {
             should_approve_authentication: false,
             should_approve_registration: true,
         };
-        let operations = FakeOperations;
-        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let operations = SecureCryptoOperations;
+        let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
@@ -457,8 +499,8 @@ mod tests {
             should_approve_authentication: true,
             should_approve_registration: false,
         };
-        let operations = FakeOperations;
-        let mut storage: InMemoryStorage = InMemoryStorage::new();
+        let operations = SecureCryptoOperations;
+        let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);

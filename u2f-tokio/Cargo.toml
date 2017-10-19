@@ -2,7 +2,8 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "u2f-tokio"
 version = "0.1.0"
-
 [dependencies]
 assert_matches = "1.1.0"
+openssl = "0.9.20"
 quick-error = "1.2.1"
+rand = "0.3.17"
