@@ -223,19 +223,19 @@ quick_error! {
     }
 }
 
-struct SoftU2F<'a> {
+struct U2F<'a> {
     approval: &'a ApprovalService,
     operations: &'a CryptoOperations,
     storage: &'a mut SecretStore,
 }
 
-impl<'a> SoftU2F<'a> {
+impl<'a> U2F<'a> {
     pub fn new(
         approval: &'a ApprovalService,
         operations: &'a CryptoOperations,
         storage: &'a mut SecretStore,
-    ) -> io::Result<SoftU2F<'a>> {
-        Ok(SoftU2F {
+    ) -> io::Result<U2F<'a>> {
+        Ok(U2F {
             approval: approval,
             operations: operations,
             storage: storage,
@@ -525,7 +525,7 @@ impl SecretStore for InMemoryStorage {
 }
 
 // struct TestContext<'a> {
-//     softu2f: SoftU2F<'a>,
+//     u2f: U2F<'a>,
 //     approval: AlwaysApproveService,
 //     operations: FakeOperations,
 //     storage: InMemoryStorage,
@@ -568,7 +568,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
     //     let operations = FakeOperations;
     //     let mut storage: InMemoryStorage = InMemoryStorage::new();
     //     TestContext {
-    //         softu2f: SoftU2F::new(&approval, &operations, &mut storage).unwrap(),
+    //         u2f: U2F::new(&approval, &operations, &mut storage).unwrap(),
     //         approval: approval,
     //         operations: operations,
     //         storage: storage,
@@ -580,13 +580,13 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeApprovalService::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+        let u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let key_handle = ALL_ZERO_KEY_HANDLE;
 
         assert_matches!(
-            softu2f.is_valid_key_handle(&key_handle, &application),
+            u2f.is_valid_key_handle(&key_handle, &application),
             Ok(false)
         );
     }
@@ -596,14 +596,14 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeApprovalService::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
-        let registration = softu2f.register(&application, &challenge).unwrap();
+        let registration = u2f.register(&application, &challenge).unwrap();
 
         assert_matches!(
-            softu2f.is_valid_key_handle(&registration.key_handle, &application),
+            u2f.is_valid_key_handle(&registration.key_handle, &application),
             Ok(true)
         );
     }
@@ -614,14 +614,14 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeApprovalService::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
         let key_handle = ALL_ZERO_KEY_HANDLE;
 
         assert_matches!(
-            softu2f.authenticate(&application, &challenge, &key_handle),
+            u2f.authenticate(&application, &challenge, &key_handle),
             Err(AuthenticateError::BadKeyHandle)
         );
     }
@@ -631,13 +631,13 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeApprovalService::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
-        let registration = softu2f.register(&application, &challenge).unwrap();
+        let registration = u2f.register(&application, &challenge).unwrap();
 
-        softu2f
+        u2f
             .authenticate(&application, &challenge, &registration.key_handle)
             .unwrap();
     }
@@ -650,14 +650,14 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         };
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
-        let registration = softu2f.register(&application, &challenge).unwrap();
+        let registration = u2f.register(&application, &challenge).unwrap();
 
         assert_matches!(
-            softu2f.authenticate(&application, &challenge, &registration.key_handle),
+            u2f.authenticate(&application, &challenge, &registration.key_handle),
             Err(AuthenticateError::ApprovalRequired)
         );
     }
@@ -670,13 +670,13 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         };
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
 
         assert_matches!(
-            softu2f.register(&application, &challenge),
+            u2f.register(&application, &challenge),
             Err(RegisterError::ApprovalRequired)
         );
     }
@@ -686,14 +686,14 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeApprovalService::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
 
         let mut os_rng = OsRng::new().unwrap();
         let application = ApplicationParameter(os_rng.gen());
         let challenge = ChallengeParameter(os_rng.gen());
         let mut ctx = BigNumContext::new().unwrap();
 
-        let registration = softu2f.register(&application, &challenge).unwrap();
+        let registration = u2f.register(&application, &challenge).unwrap();
 
         let attestation_certificate = X509::from_der(&registration.attestation_certificate).unwrap();
         let public_key = attestation_certificate.public_key().unwrap();
