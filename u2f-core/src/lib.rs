@@ -341,7 +341,7 @@ impl<'a> SoftU2F<'a> {
         // Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
         // I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
         // uncompressed point compression method.
-        message.push(4u8);
+        message.push(u2f_header::U2F_POINT_UNCOMPRESSED as u8);
         let raw_public_key = Self::encode_public_key_raw(&application_key.key.0, ctx);
         message.extend_from_slice(&raw_public_key);
 
