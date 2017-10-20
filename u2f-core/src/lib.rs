@@ -13,13 +13,14 @@ use std::io;
 use std::result::Result;
 
 use byteorder::{BigEndian, WriteBytesExt};
-use openssl::ec::{self, EcGroup, EcKey};
+use openssl::bn::BigNumContext;
+use openssl::bn::BigNumContextRef;
+use openssl::ec::{self, EcGroup, EcKey, EcGroupRef, EcPointRef};
 use openssl::hash::MessageDigest;
 use openssl::nid;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
-use openssl::bn::BigNumContextRef;
-use openssl::bn::BigNumContext;
+use openssl::x509::X509;
 use rand::OsRng;
 use rand::Rand;
 use rand::Rng;
@@ -80,6 +81,12 @@ impl Debug for KeyHandle {
 
 struct Key(EcKey);
 
+impl Key {
+    fn from_pem(pem: &str) -> Key {
+        Key(EcKey::private_key_from_pem(pem.as_bytes()).unwrap())
+    }
+}
+
 impl Clone for Key {
     fn clone(&self) -> Key {
         Key(self.0.to_owned().unwrap())
@@ -89,6 +96,31 @@ impl Clone for Key {
 impl Debug for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Key")
+    }
+}
+
+struct PublicKey<'a> {
+    group: &'a EcGroupRef,
+    point: &'a EcPointRef,
+}
+
+impl<'a> PublicKey<'a> {
+    fn from_key(key: &'a Key) -> PublicKey {
+        PublicKey {
+            group: key.0.group().unwrap(),
+            point: key.0.public_key().unwrap(),
+        }
+    }
+
+    /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
+    /// I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
+    /// uncompressed point compression method.
+    fn to_raw(&self, ctx: &mut BigNumContext) -> Vec<u8> {
+        let form = ec::POINT_CONVERSION_UNCOMPRESSED;
+        let mut bytes = self.point.to_bytes(self.group, form, ctx).unwrap();
+        // Add compression method tag as first byte
+        bytes.insert(0, u2f_header::U2F_POINT_UNCOMPRESSED as u8);
+        bytes
     }
 }
 
@@ -102,8 +134,21 @@ struct ApplicationKey {
 }
 
 #[derive(Clone)]
-struct AttestationCertificate {
+struct Attestation {
+    certificate: AttestationCertificate,
     key: Key,
+}
+
+#[derive(Clone)]
+struct AttestationCertificate (X509);
+
+impl AttestationCertificate {
+    fn from_pem(pem: &str) -> AttestationCertificate {
+        AttestationCertificate(X509::from_pem(pem.as_bytes()).unwrap())
+    }
+    fn to_der(&self) -> Vec<u8> {
+        self.0.to_der().unwrap()
+    }
 }
 
 #[derive(Debug)]
@@ -115,17 +160,17 @@ trait ApprovalService {
 }
 
 trait CryptoOperations {
+    fn attest(&self, data: &[u8]) -> Result<Box<Signature>, SignError>;
     fn generate_application_key(
         &self,
         application: &ApplicationParameter,
     ) -> io::Result<ApplicationKey>;
-    fn generate_attestation_certificate(&self) -> io::Result<AttestationCertificate>;
+    fn get_attestation_certificate(&self) -> AttestationCertificate;
     fn sign(&self, key: &Key, data: &[u8]) -> Result<Box<Signature>, SignError>;
 }
 
 trait SecretStore {
     fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()>;
-    fn get_attestation_certificate(&self) -> io::Result<Option<&AttestationCertificate>>;
     fn get_then_increment_counter(
         &mut self,
         application: &ApplicationParameter,
@@ -135,10 +180,6 @@ trait SecretStore {
         application: &ApplicationParameter,
         handle: &KeyHandle,
     ) -> io::Result<Option<&ApplicationKey>>;
-    fn set_attestation_certificate(
-        &mut self,
-        attestation_certificate: &AttestationCertificate,
-    ) -> io::Result<()>;
 }
 
 #[derive(Debug)]
@@ -183,7 +224,6 @@ quick_error! {
 }
 
 struct SoftU2F<'a> {
-    attestation_certificate: AttestationCertificate,
     approval: &'a ApprovalService,
     operations: &'a CryptoOperations,
     storage: &'a mut SecretStore,
@@ -195,27 +235,11 @@ impl<'a> SoftU2F<'a> {
         operations: &'a CryptoOperations,
         storage: &'a mut SecretStore,
     ) -> io::Result<SoftU2F<'a>> {
-        let attestation_certificate = Self::get_attestation_certificate(operations, storage)?;
         Ok(SoftU2F {
-            attestation_certificate: attestation_certificate,
             approval: approval,
             operations: operations,
             storage: storage,
         })
-    }
-
-    fn get_attestation_certificate(
-        operations: &CryptoOperations,
-        storage: &mut SecretStore,
-    ) -> io::Result<AttestationCertificate> {
-        if let Some(attestation_certificate) = storage.get_attestation_certificate()? {
-            return Ok(attestation_certificate.clone());
-        }
-        let attestation_certificate = operations.generate_attestation_certificate()?;
-        storage.set_attestation_certificate(
-            &attestation_certificate,
-        )?;
-        Ok(attestation_certificate)
     }
 
     pub fn authenticate(
@@ -284,20 +308,23 @@ impl<'a> SoftU2F<'a> {
         let mut ctx = BigNumContext::new().unwrap();
         let application_key = self.operations.generate_application_key(application)?;
         self.storage.add_application_key(&application_key)?;
-        let signature = self.operations.sign(
-            &self.attestation_certificate.key,
+
+        let public_key = PublicKey::from_key(&application_key.key);
+        let public_key_bytes: Vec<u8> = public_key.to_raw(&mut ctx);
+        let signature = self.operations.attest(
             &message_to_sign_for_register(
                 &application_key.application,
                 challenge,
+                &public_key_bytes,
                 &application_key.handle,
-                &mut ctx,
             ),
         )?;
+        let attestation_certificate = self.operations.get_attestation_certificate();
 
         Ok(Registration {
-            user_public_key: Vec::new(),
+            user_public_key: public_key_bytes,
             key_handle: application_key.handle,
-            attestation_certificate: Vec::new(),
+            attestation_certificate: attestation_certificate.to_der(),
             signature: signature,
         })
     }
@@ -342,8 +369,8 @@ fn message_to_sign_for_authenticate(
 fn message_to_sign_for_register(
     application: &ApplicationParameter,
     challenge: &ChallengeParameter,
+    key_bytes: &[u8],
     key_handle: &KeyHandle,
-    ctx: &mut BigNumContext,
 ) -> Vec<u8> {
     let mut message: Vec<u8> = Vec::new();
 
@@ -360,28 +387,22 @@ fn message_to_sign_for_register(
     message.extend_from_slice(key_handle.as_ref());
 
     // The user public key [65 bytes].
-    // Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
-    // I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
-    // uncompressed point compression method.
-    message.push(u2f_header::U2F_POINT_UNCOMPRESSED as u8);
-    let raw_public_key = Self::encode_public_key_raw(&application_key.key.0, ctx);
-    message.extend_from_slice(&raw_public_key);
+    message.extend_from_slice(key_bytes);
 
     message
 }
 
-fn encode_public_key_raw(ec_key: &EcKey, ctx: &mut BigNumContext) -> Vec<u8> {
-    // Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
-    // I.e. [X (32 bytes), Y (32 bytes)]
-    let group = ec_key.group().unwrap();
-    let form = ec::POINT_CONVERSION_UNCOMPRESSED;
-    let public_key = ec_key.public_key().unwrap();
-    public_key.to_bytes(group, form, ctx).unwrap()
+struct SecureCryptoOperations {
+    attestation: Attestation
 }
 
-struct SecureCryptoOperations;
-
 impl SecureCryptoOperations {
+    fn new(attestation: Attestation) -> SecureCryptoOperations {
+        SecureCryptoOperations {
+            attestation: attestation
+        }
+    }
+
     fn generate_key() -> Key {
         let group = EcGroup::from_curve_name(nid::X9_62_PRIME256V1).unwrap();
         let ec_key = EcKey::generate(&group).unwrap();
@@ -394,6 +415,10 @@ impl SecureCryptoOperations {
 }
 
 impl CryptoOperations for SecureCryptoOperations {
+    fn attest(&self, data: &[u8]) -> Result<Box<Signature>, SignError> {
+        self.sign(&self.attestation.key, data)
+    }
+
     fn generate_application_key(
         &self,
         application: &ApplicationParameter,
@@ -407,9 +432,8 @@ impl CryptoOperations for SecureCryptoOperations {
         })
     }
 
-    fn generate_attestation_certificate(&self) -> io::Result<AttestationCertificate> {
-        let key = Self::generate_key();
-        Ok(AttestationCertificate { key: key })
+    fn get_attestation_certificate(&self) -> AttestationCertificate {
+        self.attestation.certificate.clone()
     }
 
     fn sign(&self, key: &Key, data: &[u8]) -> Result<Box<Signature>, SignError> {
@@ -458,7 +482,6 @@ impl ApprovalService for FakeApprovalService {
 
 struct InMemoryStorage {
     application_keys: HashMap<ApplicationParameter, ApplicationKey>,
-    attestation_certificate: Option<AttestationCertificate>,
     counters: HashMap<ApplicationParameter, Counter>,
 }
 
@@ -466,7 +489,6 @@ impl InMemoryStorage {
     pub fn new() -> InMemoryStorage {
         InMemoryStorage {
             application_keys: HashMap::new(),
-            attestation_certificate: None,
             counters: HashMap::new(),
         }
     }
@@ -476,10 +498,6 @@ impl SecretStore for InMemoryStorage {
     fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()> {
         self.application_keys.insert(key.application, key.clone());
         Ok(())
-    }
-
-    fn get_attestation_certificate(&self) -> io::Result<Option<&AttestationCertificate>> {
-        Ok(self.attestation_certificate.as_ref())
     }
 
     fn get_then_increment_counter(
@@ -504,15 +522,6 @@ impl SecretStore for InMemoryStorage {
     ) -> io::Result<Option<&ApplicationKey>> {
         Ok(self.application_keys.get(application))
     }
-
-    fn set_attestation_certificate(
-        &mut self,
-        attestation_certificate: &AttestationCertificate,
-    ) -> io::Result<()> {
-        let c: &AttestationCertificate = attestation_certificate;
-        self.attestation_certificate = Some(c.clone());
-        Ok(())
-    }
 }
 
 // struct TestContext<'a> {
@@ -526,8 +535,33 @@ impl SecretStore for InMemoryStorage {
 mod tests {
     use super::*;
 
+    use openssl::sign::Verifier;
+
     const ALL_ZERO_HASH: [u8; 32] = [0; 32];
     const ALL_ZERO_KEY_HANDLE: KeyHandle = KeyHandle([0; 128]);
+
+    fn get_test_attestation() -> Attestation {
+        Attestation {
+            certificate: AttestationCertificate::from_pem("-----BEGIN CERTIFICATE-----
+MIIBfzCCASagAwIBAgIJAJaMtBXq9XVHMAoGCCqGSM49BAMCMBsxGTAXBgNVBAMM
+EFNvZnQgVTJGIFRlc3RpbmcwHhcNMTcxMDIwMjE1NzAzWhcNMjcxMDIwMjE1NzAz
+WjAbMRkwFwYDVQQDDBBTb2Z0IFUyRiBUZXN0aW5nMFkwEwYHKoZIzj0CAQYIKoZI
+zj0DAQcDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
+30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSqNTMFEwHQYDVR0OBBYEFHjWu2kQGzvn
+KfCIKULVtb4WZnAEMB8GA1UdIwQYMBaAFHjWu2kQGzvnKfCIKULVtb4WZnAEMA8G
+A1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDRwAwRAIgaiIS0Rb+Hw8WSO9fcsln
+ERLGHDWaV+MS0kr5HgmvAjQCIEU0qjr86VDcpLvuGnTkt2djzapR9iO9PPZ5aErv
+3GCT
+-----END CERTIFICATE-----
+"),
+            key: Key::from_pem("-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIEijhKU+RGVbusHs9jNSUs9ZycXRSvtz0wrBJKozKuh1oAoGCCqGSM49
+AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
+30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSg==
+-----END EC PRIVATE KEY-----
+"),
+        }
+    }
 
     // fn new_test_context<'a>() -> TestContext<'a> {
     //     let approval = AlwaysApproveService;
@@ -544,7 +578,7 @@ mod tests {
     #[test]
     fn is_valid_key_handle_with_invalid_handle_is_false() {
         let approval = FakeApprovalService::always_approve();
-        let operations = SecureCryptoOperations;
+        let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
@@ -560,7 +594,7 @@ mod tests {
     #[test]
     fn is_valid_key_handle_with_valid_handle_is_true() {
         let approval = FakeApprovalService::always_approve();
-        let operations = SecureCryptoOperations;
+        let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
@@ -578,7 +612,7 @@ mod tests {
     #[test]
     fn authenticate_with_invalid_handle_errors() {
         let approval = FakeApprovalService::always_approve();
-        let operations = SecureCryptoOperations;
+        let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
@@ -595,7 +629,7 @@ mod tests {
     #[test]
     fn authenticate_with_valid_handle_succeeds() {
         let approval = FakeApprovalService::always_approve();
-        let operations = SecureCryptoOperations;
+        let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
@@ -614,7 +648,7 @@ mod tests {
             should_approve_authentication: false,
             should_approve_registration: true,
         };
-        let operations = SecureCryptoOperations;
+        let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
@@ -634,7 +668,7 @@ mod tests {
             should_approve_authentication: true,
             should_approve_registration: false,
         };
-        let operations = SecureCryptoOperations;
+        let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
@@ -645,5 +679,31 @@ mod tests {
             softu2f.register(&application, &challenge),
             Err(RegisterError::ApprovalRequired)
         );
+    }
+
+    #[test]
+    fn register() {
+        let approval = FakeApprovalService::always_approve();
+        let operations = SecureCryptoOperations::new(get_test_attestation());
+        let mut storage = InMemoryStorage::new();
+        let mut softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
+
+        let mut os_rng = OsRng::new().unwrap();
+        let application = ApplicationParameter(os_rng.gen());
+        let challenge = ChallengeParameter(os_rng.gen());
+        let mut ctx = BigNumContext::new().unwrap();
+
+        let registration = softu2f.register(&application, &challenge).unwrap();
+
+        let attestation_certificate = X509::from_der(&registration.attestation_certificate).unwrap();
+        let public_key = attestation_certificate.public_key().unwrap();
+        let signed_data = message_to_sign_for_register(&application, &challenge, &registration.user_public_key, &registration.key_handle);
+        verify_signature(registration.signature.as_ref(), signed_data.as_ref(), &public_key);
+    }
+
+    fn verify_signature(signature: &Signature, data: &[u8], public_key: &PKey) {
+        let mut verifier = Verifier::new(MessageDigest::sha256(), public_key).unwrap();
+        verifier.update(data).unwrap();
+        assert!(verifier.finish(signature.as_ref()).unwrap());
     }
 }
