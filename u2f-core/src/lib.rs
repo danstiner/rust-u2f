@@ -389,8 +389,7 @@ impl SecureCryptoOperations {
     }
 
     fn generate_key_handle() -> io::Result<KeyHandle> {
-        let mut os_rng = OsRng::new()?;
-        Ok(os_rng.gen())
+        Ok(OsRng::new()?.gen())
     }
 }
 
