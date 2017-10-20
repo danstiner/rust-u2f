@@ -56,9 +56,9 @@ impl AsRef<[u8]> for KeyHandle {
 }
 
 impl Clone for KeyHandle {
-  fn clone(&self) -> KeyHandle {
-    KeyHandle(self.0)
-  }
+    fn clone(&self) -> KeyHandle {
+        KeyHandle(self.0)
+    }
 }
 
 impl Rand for KeyHandle {
@@ -240,7 +240,12 @@ impl<'a> SoftU2F<'a> {
 
         let signature = self.operations.sign(
             &application_key.key,
-            &Self::message_to_sign_for_authenticate(application, user_presence_byte, counter, challenge),
+            &Self::message_to_sign_for_authenticate(
+                application,
+                user_presence_byte,
+                counter,
+                challenge,
+            ),
         )?;
 
         Ok(Authentication {
@@ -281,7 +286,11 @@ impl<'a> SoftU2F<'a> {
         self.storage.add_application_key(&application_key)?;
         let signature = self.operations.sign(
             &self.attestation_certificate.key,
-            &Self::message_to_sign_for_register(&application_key, challenge, &mut ctx),
+            &Self::message_to_sign_for_register(
+                &application_key,
+                challenge,
+                &mut ctx,
+            ),
         )?;
 
         Ok(Registration {
@@ -304,7 +313,12 @@ impl<'a> SoftU2F<'a> {
         byte
     }
 
-    fn message_to_sign_for_authenticate(application: &ApplicationParameter, user_presence: u8, counter: Counter, challenge: &ChallengeParameter) -> Vec<u8> {
+    fn message_to_sign_for_authenticate(
+        application: &ApplicationParameter,
+        user_presence: u8,
+        counter: Counter,
+        challenge: &ChallengeParameter,
+    ) -> Vec<u8> {
         let mut message: Vec<u8> = Vec::new();
 
         // The application parameter [32 bytes] from the authentication request message.
@@ -322,7 +336,11 @@ impl<'a> SoftU2F<'a> {
         message
     }
 
-    fn message_to_sign_for_register(application_key: &ApplicationKey, challenge: &ChallengeParameter, ctx: &mut BigNumContext) -> Vec<u8> {
+    fn message_to_sign_for_register(
+        application_key: &ApplicationKey,
+        challenge: &ChallengeParameter,
+        ctx: &mut BigNumContext,
+    ) -> Vec<u8> {
         let mut message: Vec<u8> = Vec::new();
 
         // A byte reserved for future use [1 byte] with the value 0x00.
@@ -383,7 +401,7 @@ impl CryptoOperations for SecureCryptoOperations {
         Ok(ApplicationKey {
             application: *application,
             handle: handle,
-            key: key,  
+            key: key,
         })
     }
 
@@ -607,7 +625,6 @@ mod tests {
             Err(AuthenticateError::ApprovalRequired)
         );
     }
-
 
     #[test]
     fn register_with_rejected_approval_errors() {
