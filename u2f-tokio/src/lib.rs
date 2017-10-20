@@ -5,6 +5,7 @@ extern crate quick_error;
 extern crate openssl;
 extern crate rand;
 extern crate byteorder;
+extern crate u2f_header;
 
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
@@ -43,12 +44,37 @@ impl AsRef<[u8]> for ChallengeParameter {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-struct KeyHandle([u8; 32]);
+const MaxKeyHandleSize: usize = u2f_header::U2F_MAX_KH_SIZE as usize;
+
+#[derive(Copy)]
+struct KeyHandle([u8; MaxKeyHandleSize]);
 
 impl AsRef<[u8]> for KeyHandle {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
+    }
+}
+
+impl Clone for KeyHandle {
+  fn clone(&self) -> KeyHandle {
+    KeyHandle(self.0)
+  }
+}
+
+impl Rand for KeyHandle {
+    #[inline]
+    fn rand<R: Rng>(rng: &mut R) -> KeyHandle {
+        let mut bytes = [0u8; MaxKeyHandleSize];
+        for byte in bytes.iter_mut() {
+            *byte = rng.gen::<u8>();
+        }
+        KeyHandle(bytes)
+    }
+}
+
+impl Debug for KeyHandle {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "KeyHandle")
     }
 }
 
@@ -343,8 +369,7 @@ impl SecureCryptoOperations {
 
     fn generate_key_handle() -> io::Result<KeyHandle> {
         let mut os_rng = OsRng::new()?;
-        let bytes: [u8; 32] = os_rng.gen();
-        Ok(KeyHandle(bytes))
+        Ok(os_rng.gen())
     }
 }
 
@@ -482,6 +507,7 @@ mod tests {
     use super::*;
 
     const ALL_ZERO_HASH: [u8; 32] = [0; 32];
+    const ALL_ZERO_KEY_HANDLE: KeyHandle = KeyHandle([0; 128]);
 
     // fn new_test_context<'a>() -> TestContext<'a> {
     //     let approval = AlwaysApproveService;
@@ -503,7 +529,7 @@ mod tests {
         let softu2f = SoftU2F::new(&approval, &operations, &mut storage).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
-        let key_handle = KeyHandle(ALL_ZERO_HASH);
+        let key_handle = ALL_ZERO_KEY_HANDLE;
 
         assert_matches!(
             softu2f.is_valid_key_handle(&key_handle, &application),
@@ -538,7 +564,7 @@ mod tests {
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
-        let key_handle = KeyHandle(ALL_ZERO_HASH);
+        let key_handle = ALL_ZERO_KEY_HANDLE;
 
         assert_matches!(
             softu2f.authenticate(&application, &challenge, &key_handle),
