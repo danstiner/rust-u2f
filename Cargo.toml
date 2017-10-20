@@ -1,2 +1,2 @@
 [workspace]
-members = ["u2fhid-transport", "uhid-linux-bindings", "uhid-linux-tokio", "uhid-linux-tokio/example", "u2f-header", "u2fhid-transport-header", "u2f-tokio"]
+members = ["u2fhid-transport", "uhid-linux-bindings", "uhid-linux-tokio", "uhid-linux-tokio/example", "u2f-header", "u2fhid-transport-header", "u2f-core"]
