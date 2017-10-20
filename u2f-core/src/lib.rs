@@ -240,7 +240,7 @@ impl<'a> SoftU2F<'a> {
 
         let signature = self.operations.sign(
             &application_key.key,
-            &Self::message_to_sign_for_authenticate(
+            &message_to_sign_for_authenticate(
                 application,
                 user_presence_byte,
                 counter,
@@ -286,9 +286,10 @@ impl<'a> SoftU2F<'a> {
         self.storage.add_application_key(&application_key)?;
         let signature = self.operations.sign(
             &self.attestation_certificate.key,
-            &Self::message_to_sign_for_register(
-                &application_key,
+            &message_to_sign_for_register(
+                &application_key.application,
                 challenge,
+                &application_key.handle,
                 &mut ctx,
             ),
         )?;
@@ -312,68 +313,70 @@ impl<'a> SoftU2F<'a> {
         }
         byte
     }
+}
 
-    fn message_to_sign_for_authenticate(
-        application: &ApplicationParameter,
-        user_presence: u8,
-        counter: Counter,
-        challenge: &ChallengeParameter,
-    ) -> Vec<u8> {
-        let mut message: Vec<u8> = Vec::new();
 
-        // The application parameter [32 bytes] from the authentication request message.
-        message.extend_from_slice(application.as_ref());
+fn message_to_sign_for_authenticate(
+    application: &ApplicationParameter,
+    user_presence: u8,
+    counter: Counter,
+    challenge: &ChallengeParameter,
+) -> Vec<u8> {
+    let mut message: Vec<u8> = Vec::new();
 
-        // The user presence byte [1 byte].
-        message.push(user_presence);
+    // The application parameter [32 bytes] from the authentication request message.
+    message.extend_from_slice(application.as_ref());
 
-        // The counter [4 bytes].
-        message.write_u32::<BigEndian>(counter).unwrap();
+    // The user presence byte [1 byte].
+    message.push(user_presence);
 
-        // The challenge parameter [32 bytes] from the authentication request message.
-        message.extend_from_slice(challenge.as_ref());
+    // The counter [4 bytes].
+    message.write_u32::<BigEndian>(counter).unwrap();
 
-        message
-    }
+    // The challenge parameter [32 bytes] from the authentication request message.
+    message.extend_from_slice(challenge.as_ref());
 
-    fn message_to_sign_for_register(
-        application_key: &ApplicationKey,
-        challenge: &ChallengeParameter,
-        ctx: &mut BigNumContext,
-    ) -> Vec<u8> {
-        let mut message: Vec<u8> = Vec::new();
+    message
+}
 
-        // A byte reserved for future use [1 byte] with the value 0x00.
-        message.push(0u8);
+fn message_to_sign_for_register(
+    application: &ApplicationParameter,
+    challenge: &ChallengeParameter,
+    key_handle: &KeyHandle,
+    ctx: &mut BigNumContext,
+) -> Vec<u8> {
+    let mut message: Vec<u8> = Vec::new();
 
-        // The application parameter [32 bytes] from the registration request message.
-        message.extend_from_slice(application_key.application.as_ref());
+    // A byte reserved for future use [1 byte] with the value 0x00.
+    message.push(0u8);
 
-        // The challenge parameter [32 bytes] from the registration request message.
-        message.extend_from_slice(challenge.as_ref());
+    // The application parameter [32 bytes] from the registration request message.
+    message.extend_from_slice(application.as_ref());
 
-        // The key handle [variable length].
-        message.extend_from_slice(application_key.handle.as_ref());
+    // The challenge parameter [32 bytes] from the registration request message.
+    message.extend_from_slice(challenge.as_ref());
 
-        // The user public key [65 bytes].
-        // Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
-        // I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
-        // uncompressed point compression method.
-        message.push(u2f_header::U2F_POINT_UNCOMPRESSED as u8);
-        let raw_public_key = Self::encode_public_key_raw(&application_key.key.0, ctx);
-        message.extend_from_slice(&raw_public_key);
+    // The key handle [variable length].
+    message.extend_from_slice(key_handle.as_ref());
 
-        message
-    }
+    // The user public key [65 bytes].
+    // Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
+    // I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
+    // uncompressed point compression method.
+    message.push(u2f_header::U2F_POINT_UNCOMPRESSED as u8);
+    let raw_public_key = Self::encode_public_key_raw(&application_key.key.0, ctx);
+    message.extend_from_slice(&raw_public_key);
 
-    fn encode_public_key_raw(ec_key: &EcKey, ctx: &mut BigNumContext) -> Vec<u8> {
-        // Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
-        // I.e. [X (32 bytes), Y (32 bytes)]
-        let group = ec_key.group().unwrap();
-        let form = ec::POINT_CONVERSION_UNCOMPRESSED;
-        let public_key = ec_key.public_key().unwrap();
-        public_key.to_bytes(group, form, ctx).unwrap()
-    }
+    message
+}
+
+fn encode_public_key_raw(ec_key: &EcKey, ctx: &mut BigNumContext) -> Vec<u8> {
+    // Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
+    // I.e. [X (32 bytes), Y (32 bytes)]
+    let group = ec_key.group().unwrap();
+    let form = ec::POINT_CONVERSION_UNCOMPRESSED;
+    let public_key = ec_key.public_key().unwrap();
+    public_key.to_bytes(group, form, ctx).unwrap()
 }
 
 struct SecureCryptoOperations;
