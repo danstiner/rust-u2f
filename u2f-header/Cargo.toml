@@ -1,5 +1,5 @@
 [package]
-name = "u2f-message-format-header"
+name = "u2f-header"
 version = "1.2.0"
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 
