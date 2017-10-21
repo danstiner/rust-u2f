@@ -126,7 +126,9 @@ impl PublicKey {
     /// uncompressed point compression method.
     fn from_raw(bytes: &[u8], ctx: &mut BigNumContext) -> Result<PublicKey, String> {
         if bytes.len() != 65 {
-            return Err(String::from(format!("Expected 65 bytes, found {}", bytes.len())));
+            return Err(String::from(
+                format!("Expected 65 bytes, found {}", bytes.len()),
+            ));
         }
         if bytes[0] != u2f_header::U2F_POINT_UNCOMPRESSED as u8 {
             return Err(String::from("Expected uncompressed point"));
@@ -168,7 +170,7 @@ struct Attestation {
 }
 
 #[derive(Clone)]
-struct AttestationCertificate (X509);
+struct AttestationCertificate(X509);
 
 impl AttestationCertificate {
     fn from_pem(pem: &str) -> AttestationCertificate {
@@ -339,14 +341,12 @@ impl<'a> U2F<'a> {
 
         let public_key = PublicKey::from_key(&application_key.key, &mut ctx);
         let public_key_bytes: Vec<u8> = public_key.to_raw(&mut ctx);
-        let signature = self.operations.attest(
-            &message_to_sign_for_register(
-                &application_key.application,
-                challenge,
-                &public_key_bytes,
-                &application_key.handle,
-            ),
-        )?;
+        let signature = self.operations.attest(&message_to_sign_for_register(
+            &application_key.application,
+            challenge,
+            &public_key_bytes,
+            &application_key.handle,
+        ))?;
         let attestation_certificate = self.operations.get_attestation_certificate();
 
         Ok(Registration {
@@ -420,14 +420,12 @@ fn message_to_sign_for_register(
 }
 
 struct SecureCryptoOperations {
-    attestation: Attestation
+    attestation: Attestation,
 }
 
 impl SecureCryptoOperations {
     fn new(attestation: Attestation) -> SecureCryptoOperations {
-        SecureCryptoOperations {
-            attestation: attestation
-        }
+        SecureCryptoOperations { attestation: attestation }
     }
 
     fn generate_key() -> Key {
@@ -554,7 +552,7 @@ impl SecretStore for InMemoryStorage {
                 } else {
                     Ok(None)
                 }
-            },
+            }
             None => Ok(None),
         }
     }
@@ -582,7 +580,8 @@ mod tests {
 
     fn get_test_attestation() -> Attestation {
         Attestation {
-            certificate: AttestationCertificate::from_pem("-----BEGIN CERTIFICATE-----
+            certificate: AttestationCertificate::from_pem(
+                "-----BEGIN CERTIFICATE-----
 MIIBfzCCASagAwIBAgIJAJaMtBXq9XVHMAoGCCqGSM49BAMCMBsxGTAXBgNVBAMM
 EFNvZnQgVTJGIFRlc3RpbmcwHhcNMTcxMDIwMjE1NzAzWhcNMjcxMDIwMjE1NzAz
 WjAbMRkwFwYDVQQDDBBTb2Z0IFUyRiBUZXN0aW5nMFkwEwYHKoZIzj0CAQYIKoZI
@@ -593,13 +592,16 @@ A1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDRwAwRAIgaiIS0Rb+Hw8WSO9fcsln
 ERLGHDWaV+MS0kr5HgmvAjQCIEU0qjr86VDcpLvuGnTkt2djzapR9iO9PPZ5aErv
 3GCT
 -----END CERTIFICATE-----
-"),
-            key: Key::from_pem("-----BEGIN EC PRIVATE KEY-----
+",
+            ),
+            key: Key::from_pem(
+                "-----BEGIN EC PRIVATE KEY-----
 MHcCAQEEIEijhKU+RGVbusHs9jNSUs9ZycXRSvtz0wrBJKozKuh1oAoGCCqGSM49
 AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSg==
 -----END EC PRIVATE KEY-----
-"),
+",
+            ),
         }
     }
 
@@ -648,7 +650,6 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         );
     }
 
-
     #[test]
     fn authenticate_with_invalid_handle_errors() {
         let approval = FakeApprovalService::always_approve();
@@ -677,8 +678,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
         let registration = u2f.register(&application, &challenge).unwrap();
 
-        u2f
-            .authenticate(&application, &challenge, &registration.key_handle)
+        u2f.authenticate(&application, &challenge, &registration.key_handle)
             .unwrap();
     }
 
@@ -736,13 +736,26 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let registration = u2f.register(&application, &register_challenge).unwrap();
 
         let authenticate_challenge = ChallengeParameter(os_rng.gen());
-        let authentication = u2f.authenticate(&application, &authenticate_challenge, &registration.key_handle).unwrap();
+        let authentication = u2f.authenticate(
+            &application,
+            &authenticate_challenge,
+            &registration.key_handle,
+        ).unwrap();
 
         let user_presence_byte = user_presence_byte(true);
         let user_public_key = PublicKey::from_raw(&registration.user_public_key, &mut ctx).unwrap();
         let user_pkey = PKey::from_ec_key(user_public_key.to_ec_key()).unwrap();
-        let signed_data = message_to_sign_for_authenticate(&application, &authenticate_challenge, user_presence_byte, authentication.counter);
-        verify_signature(authentication.signature.as_ref(), signed_data.as_ref(), &user_pkey);
+        let signed_data = message_to_sign_for_authenticate(
+            &application,
+            &authenticate_challenge,
+            user_presence_byte,
+            authentication.counter,
+        );
+        verify_signature(
+            authentication.signature.as_ref(),
+            signed_data.as_ref(),
+            &user_pkey,
+        );
     }
 
     #[test]
@@ -759,10 +772,20 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let registration = u2f.register(&application, &challenge).unwrap();
 
-        let attestation_certificate = X509::from_der(&registration.attestation_certificate).unwrap();
+        let attestation_certificate = X509::from_der(&registration.attestation_certificate)
+            .unwrap();
         let public_key = attestation_certificate.public_key().unwrap();
-        let signed_data = message_to_sign_for_register(&application, &challenge, &registration.user_public_key, &registration.key_handle);
-        verify_signature(registration.signature.as_ref(), signed_data.as_ref(), &public_key);
+        let signed_data = message_to_sign_for_register(
+            &application,
+            &challenge,
+            &registration.user_public_key,
+            &registration.key_handle,
+        );
+        verify_signature(
+            registration.signature.as_ref(),
+            signed_data.as_ref(),
+            &public_key,
+        );
     }
 
     fn verify_signature(signature: &Signature, data: &[u8], public_key: &PKey) {
