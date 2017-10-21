@@ -1,0 +1,6 @@
+[package]
+name = "softu2f-bin"
+version = "0.1.0"
+authors = ["Daniel Stiner <danstiner@gmail.com>"]
+
+[dependencies]
