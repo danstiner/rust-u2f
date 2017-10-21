@@ -6,6 +6,7 @@ extern crate openssl;
 extern crate rand;
 extern crate byteorder;
 extern crate u2f_header;
+extern crate subtle;
 
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
@@ -546,8 +547,21 @@ impl SecretStore for InMemoryStorage {
         application: &ApplicationParameter,
         handle: &KeyHandle,
     ) -> io::Result<Option<&ApplicationKey>> {
-        Ok(self.application_keys.get(application))
+        match self.application_keys.get(application) {
+            Some(key) => {
+                if key_handles_eq_consttime(&key.handle, handle) {
+                    Ok(Some(key))
+                } else {
+                    Ok(None)
+                }
+            },
+            None => Ok(None),
+        }
     }
+}
+
+fn key_handles_eq_consttime(key_handle1: &KeyHandle, key_handle2: &KeyHandle) -> bool {
+    subtle::slices_equal(&key_handle1.0, &key_handle2.0) == 1
 }
 
 // struct TestContext<'a> {

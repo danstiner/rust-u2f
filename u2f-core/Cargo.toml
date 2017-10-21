@@ -9,6 +9,7 @@ byteorder = "1.1.0"
 openssl = "0.9.20"
 quick-error = "1.2.1"
 rand = "0.3.17"
+subtle = "0.3.0"
 
 [dependencies.u2f-header]
 path = "../u2f-header"
