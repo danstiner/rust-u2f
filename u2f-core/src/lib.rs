@@ -15,7 +15,7 @@ use std::result::Result;
 use byteorder::{BigEndian, WriteBytesExt};
 use openssl::bn::BigNumContext;
 use openssl::bn::BigNumContextRef;
-use openssl::ec::{self, EcGroup, EcKey, EcGroupRef, EcPointRef};
+use openssl::ec::{self, EcGroup, EcKey, EcPoint, EcGroupRef, EcPointRef};
 use openssl::hash::MessageDigest;
 use openssl::nid;
 use openssl::pkey::PKey;
@@ -99,17 +99,47 @@ impl Debug for Key {
     }
 }
 
-struct PublicKey<'a> {
-    group: &'a EcGroupRef,
-    point: &'a EcPointRef,
+struct PublicKey {
+    group: EcGroup,
+    point: EcPoint,
 }
 
-impl<'a> PublicKey<'a> {
-    fn from_key(key: &'a Key) -> PublicKey {
+fn copy_ec_point(point: &EcPointRef, group: &EcGroupRef, ctx: &mut BigNumContextRef) -> EcPoint {
+    let form = ec::POINT_CONVERSION_UNCOMPRESSED;
+    let bytes = point.to_bytes(&group, form, ctx).unwrap();
+    EcPoint::from_bytes(&group, &bytes, ctx).unwrap()
+}
+
+impl PublicKey {
+    fn from_key(key: &Key, ctx: &mut BigNumContextRef) -> PublicKey {
+        let group = EcGroup::from_curve_name(nid::X9_62_PRIME256V1).unwrap();
+        let point = copy_ec_point(key.0.public_key().unwrap(), &group, ctx);
         PublicKey {
-            group: key.0.group().unwrap(),
-            point: key.0.public_key().unwrap(),
+            group: group,
+            point: point,
         }
+    }
+
+    /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
+    /// I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
+    /// uncompressed point compression method.
+    fn from_raw(bytes: &[u8], ctx: &mut BigNumContext) -> Result<PublicKey, String> {
+        if bytes.len() != 65 {
+            return Err(String::from(format!("Expected 65 bytes, found {}", bytes.len())));
+        }
+        if bytes[0] != u2f_header::U2F_POINT_UNCOMPRESSED as u8 {
+            return Err(String::from("Expected uncompressed point"));
+        }
+        let group = EcGroup::from_curve_name(nid::X9_62_PRIME256V1).unwrap();
+        let point = EcPoint::from_bytes(&group, bytes, ctx).unwrap();
+        Ok(PublicKey {
+            group: group,
+            point: point,
+        })
+    }
+
+    fn to_ec_key(&self) -> EcKey {
+        EcKey::from_public_key(&self.group, &self.point).unwrap()
     }
 
     /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
@@ -117,10 +147,7 @@ impl<'a> PublicKey<'a> {
     /// uncompressed point compression method.
     fn to_raw(&self, ctx: &mut BigNumContext) -> Vec<u8> {
         let form = ec::POINT_CONVERSION_UNCOMPRESSED;
-        let mut bytes = self.point.to_bytes(self.group, form, ctx).unwrap();
-        // Add compression method tag as first byte
-        bytes.insert(0, u2f_header::U2F_POINT_UNCOMPRESSED as u8);
-        bytes
+        self.point.to_bytes(&self.group, form, ctx).unwrap()
     }
 }
 
@@ -260,15 +287,15 @@ impl<'a> U2F<'a> {
             None => return Err(AuthenticateError::BadKeyHandle),
         };
         let counter = self.storage.get_then_increment_counter(application)?;
-        let user_presence_byte = Self::user_presence_byte(true);
+        let user_presence_byte = user_presence_byte(true);
 
         let signature = self.operations.sign(
             &application_key.key,
             &message_to_sign_for_authenticate(
                 application,
+                challenge,
                 user_presence_byte,
                 counter,
-                challenge,
             ),
         )?;
 
@@ -309,7 +336,7 @@ impl<'a> U2F<'a> {
         let application_key = self.operations.generate_application_key(application)?;
         self.storage.add_application_key(&application_key)?;
 
-        let public_key = PublicKey::from_key(&application_key.key);
+        let public_key = PublicKey::from_key(&application_key.key, &mut ctx);
         let public_key_bytes: Vec<u8> = public_key.to_raw(&mut ctx);
         let signature = self.operations.attest(
             &message_to_sign_for_register(
@@ -328,26 +355,25 @@ impl<'a> U2F<'a> {
             signature: signature,
         })
     }
-
-    /// User presence byte [1 byte]. Bit 0 indicates whether user presence was verified.
-    /// If Bit 0 is is to 1, then user presence was verified. If Bit 0 is set to 0,
-    /// then user presence was not verified. The values of Bit 1 through 7 shall be 0;
-    /// different values are reserved for future use.
-    fn user_presence_byte(user_present: bool) -> u8 {
-        let mut byte: u8 = 0b0000_0000;
-        if user_present {
-            byte |= 0b0000_0001;
-        }
-        byte
-    }
 }
 
+/// User presence byte [1 byte]. Bit 0 indicates whether user presence was verified.
+/// If Bit 0 is is to 1, then user presence was verified. If Bit 0 is set to 0,
+/// then user presence was not verified. The values of Bit 1 through 7 shall be 0;
+/// different values are reserved for future use.
+fn user_presence_byte(user_present: bool) -> u8 {
+    let mut byte: u8 = 0b0000_0000;
+    if user_present {
+        byte |= 0b0000_0001;
+    }
+    byte
+}
 
 fn message_to_sign_for_authenticate(
     application: &ApplicationParameter,
+    challenge: &ChallengeParameter,
     user_presence: u8,
     counter: Counter,
-    challenge: &ChallengeParameter,
 ) -> Vec<u8> {
     let mut message: Vec<u8> = Vec::new();
 
@@ -682,7 +708,31 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
     }
 
     #[test]
-    fn register() {
+    fn authenticate_signature() {
+        let approval = FakeApprovalService::always_approve();
+        let operations = SecureCryptoOperations::new(get_test_attestation());
+        let mut storage = InMemoryStorage::new();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
+
+        let mut os_rng = OsRng::new().unwrap();
+        let application = ApplicationParameter(os_rng.gen());
+        let register_challenge = ChallengeParameter(os_rng.gen());
+        let mut ctx = BigNumContext::new().unwrap();
+
+        let registration = u2f.register(&application, &register_challenge).unwrap();
+
+        let authenticate_challenge = ChallengeParameter(os_rng.gen());
+        let authentication = u2f.authenticate(&application, &authenticate_challenge, &registration.key_handle).unwrap();
+
+        let user_presence_byte = user_presence_byte(true);
+        let user_public_key = PublicKey::from_raw(&registration.user_public_key, &mut ctx).unwrap();
+        let user_pkey = PKey::from_ec_key(user_public_key.to_ec_key()).unwrap();
+        let signed_data = message_to_sign_for_authenticate(&application, &authenticate_challenge, user_presence_byte, authentication.counter);
+        verify_signature(authentication.signature.as_ref(), signed_data.as_ref(), &user_pkey);
+    }
+
+    #[test]
+    fn register_signature() {
         let approval = FakeApprovalService::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
