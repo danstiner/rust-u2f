@@ -2,10 +2,11 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "softu2f-bin"
 version = "0.1.0"
-
 [dependencies]
 futures = "0.1.16"
 rprompt = "1.0.3"
+slog = "2.0.12"
+slog-term = "2.2.0"
 tokio-core = "0.1.9"
 tokio-service = "0.1.0"
 

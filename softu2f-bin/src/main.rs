@@ -1,5 +1,8 @@
 extern crate futures;
 extern crate rprompt;
+#[macro_use]
+extern crate slog;
+extern crate slog_term;
 extern crate tokio_core;
 extern crate tokio_service;
 extern crate u2f_core;
@@ -8,7 +11,7 @@ use std::ascii::AsciiExt;
 use std::io;
 
 use futures::{future, Future, Stream, Sink};
-use tokio_core::net::TcpListener;
+use slog::*;
 use tokio_core::reactor::Core;
 use tokio_service::{Service, NewService};
 
@@ -42,8 +45,8 @@ impl ApprovalService for CommandPromptApprovalService {
 struct U2FUHIDDevice;
 
 impl U2FUHIDDevice {
-    fn new(handle) -> Ok(U2FUHIDDevice {
-
+    fn new(handle) -> Result<U2FUHIDDevice, ()> {
+        Ok(U2FUHIDDevice)
     }
 }
 
@@ -71,6 +74,11 @@ fn run() -> io::Result<()> {
 }
 
 fn main() {
-    println!("Hello, world!");
+    let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
+    let logger = Logger::root(
+        slog_term::FullFormat::new(plain)
+        .build().fuse(), o!()
+    );
+    info!(logger, "SoftU2F started");
     run().unwrap();
 }
