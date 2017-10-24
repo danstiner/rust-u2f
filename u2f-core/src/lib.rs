@@ -2,11 +2,15 @@
 extern crate assert_matches;
 #[macro_use]
 extern crate quick_error;
+extern crate byteorder;
+extern crate futures;
 extern crate openssl;
 extern crate rand;
-extern crate byteorder;
-extern crate u2f_header;
 extern crate subtle;
+extern crate tokio_service;
+extern crate u2f_header;
+
+mod self_signed_attestation;
 
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
@@ -14,6 +18,7 @@ use std::io;
 use std::result::Result;
 
 use byteorder::{BigEndian, WriteBytesExt};
+use futures::Future;
 use openssl::bn::BigNumContext;
 use openssl::bn::BigNumContextRef;
 use openssl::ec::{self, EcGroup, EcKey, EcPoint, EcGroupRef, EcPointRef};
@@ -25,12 +30,79 @@ use openssl::x509::X509;
 use rand::OsRng;
 use rand::Rand;
 use rand::Rng;
+use tokio_service::Service;
+
+use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM, SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
+
+pub enum StatusCode {
+    NoError,
+    TestOfUserPresenceNotSatisfied,
+    InvalidKeyHandle,
+    RequestLengthInvalid,
+    RequestClassNotSupported,
+    RequestInstructionNotSuppored,
+}
+
+pub enum AuthenticateControlCode {
+    CheckOnly,
+    EnforceUserPresenceAndSign,
+    DontEnforceUserPresenceAndSign,
+}
+
+pub enum Request {
+    Register {
+        challenge: ChallengeParameter,
+        application: ApplicationParameter,
+    },
+    Authenticate {
+        control_code: AuthenticateControlCode,
+        challenge: ChallengeParameter,
+        application: ApplicationParameter,
+        key_handle: KeyHandle,
+    },
+    GetVersion,
+    Wink,
+}
+
+impl Request {
+    pub fn decode(data: &[u8]) -> Result<Request,()> {
+        Err(())
+    }
+}
+
+pub enum Response {
+    Registration {
+        user_public_key: Vec<u8>,
+        key_handle: KeyHandle,
+        attestation_certificate: Vec<u8>,
+        signature: Box<Signature>,
+    },
+    Authentication {
+        counter: Counter,
+        signature: Box<Signature>,
+        user_present: bool,
+    },
+    Version { version_string: String },
+    DidWink,
+}
+
+impl Response {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        Vec::new() // TODO
+    }
+}
+
+pub enum ErrorMessage {
+    Unknown, // SW_UNKNOWN : No precise diagnosis = 0x6F00
+    TestOfUserPresenceNotSatisfied,
+    InvalidKeyHandle,
+}
 
 type Counter = u32;
 type SHA256Hash = [u8; 32];
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-struct ApplicationParameter(SHA256Hash);
+pub struct ApplicationParameter(SHA256Hash);
 
 impl AsRef<[u8]> for ApplicationParameter {
     fn as_ref(&self) -> &[u8] {
@@ -38,7 +110,7 @@ impl AsRef<[u8]> for ApplicationParameter {
     }
 }
 
-struct ChallengeParameter(SHA256Hash);
+pub struct ChallengeParameter(SHA256Hash);
 
 impl AsRef<[u8]> for ChallengeParameter {
     fn as_ref(&self) -> &[u8] {
@@ -49,7 +121,7 @@ impl AsRef<[u8]> for ChallengeParameter {
 const MaxKeyHandleSize: usize = u2f_header::U2F_MAX_KH_SIZE as usize;
 
 #[derive(Copy)]
-struct KeyHandle([u8; MaxKeyHandleSize]);
+pub struct KeyHandle([u8; MaxKeyHandleSize]);
 
 impl AsRef<[u8]> for KeyHandle {
     fn as_ref(&self) -> &[u8] {
@@ -80,7 +152,7 @@ impl Debug for KeyHandle {
     }
 }
 
-struct Key(EcKey);
+pub struct Key(EcKey);
 
 impl Key {
     fn from_pem(pem: &str) -> Key {
@@ -100,7 +172,7 @@ impl Debug for Key {
     }
 }
 
-struct PublicKey {
+pub struct PublicKey {
     group: EcGroup,
     point: EcPoint,
 }
@@ -154,23 +226,23 @@ impl PublicKey {
     }
 }
 
-trait Signature: AsRef<[u8]> + Debug {}
+pub trait Signature: AsRef<[u8]> + Debug + Send {}
 
 #[derive(Clone)]
-struct ApplicationKey {
+pub struct ApplicationKey {
     application: ApplicationParameter,
     handle: KeyHandle,
     key: Key,
 }
 
 #[derive(Clone)]
-struct Attestation {
+pub struct Attestation {
     certificate: AttestationCertificate,
     key: Key,
 }
 
 #[derive(Clone)]
-struct AttestationCertificate(X509);
+pub struct AttestationCertificate(X509);
 
 impl AttestationCertificate {
     fn from_pem(pem: &str) -> AttestationCertificate {
@@ -184,12 +256,12 @@ impl AttestationCertificate {
 #[derive(Debug)]
 pub enum SignError {}
 
-trait ApprovalService {
+pub trait ApprovalService {
     fn approve_registration(&self, application: &ApplicationParameter) -> io::Result<bool>;
     fn approve_authentication(&self, application: &ApplicationParameter) -> io::Result<bool>;
 }
 
-trait CryptoOperations {
+pub trait CryptoOperations {
     fn attest(&self, data: &[u8]) -> Result<Box<Signature>, SignError>;
     fn generate_application_key(
         &self,
@@ -199,7 +271,7 @@ trait CryptoOperations {
     fn sign(&self, key: &Key, data: &[u8]) -> Result<Box<Signature>, SignError>;
 }
 
-trait SecretStore {
+pub trait SecretStore {
     fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()>;
     fn get_then_increment_counter(
         &mut self,
@@ -213,7 +285,7 @@ trait SecretStore {
 }
 
 #[derive(Debug)]
-struct Registration {
+pub struct Registration {
     user_public_key: Vec<u8>,
     key_handle: KeyHandle,
     attestation_certificate: Vec<u8>,
@@ -221,16 +293,17 @@ struct Registration {
 }
 
 #[derive(Debug)]
-struct Authentication {
+pub struct Authentication {
     counter: Counter,
     signature: Box<Signature>,
+    user_present: bool,
 }
 
 quick_error! {
     #[derive(Debug)]
     pub enum AuthenticateError {
         ApprovalRequired
-        BadKeyHandle
+        InvalidKeyHandle
         Io(err: io::Error) {
             from()
         }
@@ -253,7 +326,7 @@ quick_error! {
     }
 }
 
-struct U2F<'a> {
+pub struct U2F<'a> {
     approval: &'a ApprovalService,
     operations: &'a CryptoOperations,
     storage: &'a mut SecretStore,
@@ -282,15 +355,16 @@ impl<'a> U2F<'a> {
             return Err(AuthenticateError::ApprovalRequired);
         }
 
+        let user_present = true;
         let application_key = match self.storage.retrieve_application_key(
             application,
             key_handle,
         )? {
             Some(key) => key.clone(),
-            None => return Err(AuthenticateError::BadKeyHandle),
+            None => return Err(AuthenticateError::InvalidKeyHandle),
         };
         let counter = self.storage.get_then_increment_counter(application)?;
-        let user_presence_byte = user_presence_byte(true);
+        let user_presence_byte = user_presence_byte(user_present);
 
         let signature = self.operations.sign(
             &application_key.key,
@@ -305,10 +379,11 @@ impl<'a> U2F<'a> {
         Ok(Authentication {
             counter: counter,
             signature: signature,
+            user_present: user_present,
         })
     }
 
-    pub fn get_version_string() -> String {
+    pub fn get_version_string(&self) -> String {
         String::from("U2F_V2")
     }
 
@@ -355,6 +430,100 @@ impl<'a> U2F<'a> {
             attestation_certificate: attestation_certificate.to_der(),
             signature: signature,
         })
+    }
+
+    pub fn call(&mut self, request: Request) -> Box<Future<Item = Response, Error = ErrorMessage>> {
+        match request {
+            Request::Register {
+                challenge,
+                application,
+            } => {
+                match self.register(&application, &challenge) {
+                    Ok(registration) => {
+                        futures::finished(Response::Registration {
+                            user_public_key: registration.user_public_key,
+                            key_handle: registration.key_handle,
+                            attestation_certificate: registration.attestation_certificate,
+                            signature: registration.signature,
+                        }).boxed()
+                    },
+                    Err(error) => {
+                        match error {
+                            RegisterError::ApprovalRequired => {
+                                futures::failed(ErrorMessage::TestOfUserPresenceNotSatisfied).boxed()
+                            },
+                            RegisterError::Io(err) => {
+                                futures::failed(ErrorMessage::Unknown).boxed()
+                            },
+                            RegisterError::Signing(err) => {
+                                futures::failed(ErrorMessage::Unknown).boxed()
+                            },
+                        }
+                    },
+                }
+            },
+            Request::Authenticate {
+                control_code,
+                challenge,
+                application,
+                key_handle,
+            } => {
+                match control_code {
+                    AuthenticateControlCode::CheckOnly => {
+                        match self.is_valid_key_handle(&key_handle, &application) {
+                            Ok(is_valid) => {
+                                if is_valid {
+                                    futures::failed(ErrorMessage::TestOfUserPresenceNotSatisfied).boxed()
+                                } else {
+                                    futures::failed(ErrorMessage::InvalidKeyHandle).boxed()
+                                }
+                            },
+                            Err(_) => futures::failed(ErrorMessage::Unknown).boxed(),
+                        }
+                    },
+                    AuthenticateControlCode::EnforceUserPresenceAndSign => {
+                        match self.authenticate(&application, &challenge, &key_handle) {
+                            Ok(authentication) => {
+                                futures::finished(Response::Authentication {
+                                    counter: authentication.counter,
+                                    signature: authentication.signature,
+                                    user_present: authentication.user_present,
+                                }).boxed()
+                            },
+                            Err(error) => {
+                                match error {
+                                    AuthenticateError::ApprovalRequired => {
+                                        futures::failed(ErrorMessage::TestOfUserPresenceNotSatisfied).boxed()
+                                    }
+                                    AuthenticateError::InvalidKeyHandle => {
+                                        futures::failed(ErrorMessage::InvalidKeyHandle).boxed()
+                                    }
+                                    AuthenticateError::Io(err) => {
+                                        futures::failed(ErrorMessage::Unknown).boxed()
+                                    }
+                                    AuthenticateError::Signing(err) => {
+                                        futures::failed(ErrorMessage::Unknown).boxed()
+                                    }
+                                }
+                            },
+                        }
+                    },
+                    AuthenticateControlCode::DontEnforceUserPresenceAndSign => {
+                        futures::failed(ErrorMessage::TestOfUserPresenceNotSatisfied).boxed()
+                    },
+                }
+            },
+            Request::GetVersion => {
+                let response = Response::Version {
+                    version_string: self.get_version_string(),
+                };
+                futures::finished(response).boxed()
+            },
+            Request::Wink => {
+                assert!(false); // not implemented
+                futures::finished(Response::DidWink).boxed()
+            },
+        }
     }
 }
 
@@ -419,12 +588,12 @@ fn message_to_sign_for_register(
     message
 }
 
-struct SecureCryptoOperations {
+pub struct SecureCryptoOperations {
     attestation: Attestation,
 }
 
 impl SecureCryptoOperations {
-    fn new(attestation: Attestation) -> SecureCryptoOperations {
+    pub fn new(attestation: Attestation) -> SecureCryptoOperations {
         SecureCryptoOperations { attestation: attestation }
     }
 
@@ -505,7 +674,7 @@ impl ApprovalService for FakeApprovalService {
     }
 }
 
-struct InMemoryStorage {
+pub struct InMemoryStorage {
     application_keys: HashMap<ApplicationParameter, ApplicationKey>,
     counters: HashMap<ApplicationParameter, Counter>,
 }
@@ -560,6 +729,17 @@ impl SecretStore for InMemoryStorage {
 
 fn key_handles_eq_consttime(key_handle1: &KeyHandle, key_handle2: &KeyHandle) -> bool {
     subtle::slices_equal(&key_handle1.0, &key_handle2.0) == 1
+}
+
+pub fn self_signed_attestation() -> Attestation {
+    Attestation {
+        certificate: AttestationCertificate::from_pem(
+            SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM
+        ),
+        key: Key::from_pem(
+            SELF_SIGNED_ATTESTATION_KEY_PEM
+        ),
+    }
 }
 
 // struct TestContext<'a> {
@@ -663,7 +843,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         assert_matches!(
             u2f.authenticate(&application, &challenge, &key_handle),
-            Err(AuthenticateError::BadKeyHandle)
+            Err(AuthenticateError::InvalidKeyHandle)
         );
     }
 

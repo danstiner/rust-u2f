@@ -5,10 +5,10 @@ extern crate bytes;
 extern crate futures;
 #[macro_use]
 extern crate quick_error;
-extern crate tokio_core;
-extern crate tokio_io;
 extern crate mio;
 extern crate nix;
+extern crate tokio_core;
+extern crate tokio_io;
 extern crate uhid_linux_bindings;
 
 mod character_device_file;

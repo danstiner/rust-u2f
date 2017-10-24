@@ -68,7 +68,7 @@ fn main() {
 
     let mut core = tokio_core::reactor::Core::new().unwrap();
     let handle = core.handle();
-    let mut uhid_device = UHIDDevice::create(&handle, create_params).unwrap();
+    let mut uhid_device = UHIDDevice::create(&handle, create_params, None).unwrap();
 
     let button_flags = 0;
     let mouse_abs_hor = 20;

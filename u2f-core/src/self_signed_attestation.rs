@@ -11,7 +11,7 @@
 // Further, at the current time there is no chain of trust for attestation certficates,
 // nor do any sites seem to have lists of specific allowed attestation certificates,
 // so there is little lost by publicizing this key.
-const self_signed_attestation_key_pem: &str = "-----BEGIN EC PRIVATE KEY-----
+pub const SELF_SIGNED_ATTESTATION_KEY_PEM: &str = "-----BEGIN EC PRIVATE KEY-----
 MHcCAQEEINEOLIK0c4FmXL3ImqB65YV63JyaR3NGWA7ShLmL6GfboAoGCCqGSM49
 AwEHoUQDQgAEOYIz5kgxQSWqea8AzHcqjuJQnFqkF8V7RwTfkvs7esrQt2pqrqHL
 VxrjjimYpE5E/4F/CxV1apjGSHLwuBM4hg==
@@ -52,7 +52,7 @@ VxrjjimYpE5E/4F/CxV1apjGSHLwuBM4hg==
 //          f1:c3:c0:d5:62:44:7e:3a:d5:f6:6f:ff:ab:45:95:b6:0f:18:
 //          4c:02:21:00:92:d4:f3:3c:7c:c3:8a:4e:07:6b:de:1a:6a:79:
 //          0a:bf:ca:c4:0a:f0:d2:59:b4:f6:c5:00:31:24:f1:e7:df:1d
-const self_signed_attestation_certificate_pem: &str = "-----BEGIN CERTIFICATE-----
+pub const SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM: &str = "-----BEGIN CERTIFICATE-----
 MIIBcTCCARagAwIBAgIJAIqK93XCOr/GMAoGCCqGSM49BAMCMBMxETAPBgNVBAMM
 CFNvZnQgVTJGMB4XDTE3MTAyMDIxNTEzM1oXDTI3MTAyMDIxNTEzM1owEzERMA8G
 A1UEAwwIU29mdCBVMkYwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQ5gjPmSDFB

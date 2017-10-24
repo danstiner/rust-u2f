@@ -2,6 +2,12 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "u2fhid-transport"
 version = "0.1.0"
+[dependencies]
+byteorder = "1.1.0"
+futures = "0.1.16"
+
+[dependencies.u2f-core]
+path = "../u2f-core"
 
 [dependencies.u2fhid-transport-header]
 path = "../u2fhid-transport-header"
