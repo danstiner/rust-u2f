@@ -151,10 +151,17 @@ impl<S: Sink + Stream, E> StreamState<S, E> {
     }
 }
 
+struct StateMachine;
+
+impl StateMachine {
+    
+}
+
 struct U2FHID<S: Sink + Stream, E> {
     channels: HashSet<ChannelId>,
     state: State,
     stream_state: StreamState<S, E>,
+    state_machine: StateMachine
 }
 
 impl<S: Sink<SinkItem = Packet, SinkError = E> + Stream<Item = Packet, Error = E>, E> U2FHID<S, E> {
