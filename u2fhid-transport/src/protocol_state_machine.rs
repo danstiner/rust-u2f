@@ -3,6 +3,7 @@ use std::mem;
 use definitions::*;
 use u2f_core::Request;
 
+#[derive(Debug)]
 pub enum Output {
     Request(Request),
     ResponseMessage(ResponseMessage, ChannelId),
@@ -34,6 +35,7 @@ const BROADCAST_CHANNEL_ID: ChannelId = 0xffffffff;
 const MAX_CHANNEL_ID: ChannelId = 5;
 const MIN_CHANNEL_ID: ChannelId = 1;
 
+#[derive(Debug)]
 struct Channels {
     next_allocation: ChannelId,
 }
@@ -276,8 +278,12 @@ mod tests {
 
     #[test]
     fn init() {
-        let mut os_rng = OsRng::new().unwrap();
         let mut state_machine = StateMachine::new();
+        init_channel(&mut state_machine);
+    }
+
+    fn init_channel(state_machine: &mut StateMachine) -> ChannelId {
+        let mut os_rng = OsRng::new().unwrap();
         let request_nonce: [u8; 8] = os_rng.gen();
         let data = request_nonce.to_vec();
         let data_len = data.len();
@@ -296,8 +302,37 @@ mod tests {
                 assert_eq!(response_channel_id, BROADCAST_CHANNEL_ID);
                 assert_eq!(request_nonce, nonce);
                 assert!(state_machine.channels.is_valid(channel_id));
-            }
-            _ => assert!(false)
+                channel_id
+            },
+            _ => panic!(),
         }
+    }
+
+    #[test]
+    fn ping() {
+        let mut os_rng = OsRng::new().unwrap();
+        let mut state_machine = StateMachine::new();
+        let request_data: [u8; 8] = os_rng.gen();
+        let packet_data = request_data.to_vec();
+        let packet_data_len = packet_data.len();
+
+        let channel_id = init_channel(&mut state_machine);
+
+        let res = state_machine
+            .accept_packet(Packet::Initialization {
+                channel_id: channel_id,
+                command: Command::Ping,
+                data: packet_data,
+                payload_len: packet_data_len,
+            })
+            .unwrap();
+
+        match res {
+            Some(Output::ResponseMessage(ResponseMessage::Ping { data }, response_channel_id)) => {
+                assert_eq!(response_channel_id, channel_id);
+                assert_eq!(request_data, data[..]);
+            }
+            _ => panic!()
+        };
     }
 }

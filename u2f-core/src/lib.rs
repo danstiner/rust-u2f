@@ -34,6 +34,7 @@ use tokio_service::Service;
 
 use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM, SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
 
+#[derive(Debug)]
 pub enum StatusCode {
     NoError,
     TestOfUserPresenceNotSatisfied,
@@ -43,12 +44,14 @@ pub enum StatusCode {
     RequestInstructionNotSuppored,
 }
 
+#[derive(Debug)]
 pub enum AuthenticateControlCode {
     CheckOnly,
     EnforceUserPresenceAndSign,
     DontEnforceUserPresenceAndSign,
 }
 
+#[derive(Debug)]
 pub enum Request {
     Register {
         challenge: ChallengeParameter,
@@ -110,6 +113,7 @@ impl AsRef<[u8]> for ApplicationParameter {
     }
 }
 
+#[derive(Debug)]
 pub struct ChallengeParameter(SHA256Hash);
 
 impl AsRef<[u8]> for ChallengeParameter {

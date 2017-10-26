@@ -20,6 +20,7 @@ bitflags! {
     }
 }
 
+#[derive(Debug)]
 pub enum ErrorCode {
     None,
     InvalidChannel,
@@ -122,6 +123,7 @@ impl RequestMessage {
     }
 }
 
+#[derive(Debug)]
 pub enum ResponseMessage {
     EncapsulatedResponse { data: Vec<u8> },
     Init {
