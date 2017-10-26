@@ -55,7 +55,7 @@ impl Channels {
 
     fn is_valid(&self, channel_id: ChannelId) -> bool {
         let is_broadcast = channel_id == BROADCAST_CHANNEL_ID;
-        let is_in_allocated_range = channel_id > MIN_CHANNEL_ID &&
+        let is_in_allocated_range = channel_id >= MIN_CHANNEL_ID &&
             channel_id < self.next_allocation;
         is_broadcast || is_in_allocated_range
     }
@@ -86,7 +86,7 @@ impl StateMachine {
             return Ok(Some(Output::ResponseMessage(
                 ResponseMessage::Error { code: ErrorCode::InvalidChannel },
                 packet_channel_id,
-            )))
+            )));
         }
         let transition: StateTransition = match (self.state.take(), packet) {
             (State::Idle,
@@ -255,4 +255,17 @@ impl StateMachine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn channels_broadcast_channel_is_valid() {
+        let channels = Channels::new();
+        assert!(channels.is_valid(BROADCAST_CHANNEL_ID));
+    }
+
+    #[test]
+    fn channels_allocated_channel_is_valid() {
+        let mut channels = Channels::new();
+        let channel_id = channels.allocate().unwrap();
+        assert!(channels.is_valid(channel_id));
+    }
 }
