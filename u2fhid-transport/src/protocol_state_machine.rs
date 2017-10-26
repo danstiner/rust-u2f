@@ -254,7 +254,12 @@ impl StateMachine {
 
 #[cfg(test)]
 mod tests {
+    extern crate rand;
+
     use super::*;
+    use self::rand::OsRng;
+    use self::rand::Rand;
+    use self::rand::Rng;
 
     #[test]
     fn channels_broadcast_channel_is_valid() {
@@ -267,5 +272,32 @@ mod tests {
         let mut channels = Channels::new();
         let channel_id = channels.allocate().unwrap();
         assert!(channels.is_valid(channel_id));
+    }
+
+    #[test]
+    fn init() {
+        let mut os_rng = OsRng::new().unwrap();
+        let mut state_machine = StateMachine::new();
+        let request_nonce: [u8; 8] = os_rng.gen();
+        let data = request_nonce.to_vec();
+        let data_len = data.len();
+
+        let res = state_machine
+            .accept_packet(Packet::Initialization {
+                channel_id: BROADCAST_CHANNEL_ID,
+                command: Command::Init,
+                data: data,
+                payload_len: data_len,
+            })
+            .unwrap();
+
+        match res {
+            Some(Output::ResponseMessage(ResponseMessage::Init { channel_id, nonce, .. }, response_channel_id)) => {
+                assert_eq!(response_channel_id, BROADCAST_CHANNEL_ID);
+                assert_eq!(request_nonce, nonce);
+                assert!(state_machine.channels.is_valid(channel_id));
+            }
+            _ => assert!(false)
+        }
     }
 }

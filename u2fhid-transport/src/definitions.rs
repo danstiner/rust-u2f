@@ -104,7 +104,7 @@ impl RequestMessage {
                     Err(())
                 } else {
                     let mut nonce = [0u8; 8];
-                    nonce.copy_from_slice(&data[0..7]);
+                    nonce.copy_from_slice(&data[..]);
                     Ok(RequestMessage::Init { nonce: nonce })
                 }
             }

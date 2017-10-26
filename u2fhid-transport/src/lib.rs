@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate futures;
 extern crate u2f_core;
-extern crate u2fhid_transport_header;
 extern crate byteorder;
 #[macro_use]
 extern crate bitflags;

@@ -12,3 +12,6 @@ path = "../u2f-core"
 
 [dependencies.u2fhid-transport-header]
 path = "../u2fhid-transport-header"
+
+[dev-dependencies]
+rand = "0.3.17"
