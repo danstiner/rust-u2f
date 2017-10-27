@@ -15,11 +15,11 @@ use slog::*;
 use tokio_core::reactor::Core;
 use tokio_service::{Service, NewService};
 
-use u2f_core::{ApplicationParameter, ApprovalService, InMemoryStorage, SecureCryptoOperations, U2F};
+use u2f_core::{ApplicationParameter, UserPresence, InMemoryStorage, SecureCryptoOperations, U2F};
 
-struct CommandPromptApprovalService;
+struct CommandPromptUserPresence;
 
-impl CommandPromptApprovalService {
+impl CommandPromptUserPresence {
     fn approve(prompt: &str) -> io::Result<bool> {
         loop {
             let reply = rprompt::prompt_reply_stdout(prompt)?;
@@ -32,7 +32,7 @@ impl CommandPromptApprovalService {
     }
 }
 
-impl ApprovalService for CommandPromptApprovalService {
+impl UserPresence for CommandPromptUserPresence {
     fn approve_registration(&self, application: &ApplicationParameter) -> io::Result<bool> {
         Self::approve("Approve registration [y/n]: ")
     }
@@ -60,7 +60,7 @@ fn run() -> io::Result<()> {
 
     let (writer, reader) = u2f_connection.split();
     let attestation = u2f_core::self_signed_attestation();
-    let approval = CommandPromptApprovalService;
+    let approval = CommandPromptUserPresence;
     let operations: SecureCryptoOperations = SecureCryptoOperations::new(attestation);
     let storage: InMemoryStorage = InMemoryStorage::new();
     let service = U2F::new(&approval, &operations, &mut storage)?;

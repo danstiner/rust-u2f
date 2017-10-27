@@ -260,7 +260,7 @@ impl AttestationCertificate {
 #[derive(Debug)]
 pub enum SignError {}
 
-pub trait ApprovalService {
+pub trait UserPresence {
     fn approve_registration(&self, application: &ApplicationParameter) -> io::Result<bool>;
     fn approve_authentication(&self, application: &ApplicationParameter) -> io::Result<bool>;
 }
@@ -331,14 +331,14 @@ quick_error! {
 }
 
 pub struct U2F<'a> {
-    approval: &'a ApprovalService,
+    approval: &'a UserPresence,
     operations: &'a CryptoOperations,
     storage: &'a mut SecretStore,
 }
 
 impl<'a> U2F<'a> {
     pub fn new(
-        approval: &'a ApprovalService,
+        approval: &'a UserPresence,
         operations: &'a CryptoOperations,
         storage: &'a mut SecretStore,
     ) -> io::Result<U2F<'a>> {
@@ -655,21 +655,21 @@ impl AsRef<[u8]> for RawSignature {
     }
 }
 
-struct FakeApprovalService {
+struct FakeUserPresence {
     pub should_approve_authentication: bool,
     pub should_approve_registration: bool,
 }
 
-impl FakeApprovalService {
-    fn always_approve() -> FakeApprovalService {
-        FakeApprovalService {
+impl FakeUserPresence {
+    fn always_approve() -> FakeUserPresence {
+        FakeUserPresence {
             should_approve_authentication: true,
             should_approve_registration: true,
         }
     }
 }
 
-impl ApprovalService for FakeApprovalService {
+impl UserPresence for FakeUserPresence {
     fn approve_authentication(&self, application: &ApplicationParameter) -> io::Result<bool> {
         Ok(self.should_approve_authentication)
     }
@@ -803,7 +803,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn is_valid_key_handle_with_invalid_handle_is_false() {
-        let approval = FakeApprovalService::always_approve();
+        let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
@@ -819,7 +819,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn is_valid_key_handle_with_valid_handle_is_true() {
-        let approval = FakeApprovalService::always_approve();
+        let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
@@ -836,7 +836,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn authenticate_with_invalid_handle_errors() {
-        let approval = FakeApprovalService::always_approve();
+        let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
@@ -853,7 +853,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn authenticate_with_valid_handle_succeeds() {
-        let approval = FakeApprovalService::always_approve();
+        let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
@@ -868,7 +868,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn authenticate_with_rejected_approval_errors() {
-        let approval = FakeApprovalService {
+        let approval = FakeUserPresence {
             should_approve_authentication: false,
             should_approve_registration: true,
         };
@@ -888,7 +888,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn register_with_rejected_approval_errors() {
-        let approval = FakeApprovalService {
+        let approval = FakeUserPresence {
             should_approve_authentication: true,
             should_approve_registration: false,
         };
@@ -907,7 +907,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn authenticate_signature() {
-        let approval = FakeApprovalService::always_approve();
+        let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
@@ -944,7 +944,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn register_signature() {
-        let approval = FakeApprovalService::always_approve();
+        let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
         let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
