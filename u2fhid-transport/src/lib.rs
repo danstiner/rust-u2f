@@ -147,7 +147,10 @@ impl<S: Stream<Item = Packet, Error = E> + Sink<SinkItem = Packet, SinkError = E
                     match res {
                         Some(Output::Request(request)) => return Ok(Async::Ready(Some(request))),
                         Some(Output::ResponseMessage(message, channel_id)) => {
-                            Self::send_response_message(message, channel_id, stream);
+                            self.stream_state =
+                                StreamState::StreamSending(
+                                    Self::send_response_message(message, channel_id, stream),
+                                );
                         }
                         None => {}
                     };

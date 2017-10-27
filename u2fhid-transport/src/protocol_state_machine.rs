@@ -298,12 +298,13 @@ mod tests {
             .unwrap();
 
         match res {
-            Some(Output::ResponseMessage(ResponseMessage::Init { channel_id, nonce, .. }, response_channel_id)) => {
+            Some(Output::ResponseMessage(ResponseMessage::Init { channel_id, nonce, .. },
+                                         response_channel_id)) => {
                 assert_eq!(response_channel_id, BROADCAST_CHANNEL_ID);
                 assert_eq!(request_nonce, nonce);
                 assert!(state_machine.channels.is_valid(channel_id));
                 channel_id
-            },
+            }
             _ => panic!(),
         }
     }
@@ -332,7 +333,7 @@ mod tests {
                 assert_eq!(response_channel_id, channel_id);
                 assert_eq!(request_data, data[..]);
             }
-            _ => panic!()
+            _ => panic!(),
         };
     }
 }
