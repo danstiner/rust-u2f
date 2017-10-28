@@ -3,7 +3,7 @@ use std::io;
 use std::io::Write;
 
 use bytes::BytesMut;
-use futures::{Async, Poll, Stream};
+use futures::{Async, AsyncSink, Poll, Stream, StartSend, Sink};
 use tokio_io::AsyncRead;
 
 /// Decoding of items in buffers.

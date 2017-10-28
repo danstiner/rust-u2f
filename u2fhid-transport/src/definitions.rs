@@ -1,6 +1,7 @@
 use std::cmp;
+use std::io::{Cursor, Read};
 
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 pub const MAJOR_DEVICE_VERSION_NUMBER: u8 = 0;
 pub const MINOR_DEVICE_VERSION_NUMBER: u8 = 1;
@@ -8,9 +9,24 @@ pub const BUILD_DEVICE_VERSION_NUMBER: u8 = 0;
 
 pub const U2FHID_PROTOCOL_VERSION: u8 = 2;
 
-const HID_REPORT_SIZE: usize = 64;
-const INITIAL_PACKET_DATA_MAX_LEN: usize = HID_REPORT_SIZE - 7;
-const CONTINUATION_PACKET_DATA_MAX_LEN: usize = HID_REPORT_SIZE - 5;
+const HID_REPORT_LEN: usize = 64;
+const INITIAL_PACKET_DATA_LEN: usize = HID_REPORT_LEN - 7;
+const CONTINUATION_PACKET_DATA_LEN: usize = HID_REPORT_LEN - 5;
+
+const FRAME_TYPE_INIT: u8 = 0b10000000;
+const FRAME_TYPE_CONT: u8 = 0b00000000;
+const FRAME_TYPE_MASK: u8 = FRAME_TYPE_INIT;
+
+const U2FHID_PING: u8 = FRAME_TYPE_INIT | 0x01; // Echo data through local processor only
+const U2FHID_MSG: u8 = FRAME_TYPE_INIT | 0x03; // Send U2F message frame
+const U2FHID_LOCK: u8 = FRAME_TYPE_INIT | 0x04; // Send lock channel command
+const U2FHID_INIT: u8 = FRAME_TYPE_INIT | 0x06; // Channel initialization
+const U2FHID_WINK: u8 = FRAME_TYPE_INIT | 0x08; // Send device identification wink
+const U2FHID_SYNC: u8 = FRAME_TYPE_INIT | 0x3c; // Protocol resync command
+const U2FHID_ERROR: u8 = FRAME_TYPE_INIT | 0x3f; // Error response
+
+const U2FHID_VENDOR_FIRST: u8 = FRAME_TYPE_INIT | 0x40; // First vendor defined command
+const U2FHID_VENDOR_LAST: u8 = FRAME_TYPE_INIT | 0x7f; // Last vendor defined command
 
 pub type ChannelId = u32;
 
@@ -60,6 +76,7 @@ pub enum Command {
     Error,
     Wink,
     Lock,
+    Sync,
     Vendor { identifier: u8 },
 }
 
@@ -83,6 +100,104 @@ impl Packet {
             &Packet::Initialization { channel_id, .. } => channel_id,
             &Packet::Continuation { channel_id, .. } => channel_id,
         }
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Packet, ()> {
+        // TODO assert corerct bytes length
+        let mut reader = Cursor::new(bytes);
+        let channel_id = reader.read_u32::<BigEndian>().unwrap();
+        let frame_type_byte = reader.read_u8().unwrap();
+        if frame_type_byte & FRAME_TYPE_MASK == FRAME_TYPE_INIT {
+            let command = match frame_type_byte {
+                U2FHID_MSG => Command::Msg,
+                U2FHID_PING => Command::Ping,
+                U2FHID_INIT => Command::Init,
+                U2FHID_ERROR => Command::Error,
+                U2FHID_WINK => Command::Wink,
+                U2FHID_LOCK => Command::Lock,
+                U2FHID_SYNC => Command::Sync,
+                id if id >= U2FHID_VENDOR_FIRST && id <= U2FHID_VENDOR_LAST => Command::Vendor {
+                    identifier: id,
+                },
+                _ => return Err(()),
+            };
+            let payload_len = reader.read_u16::<BigEndian>().unwrap();
+            let mut packet_data = Vec::with_capacity(INITIAL_PACKET_DATA_LEN);
+            reader
+                .read_exact(&mut packet_data[0..INITIAL_PACKET_DATA_LEN])
+                .unwrap();
+            Ok(Packet::Initialization {
+                channel_id: channel_id,
+                command: command,
+                data: packet_data,
+                payload_len: payload_len as usize,
+            })
+        } else {
+            let sequence_number = frame_type_byte;
+            let mut packet_data = Vec::with_capacity(CONTINUATION_PACKET_DATA_LEN);
+            reader
+                .read_exact(&mut packet_data[0..CONTINUATION_PACKET_DATA_LEN])
+                .unwrap();
+            Ok(Packet::Continuation {
+                channel_id: channel_id,
+                sequence_number: sequence_number,
+                data: packet_data,
+            })
+        }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(HID_REPORT_LEN);
+        match self {
+            Packet::Initialization {
+                channel_id,
+                command,
+                data,
+                payload_len,
+            } => {
+                // Offset Length Mnemonic Description
+                // 0      4      CID      Channel identifier
+                bytes.write_u32::<BigEndian>(channel_id).unwrap();
+
+                // 4      1      CMD      Command identifier (bit 7 always set)
+                let command_byte = match command {
+                    Command::Msg => U2FHID_MSG,
+                    Command::Ping => U2FHID_PING,
+                    Command::Init => 0x06,
+                    Command::Error => 0x3f,
+                    Command::Wink => 0x08,
+                    Command::Lock => 0x04,
+                    Command::Sync => 0x3c,
+                    Command::Vendor { identifier } => identifier,
+                };
+                bytes.push(command_byte);
+
+                // 5      1      BCNTH    High part of payload length
+                // 6      1      BCNTL    Low part of payload length
+                bytes.write_u16::<BigEndian>(payload_len as u16).unwrap();
+
+                // 7      (s-7)  DATA     Payload data (s is equal to the fixed packet size)
+                bytes.extend_from_slice(&data);
+            }
+            Packet::Continuation {
+                channel_id,
+                sequence_number,
+                data,
+            } => {
+                // Offset Length Mnemonic Description
+                // 0      4      CID      Channel identifier
+                bytes.write_u32::<BigEndian>(channel_id).unwrap();
+
+                // 4      1      SEQ      Packet sequence 0x00..0x7f (bit 7 always cleared)
+                assert!(sequence_number & FRAME_TYPE_MASK == FRAME_TYPE_CONT);
+                bytes.push(sequence_number);
+
+                // 5      (s-5)  DATA     Payload data (s is equal to the fixed packet size)
+                bytes.extend_from_slice(&data);
+            }
+        }
+        assert_eq!(bytes.len(), HID_REPORT_LEN);
+        bytes
     }
 }
 
@@ -116,6 +231,10 @@ impl RequestMessage {
                 } else {
                     Ok(RequestMessage::Lock { lock_time: data[0] })
                 }
+            }
+            &Command::Sync => {
+                // TODO
+                Err(())
             }
             &Command::Error => Err(()),
             &Command::Vendor { .. } => Err(()),
@@ -178,7 +297,7 @@ impl ResponseMessage {
 
 fn encode_response(channel_id: ChannelId, command: Command, data: &[u8]) -> Vec<Packet> {
     let mut packets: Vec<Packet> = Vec::new();
-    let split_index = cmp::min(data.len(), INITIAL_PACKET_DATA_MAX_LEN);
+    let split_index = cmp::min(data.len(), INITIAL_PACKET_DATA_LEN);
     let (initial, remaining) = data.split_at(split_index);
     packets.push(Packet::Initialization {
         channel_id: channel_id,
@@ -186,10 +305,7 @@ fn encode_response(channel_id: ChannelId, command: Command, data: &[u8]) -> Vec<
         payload_len: data.len(),
         data: initial.to_vec(),
     });
-    for (i, chunk) in remaining
-        .chunks(CONTINUATION_PACKET_DATA_MAX_LEN)
-        .enumerate()
-    {
+    for (i, chunk) in remaining.chunks(CONTINUATION_PACKET_DATA_LEN).enumerate() {
         packets.push(Packet::Continuation {
             channel_id: channel_id,
             sequence_number: i as u8,

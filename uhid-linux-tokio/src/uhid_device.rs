@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::os::unix::io::FromRawFd;
 use std::path::Path;
 
-use futures::{Stream, Poll};
+use futures::{Async, AsyncSink, Stream, Sink, Poll, StartSend};
 use nix;
 use nix::fcntl;
 use tokio_core::reactor::Handle;
@@ -96,14 +96,26 @@ where
     }
 }
 
-impl<T> Stream for UHIDDevice<T>
-where
-    T: AsyncRead,
-{
+impl<T: AsyncRead> Stream for UHIDDevice<T> {
     type Item = <UHIDCodec as Decoder>::Item;
     type Error = <UHIDCodec as Decoder>::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         self.inner.poll()
+    }
+}
+
+impl<T: Write> Sink for UHIDDevice<T> {
+    type SinkItem = <UHIDCodec as Encoder>::Item;
+    type SinkError = <UHIDCodec as Encoder>::Error;
+
+    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        self.inner.send(item)?;
+        Ok(AsyncSink::Ready)
+    }
+
+    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
+        self.inner.flush()?;
+        Ok(Async::Ready(()))
     }
 }

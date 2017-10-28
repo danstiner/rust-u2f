@@ -30,9 +30,9 @@ use openssl::x509::X509;
 use rand::OsRng;
 use rand::Rand;
 use rand::Rng;
-use tokio_service::Service;
 
-use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM, SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
+use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM,
+                              SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
 
 #[derive(Debug)]
 pub enum StatusCode {
@@ -68,7 +68,7 @@ pub enum Request {
 }
 
 impl Request {
-    pub fn decode(data: &[u8]) -> Result<Request,()> {
+    pub fn decode(data: &[u8]) -> Result<Request, ()> {
         Err(())
     }
 }
@@ -87,6 +87,9 @@ pub enum Response {
     },
     Version { version_string: String },
     DidWink,
+    TestOfUserPresenceNotSatisfied,
+    InvalidKeyHandle,
+    Unknown,
 }
 
 impl Response {
@@ -95,10 +98,16 @@ impl Response {
     }
 }
 
-pub enum ErrorMessage {
-    Unknown, // SW_UNKNOWN : No precise diagnosis = 0x6F00
-    TestOfUserPresenceNotSatisfied,
-    InvalidKeyHandle,
+quick_error! {
+    #[derive(Debug)]
+    pub enum ResponseError {
+        Io(err: io::Error) {
+            from()
+        }
+        Signing(err: SignError) {
+            from()
+        }
+    }
 }
 
 type Counter = u32;
@@ -435,9 +444,33 @@ impl<'a> U2F<'a> {
             signature: signature,
         })
     }
+}
 
-    pub fn call(&mut self, request: Request) -> Box<Future<Item = Response, Error = ErrorMessage>> {
-        match request {
+pub trait Service {
+    /// Requests handled by the service.
+    type Request;
+
+    /// Responses given by the service.
+    type Response;
+
+    /// Errors produced by the service.
+    type Error;
+
+    /// The future response value.
+    type Future: Future<Item = Self::Response, Error = Self::Error>;
+
+    /// Process the request and return the response asynchronously.
+    fn call(&mut self, req: Self::Request) -> Self::Future;
+}
+
+impl<'a> Service for U2F<'a> {
+    type Request = Request;
+    type Response = Response;
+    type Error = ResponseError;
+    type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
+
+    fn call(&mut self, req: Self::Request) -> Self::Future {
+        match req {
             Request::Register {
                 challenge,
                 application,
@@ -450,22 +483,18 @@ impl<'a> U2F<'a> {
                             attestation_certificate: registration.attestation_certificate,
                             signature: registration.signature,
                         }).boxed()
-                    },
+                    }
                     Err(error) => {
                         match error {
                             RegisterError::ApprovalRequired => {
-                                futures::failed(ErrorMessage::TestOfUserPresenceNotSatisfied).boxed()
-                            },
-                            RegisterError::Io(err) => {
-                                futures::failed(ErrorMessage::Unknown).boxed()
-                            },
-                            RegisterError::Signing(err) => {
-                                futures::failed(ErrorMessage::Unknown).boxed()
-                            },
+                                futures::finished(Response::TestOfUserPresenceNotSatisfied).boxed()
+                            }
+                            RegisterError::Io(err) => futures::failed(err.into()).boxed(),
+                            RegisterError::Signing(err) => futures::failed(err.into()).boxed(),
                         }
-                    },
+                    }
                 }
-            },
+            }
             Request::Authenticate {
                 control_code,
                 challenge,
@@ -477,14 +506,15 @@ impl<'a> U2F<'a> {
                         match self.is_valid_key_handle(&key_handle, &application) {
                             Ok(is_valid) => {
                                 if is_valid {
-                                    futures::failed(ErrorMessage::TestOfUserPresenceNotSatisfied).boxed()
+                                    futures::finished(Response::TestOfUserPresenceNotSatisfied)
+                                        .boxed()
                                 } else {
-                                    futures::failed(ErrorMessage::InvalidKeyHandle).boxed()
+                                    futures::finished(Response::InvalidKeyHandle).boxed()
                                 }
-                            },
-                            Err(_) => futures::failed(ErrorMessage::Unknown).boxed(),
+                            }
+                            Err(err) => futures::failed(err.into()).boxed(),
                         }
-                    },
+                    }
                     AuthenticateControlCode::EnforceUserPresenceAndSign => {
                         match self.authenticate(&application, &challenge, &key_handle) {
                             Ok(authentication) => {
@@ -493,40 +523,39 @@ impl<'a> U2F<'a> {
                                     signature: authentication.signature,
                                     user_present: authentication.user_present,
                                 }).boxed()
-                            },
+                            }
                             Err(error) => {
                                 match error {
                                     AuthenticateError::ApprovalRequired => {
-                                        futures::failed(ErrorMessage::TestOfUserPresenceNotSatisfied).boxed()
+                                        futures::finished(Response::TestOfUserPresenceNotSatisfied)
+                                            .boxed()
                                     }
                                     AuthenticateError::InvalidKeyHandle => {
-                                        futures::failed(ErrorMessage::InvalidKeyHandle).boxed()
+                                        futures::finished(Response::InvalidKeyHandle).boxed()
                                     }
                                     AuthenticateError::Io(err) => {
-                                        futures::failed(ErrorMessage::Unknown).boxed()
+                                        futures::finished(Response::Unknown).boxed()
                                     }
                                     AuthenticateError::Signing(err) => {
-                                        futures::failed(ErrorMessage::Unknown).boxed()
+                                        futures::finished(Response::Unknown).boxed()
                                     }
                                 }
-                            },
+                            }
                         }
-                    },
+                    }
                     AuthenticateControlCode::DontEnforceUserPresenceAndSign => {
-                        futures::failed(ErrorMessage::TestOfUserPresenceNotSatisfied).boxed()
-                    },
+                        futures::finished(Response::TestOfUserPresenceNotSatisfied).boxed()
+                    }
                 }
-            },
+            }
             Request::GetVersion => {
-                let response = Response::Version {
-                    version_string: self.get_version_string(),
-                };
+                let response = Response::Version { version_string: self.get_version_string() };
                 futures::finished(response).boxed()
-            },
+            }
             Request::Wink => {
                 assert!(false); // not implemented
                 futures::finished(Response::DidWink).boxed()
-            },
+            }
         }
     }
 }
@@ -737,12 +766,8 @@ fn key_handles_eq_consttime(key_handle1: &KeyHandle, key_handle2: &KeyHandle) ->
 
 pub fn self_signed_attestation() -> Attestation {
     Attestation {
-        certificate: AttestationCertificate::from_pem(
-            SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM
-        ),
-        key: Key::from_pem(
-            SELF_SIGNED_ATTESTATION_KEY_PEM
-        ),
+        certificate: AttestationCertificate::from_pem(SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM),
+        key: Key::from_pem(SELF_SIGNED_ATTESTATION_KEY_PEM),
     }
 }
 

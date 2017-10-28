@@ -40,9 +40,9 @@ VxrjjimYpE5E/4F/CxV1apjGSHLwuBM4hg==
 //                 ASN1 OID: prime256v1
 //                 NIST CURVE: P-256
 //         X509v3 extensions:
-//             X509v3 Subject Key Identifier: 
+//             X509v3 Subject Key Identifier:
 //                 F1:B2:70:DA:2D:41:8E:A2:36:BA:FA:90:5A:A3:5E:9A:9C:53:C4:3E
-//             X509v3 Authority Key Identifier: 
+//             X509v3 Authority Key Identifier:
 //                 keyid:F1:B2:70:DA:2D:41:8E:A2:36:BA:FA:90:5A:A3:5E:9A:9C:53:C4:3E
 
 //             X509v3 Basic Constraints: critical

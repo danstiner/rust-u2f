@@ -19,4 +19,4 @@ mod poll_evented_read_wrapper;
 
 pub use uhid_device::UHIDDevice;
 pub use uhid_device::CreateParams;
-pub use uhid_codec::Bus;
+pub use uhid_codec::{Bus, InputEvent, OutputEvent, StreamError};
