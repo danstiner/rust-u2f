@@ -76,10 +76,11 @@ where
     }
 }
 
-fn map_service_error<S, F, U>(inner: S, f: F) -> ServiceErrorMap<S, F> 
+fn map_service_error<S, F, U>(inner: S, f: F) -> ServiceErrorMap<S, F>
 where
     S: Service,
-    F: Fn(S::Error) -> U,{
+    F: Fn(S::Error) -> U,
+{
     ServiceErrorMap::new(inner, f)
 }
 
@@ -93,7 +94,7 @@ where
     type Request = S::Request;
     type Response = S::Response;
     type Error = U;
-    type Future = Box<Future<Item=S::Response, Error=U>>;
+    type Future = Box<Future<Item = S::Response, Error = U>>;
 
     fn call(&mut self, req: Self::Request) -> Self::Future {
         let f = Rc::clone(&self.map_err_fn);

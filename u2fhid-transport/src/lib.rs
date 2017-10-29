@@ -6,6 +6,7 @@ extern crate futures;
 extern crate tokio_core;
 extern crate u2f_core;
 
+mod buffer_one;
 mod definitions;
 mod protocol_state_machine;
 mod send_all;
@@ -17,95 +18,32 @@ use std::mem;
 use futures::{Async, AsyncSink, Future, Poll, Sink, StartSend, Stream, stream};
 use tokio_core::reactor::Handle;
 
+use buffer_one::BufferOne;
 use u2f_core::{Request, Service};
 use definitions::*;
 use protocol_state_machine::{Output, StateMachine};
 use send_all::SendAll;
 
-enum StreamState<S: Sink + Stream, E: Sized> {
-    Unknown,
-    Ready(S),
-    SinkSending(SendAll<S, futures::stream::IterOk<std::vec::IntoIter<Packet>, E>>),
-    SinkError(S, E),
-    StreamSending(SendAll<S, futures::stream::IterOk<std::vec::IntoIter<Packet>, E>>),
-    StreamError(S, E),
-}
-
-impl<S: Sink + Stream, E> StreamState<S, E> {
-    fn take(&mut self) -> StreamState<S, E> {
-        mem::replace(self, StreamState::Unknown)
-    }
-}
-
-pub struct U2FHID<I: Sink + Stream, S, E> {
+pub struct U2FHID<T: Sink + Stream, S> {
     service: S,
     state_machine: StateMachine,
-    stream_state: StreamState<I, E>,
+    transport: BufferOne<T>,
 }
 
-impl<I, S, E> U2FHID<I, S, E>
+impl<T, S, E> U2FHID<T, S>
 where
-    I: Sink<SinkItem = Packet, SinkError = E>
+    T: Sink<SinkItem = Packet, SinkError = E>
         + Stream<Item = Packet, Error = E>,
     S: Service,
     S::Error: Into<E>,
 {
-    pub fn bind_service(handle: &Handle, inner: I, service: S) -> U2FHID<I, S, E> {
+    pub fn bind_service(handle: &Handle, transport: T, service: S) -> U2FHID<T, S> {
         U2FHID {
             service: service,
             state_machine: StateMachine::new(),
-            stream_state: StreamState::Ready(inner),
+            transport: BufferOne::new(transport),
         }
     }
-
-    fn try_take_inner_sink(&mut self) -> Poll<I, E> {
-        match self.stream_state.take() {
-            StreamState::Ready(inner) => Ok(Async::Ready(inner)),
-            StreamState::SinkError(inner, error) => {
-                self.stream_state = StreamState::Ready(inner);
-                Err(error)
-            }
-            StreamState::SinkSending(mut future) => {
-                match future.poll() {
-                    Ok(Async::NotReady) => Ok(Async::NotReady),
-                    Ok(Async::Ready((inner, _))) => Ok(Async::Ready(inner)),
-                    Err(error) => Err(error),
-                }
-            }
-            StreamState::StreamError(_, _) => Ok(Async::NotReady),
-            StreamState::StreamSending(_) => Ok(Async::NotReady),
-            StreamState::Unknown => panic!(),
-        }
-    }
-
-    fn try_take_inner_stream(&mut self) -> Poll<I, E> {
-        match self.stream_state.take() {
-            StreamState::Ready(inner) => Ok(Async::Ready(inner)),
-            StreamState::SinkError(_, _) => Ok(Async::NotReady),
-            StreamState::SinkSending(_) => Ok(Async::NotReady),
-            StreamState::StreamError(inner, error) => {
-                self.stream_state = StreamState::Ready(inner);
-                Err(error)
-            }
-            StreamState::StreamSending(mut future) => {
-                match future.poll() {
-                    Ok(Async::NotReady) => Ok(Async::NotReady),
-                    Ok(Async::Ready((inner, _))) => Ok(Async::Ready(inner)),
-                    Err(error) => Err(error),
-                }
-            }
-            StreamState::Unknown => panic!(),
-        }
-    }
-
-    // fn send_response_message(
-    //     message: ResponseMessage,
-    //     channel_id: ChannelId,
-    //     stream: S,
-    // ) -> SendAll<S, futures::stream::IterOk<std::vec::IntoIter<Packet>, E>> {
-    //     let packets = message.to_packets(channel_id);
-    //     send_all::new(stream, stream::iter_ok(packets))
-    //    }
 }
 
 // impl<I, S, E> Sink for U2FHID<I, S, E> where
@@ -175,16 +113,38 @@ where
 //     }
 // }
 
-impl<I, S, E> Future for U2FHID<I, S, E>
+impl<T, S, E> Future for U2FHID<T, S>
 where
-    I: Sink<SinkItem = Packet, SinkError = E>
+    T: Sink<SinkItem = Packet, SinkError = E>
         + Stream<Item = Packet, Error = E>,
 {
     type Item = ();
     type Error = ();
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        Ok(Async::Ready(()))
+        loop {
+            // Always tick the transport first
+
+            // poll for readiness on sink
+            // if !self.check_out_body_stream() {
+            //     break;
+            // }
+
+            // if let Async::Ready(frame) = try!(self.dispatch.get_mut().inner.transport().poll()) {
+            //     try!(self.process_out_frame(frame));
+            // } else {
+            //     break;
+            // }
+
+            // check timeouts
+
+
+            // poll read from transport stream
+
+            // run state machine a step
+
+            return Ok(Async::Ready(()));
+        }
     }
 }
 
@@ -193,4 +153,16 @@ fn encode_response_message(
     response_message: ResponseMessage,
 ) -> Result<Vec<Packet>, ()> {
     Ok(response_message.to_packets(channel_id))
+}
+
+fn assert_send<S: Sink>(s: &mut S, item: S::SinkItem) -> Result<(), S::SinkError> {
+    match try!(s.start_send(item)) {
+        AsyncSink::Ready => Ok(()),
+        AsyncSink::NotReady(_) => {
+            panic!(
+                "sink reported itself as ready after `poll_ready` but was \
+                    then unable to accept a message"
+            )
+        }
+    }
 }
