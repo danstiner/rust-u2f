@@ -10,15 +10,12 @@ extern crate uhid_linux_tokio;
 extern crate tokio_io;
 
 use std::ascii::AsciiExt;
-use std::io::{self, Write};
+use std::io;
 use std::rc::Rc;
 
-use futures::stream::FilterMap;
-use futures::sink::With;
-use futures::{future, Future, Stream, Sink, Poll, StartSend, BoxFuture};
+use futures::{future, Future, Stream, Sink};
 use slog::*;
 use tokio_core::reactor::Core;
-use tokio_io::AsyncRead;
 
 use u2f_core::{ApplicationParameter, UserPresence, InMemoryStorage, SecureCryptoOperations, U2F,
                ResponseError, Service};
@@ -41,11 +38,11 @@ impl CommandPromptUserPresence {
 }
 
 impl UserPresence for CommandPromptUserPresence {
-    fn approve_registration(&self, application: &ApplicationParameter) -> io::Result<bool> {
+    fn approve_registration(&self, _: &ApplicationParameter) -> io::Result<bool> {
         Self::approve("Approve registration [y/n]: ")
     }
 
-    fn approve_authentication(&self, application: &ApplicationParameter) -> io::Result<bool> {
+    fn approve_authentication(&self, _: &ApplicationParameter) -> io::Result<bool> {
         Self::approve("Approve authentication [y/n]: ")
     }
 }
@@ -57,8 +54,8 @@ fn output_to_packet(output_event: OutputEvent) -> Option<Packet> {
     }
 }
 
-fn packet_to_input(packet: Packet) -> BoxFuture<InputEvent, StreamError> {
-    future::ok(InputEvent::Input { data: packet.into_bytes() }).boxed()
+fn packet_to_input(packet: Packet) -> Box<Future<Item = InputEvent, Error = StreamError>> {
+    Box::new(future::ok(InputEvent::Input { data: packet.into_bytes() }))
 }
 
 struct ServiceErrorMap<S: Service, F> {
@@ -111,11 +108,11 @@ fn response_error_to_stream_error(err: ResponseError) -> StreamError {
     }
 }
 
-const InputReportLen: u8 = 64;
-const OutputReportLen: u8 = 64;
+const INPUT_REPORT_LEN: u8 = 64;
+const OUTPUT_REPORT_LEN: u8 = 64;
 
 // HID Report Descriptor from http://www.usb.org/developers/hidpage/HUTRR48.pdf
-const ReportDescriptor: [u8; 34] = [
+const REPORT_DESCRIPTOR: [u8; 34] = [
         0x06, 0xd0, 0xf1,             // USAGE_PAGE (FIDO Alliance)
         0x09, 0x01,                   // USAGE (Keyboard)
         0xa1, 0x01,                   // COLLECTION (Application)
@@ -123,13 +120,13 @@ const ReportDescriptor: [u8; 34] = [
         0x15, 0x00,                   //   LOGICAL_MINIMUM (0)
         0x26, 0xff, 0x00,             //   LOGICAL_MAXIMUM (255)
         0x75, 0x08,                   //   REPORT_SIZE (8)
-        0x95, InputReportLen,         //   REPORT_COUNT (64)
+        0x95, INPUT_REPORT_LEN,       //   REPORT_COUNT (64)
         0x81, 0x02,                   //   INPUT (Data,Var,Abs)
         0x09, 0x21,                   //   USAGE(Output Report Data)
         0x15, 0x00,                   //   LOGICAL_MINIMUM (0)
         0x26, 0xff, 0x00,             //   LOGICAL_MAXIMUM (255)
         0x75, 0x08,                   //   REPORT_SIZE (8)
-        0x95, OutputReportLen,        //   REPORT_COUNT (64)
+        0x95, OUTPUT_REPORT_LEN,      //   REPORT_COUNT (64)
         0x91, 0x02,                   //   OUTPUT (Data,Var,Abs)
         0xc0,                         // END_COLLECTION
 ];
@@ -144,7 +141,7 @@ fn run() -> io::Result<()> {
         product: 0xffff,
         version: 0,
         country: 0,
-        data: ReportDescriptor.to_vec(),
+        data: REPORT_DESCRIPTOR.to_vec(),
     };
 
     let mut core = Core::new()?;
