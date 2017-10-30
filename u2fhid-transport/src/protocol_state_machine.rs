@@ -1,12 +1,23 @@
+use std::collections::VecDeque;
+use std::io;
 use std::mem;
+use std::time::Duration;
+
+use futures::{Async, Future, Poll};
+use futures::future;
+use tokio_core::reactor::Handle;
+use tokio_core::reactor::Timeout;
+use slog::Logger;
 
 use definitions::*;
-use u2f_core::Request;
+use u2f_core::{self, ResponseError, Service, U2F};
 
-#[derive(Debug)]
-pub enum Output {
-    Request(Request),
-    ResponseMessage(ResponseMessage, ChannelId),
+macro_rules! try_some {
+    ($e:expr) => (match $e {
+        Ok(Some(t)) => return Ok(Async::Ready(t)),
+        Ok(None) => {},
+        Err(e) => return Err(From::from(e)),
+    })
 }
 
 struct ReceiveState {
@@ -14,14 +25,21 @@ struct ReceiveState {
     command: Command,
     next_sequence_number: u8,
     payload_len: usize,
-    receive_channel_id: ChannelId,
-    // TODO timeout
+    channel_id: ChannelId,
+    packet_timeout: Timeout,
+    transaction_timeout: Timeout,
+}
+
+struct DispatchState {
+    channel_id: ChannelId,
+    future: Box<Future<Item = ResponseMessage, Error = io::Error>>,
+    timeout: Timeout,
 }
 
 enum State {
     Idle,
     Receive(ReceiveState),
-    Processing,
+    Dispatch(DispatchState),
     Unknown,
 }
 
@@ -31,9 +49,8 @@ impl State {
     }
 }
 
-const BROADCAST_CHANNEL_ID: ChannelId = 0xffffffff;
-const MAX_CHANNEL_ID: ChannelId = 5;
-const MIN_CHANNEL_ID: ChannelId = 1;
+const MAX_CHANNEL_ID: ChannelId = ChannelId(5);
+const MIN_CHANNEL_ID: ChannelId = ChannelId(1);
 
 #[derive(Debug)]
 struct Channels {
@@ -50,7 +67,7 @@ impl Channels {
             Err(())
         } else {
             let allocation = self.next_allocation;
-            self.next_allocation += 1;
+            self.next_allocation = self.next_allocation.checked_add(1).unwrap();
             Ok(allocation)
         }
     }
@@ -63,34 +80,161 @@ impl Channels {
     }
 }
 
-struct StateTransition {
+enum LockState {
+    None,
+    Locked {
+        channel_id: ChannelId,
+        timeout: Timeout,
+    },
+}
+
+impl LockState {
+    fn lock(
+        &mut self,
+        duration: Duration,
+        channel_id: ChannelId,
+        handle: &Handle,
+    ) -> io::Result<()> {
+        *self = LockState::Locked {
+            channel_id: channel_id,
+            timeout: Timeout::new(duration, handle)?,
+        };
+        Ok(())
+    }
+
+    fn release(&mut self) {
+        *self = LockState::None;
+    }
+
+    fn tick(&mut self) -> Result<(), io::Error> {
+        let timed_out = match self {
+            &mut LockState::Locked {
+                ref channel_id,
+                ref mut timeout,
+            } => {
+                match timeout.poll()? {
+                    Async::Ready(()) => true,
+                    Async::NotReady => false,
+                }
+            }
+            _ => false,
+        };
+
+        if timed_out {
+            *self = LockState::None;
+        }
+
+        Ok(())
+    }
+}
+
+struct StateTransition<O> {
     new_state: State,
-    output: Option<Output>,
+    output: O,
 }
 
-pub struct StateMachine {
+pub struct StateMachine<'a> {
     channels: Channels,
+    handle: Handle,
+    lock: LockState,
+    logger: Logger,
+    service: U2F<'a>,
     state: State,
-    // TODO lock
 }
 
-impl StateMachine {
-    pub fn new() -> StateMachine {
+impl<'a> StateMachine<'a> {
+    pub fn new(service: U2F<'a>, handle: Handle, logger: Logger) -> StateMachine<'a> {
         StateMachine {
             channels: Channels::new(),
+            handle: handle,
+            lock: LockState::None,
+            logger: logger,
+            service: service,
             state: State::Idle,
         }
     }
 
-    pub fn accept_packet(&mut self, packet: Packet) -> Result<Option<Output>, ()> {
-        let packet_channel_id = packet.channel_id();
-        if !self.channels.is_valid(packet_channel_id) {
-            return Ok(Some(Output::ResponseMessage(
-                ResponseMessage::Error { code: ErrorCode::InvalidChannel },
-                packet_channel_id,
-            )));
+    pub fn step(&mut self) -> Result<Option<Response>, io::Error> {
+        // Tick the lock for possible timeout
+        self.lock.tick();
+
+        let transition = match self.state.take() {
+            State::Receive(receive) => {
+                // TODO check timeouts
+                // receive.packet_timeout
+                StateTransition {
+                    new_state: State::Receive(receive),
+                    output: None,
+                }
+            }
+            State::Dispatch(mut dispatch) => {
+                // check if ready
+                match dispatch.future.poll()? {
+                    Async::Ready(result) => {
+                        let channel_id = dispatch.channel_id;
+                        StateTransition {
+                            new_state: State::Dispatch(dispatch),
+                            output: Some(Response {
+                                channel_id: channel_id,
+                                message: result,
+                            }),
+                        }
+                    }
+                    Async::NotReady => StateTransition {
+                        new_state: State::Dispatch(dispatch),
+                        output: None,
+                    },
+                }
+            }
+            state => StateTransition {
+                new_state: state,
+                output: None,
+            },
+        };
+        self.state = transition.new_state;
+        Ok(transition.output)
+    }
+
+    pub fn accept_packet(&mut self, packet: Packet) -> Poll<Response, io::Error> {
+        try_some!(self.check_channel_id(&packet));
+        try_some!(self.check_lock(&packet));
+        try_some!(self.step_with_packet(packet));
+        try_some!(self.try_complete_receive());
+        try_some!(self.try_complete_dispatch());
+        Ok(Async::NotReady)
+    }
+
+    fn check_channel_id(&self, packet: &Packet) -> Result<Option<Response>, io::Error> {
+        let channel_id = packet.channel_id();
+        if !self.channels.is_valid(channel_id) {
+            debug!(self.logger, "Invalid channel"; "id" => channel_id);
+            Ok(Some(
+                Self::error_output(ErrorCode::InvalidChannel, channel_id),
+            ))
+        } else {
+            Ok(None)
         }
-        let transition: StateTransition = match (self.state.take(), packet) {
+    }
+
+    fn check_lock(&self, packet: &Packet) -> Result<Option<Response>, io::Error> {
+        let packet_channel_id = packet.channel_id();
+        match &self.lock {
+            &LockState::Locked { channel_id, .. } => {
+                if packet_channel_id != channel_id {
+                    Ok(Some(Self::error_output(
+                        ErrorCode::ChannelBusy,
+                        packet_channel_id,
+                    )))
+                } else {
+                    Ok(None)
+                }
+            }
+            &LockState::None => Ok(None),
+        }
+    }
+
+    fn step_with_packet(&mut self, packet: Packet) -> Result<Option<Response>, io::Error> {
+        let transition = match (self.state.take(), packet) {
             (State::Idle,
              Packet::Initialization {
                  channel_id,
@@ -98,50 +242,48 @@ impl StateMachine {
                  payload_len,
                  command,
              }) => {
-                if data.len() >= payload_len {
-                    let message = RequestMessage::decode(&command, &data[0..payload_len]).unwrap();
-                    StateTransition {
-                        new_state: State::Idle, // TODO decide on next state
-                        output: self.handle_request_message(message, channel_id)?,
-                    }
-                } else {
-                    StateTransition {
-                        new_state: State::Receive(ReceiveState {
-                            buffer: data.to_vec(),
-                            command: command,
-                            next_sequence_number: 0,
-                            payload_len: payload_len,
-                            receive_channel_id: channel_id,
-                        }),
-                        output: None,
-                    }
+                debug!(self.logger, "Begin transaction");
+                StateTransition {
+                    new_state: State::Receive(ReceiveState {
+                        buffer: data.to_vec(),
+                        channel_id: channel_id,
+                        command: command,
+                        next_sequence_number: 0,
+                        payload_len: payload_len,
+                        packet_timeout: Timeout::new(packet_timeout_duration(), &self.handle)?,
+                        transaction_timeout: Timeout::new(
+                            transaction_timeout_duration(),
+                            &self.handle,
+                        )?,
+                    }),
+                    output: None,
                 }
             }
             (state @ State::Idle, Packet::Continuation { .. }) => {
-                // TODO info!("Out of order continuation packet, ignoring.");
+                debug!(self.logger, "Out of order continuation packet, ignoring");
                 StateTransition {
                     new_state: state,
                     output: None,
                 }
             }
             (State::Receive(receive), Packet::Initialization { channel_id, .. }) => {
-                if channel_id != receive.receive_channel_id {
+                if channel_id == receive.channel_id {
                     StateTransition {
-                        new_state: State::Receive(receive),
-                        output: Some(Output::ResponseMessage(
-                            ResponseMessage::Error { code: ErrorCode::ChannelBusy },
-                            channel_id,
-                        )),
+                        new_state: State::Idle,
+                        output: Some(Response {
+                            channel_id: channel_id,
+                            message: ResponseMessage::Error {
+                                code: ErrorCode::InvalidMessageSequencing,
+                            },
+                        }),
                     }
                 } else {
                     StateTransition {
-                        new_state: State::Idle,
-                        output: Some(Output::ResponseMessage(
-                            ResponseMessage::Error {
-                                code: ErrorCode::InvalidMessageSequencing,
-                            },
-                            channel_id,
-                        )),
+                        new_state: State::Receive(receive),
+                        output: Some(Response {
+                            channel_id: channel_id,
+                            message: ResponseMessage::Error { code: ErrorCode::ChannelBusy },
+                        }),
                     }
                 }
             }
@@ -151,106 +293,183 @@ impl StateMachine {
                  sequence_number,
                  data,
              }) => {
-                if channel_id != receive.receive_channel_id {
+                if channel_id != receive.channel_id {
                     StateTransition {
                         new_state: State::Receive(receive),
-                        output: Some(Output::ResponseMessage(
-                            ResponseMessage::Error { code: ErrorCode::ChannelBusy },
-                            channel_id,
-                        )),
+                        output: Some(Response {
+                            channel_id: channel_id,
+                            message: ResponseMessage::Error { code: ErrorCode::ChannelBusy },
+                        }),
                     }
                 } else if sequence_number != receive.next_sequence_number {
                     StateTransition {
                         new_state: State::Idle,
-                        output: Some(Output::ResponseMessage(
-                            ResponseMessage::Error {
+                        output: Some(Response {
+                            channel_id: channel_id,
+                            message: ResponseMessage::Error {
                                 code: ErrorCode::InvalidMessageSequencing,
                             },
-                            channel_id,
-                        )),
+                        }),
                     }
                 } else {
                     receive.next_sequence_number += 1;
                     receive.buffer.extend_from_slice(&data);
-                    if receive.buffer.len() >= receive.payload_len {
-                        // TODO better than unwrap
-                        let message = RequestMessage::decode(
-                            &receive.command,
-                            &receive.buffer[0..receive.payload_len],
-                        ).unwrap();
+                    receive.packet_timeout = Timeout::new(packet_timeout_duration(), &self.handle)?;
+                    StateTransition {
+                        new_state: State::Receive(receive),
+                        output: None,
+                    }
+                }
+            }
+            (state @ State::Dispatch(_), packet) => StateTransition {
+                new_state: state,
+                output: Some(Self::error_output(
+                    ErrorCode::ChannelBusy,
+                    packet.channel_id(),
+                )),
+            },
+            (State::Unknown, _) => panic!(),
+        };
+
+        self.state = transition.new_state;
+        Ok(transition.output)
+    }
+
+    fn try_complete_receive(&mut self) -> Result<Option<Response>, io::Error> {
+        let transition = match self.state.take() {
+            State::Receive(receive) => {
+                if receive.buffer.len() >= receive.payload_len {
+                    let message = RequestMessage::decode(
+                        &receive.command,
+                        &receive.buffer[0..receive.payload_len],
+                    ).unwrap();
+                    let response_future = self.handle_request(Request {
+                        channel_id: receive.channel_id,
+                        message: message,
+                    })?;
+                    let dispatch_state = DispatchState {
+                        channel_id: receive.channel_id,
+                        future: response_future,
+                        timeout: receive.transaction_timeout,
+                    };
+                    StateTransition {
+                        new_state: State::Dispatch(dispatch_state),
+                        output: None,
+                    }
+                } else {
+                    StateTransition {
+                        new_state: State::Receive(receive),
+                        output: None,
+                    }
+                }
+            }
+            state => StateTransition {
+                new_state: state,
+                output: None,
+            },
+        };
+
+        self.state = transition.new_state;
+        Ok(transition.output)
+    }
+
+    fn try_complete_dispatch(&mut self) -> Result<Option<Response>, io::Error> {
+        let transition = match self.state.take() {
+            State::Dispatch(mut dispatch) => {
+                match dispatch.future.poll()? {
+                    Async::Ready(response) => {
                         StateTransition {
-                            new_state: State::Processing, // TODO decide on next state
-                            output: self.handle_request_message(message, channel_id)?,
+                            new_state: State::Idle,
+                            output: Some(Response {
+                                channel_id: dispatch.channel_id,
+                                message: response.into(),
+                            }),
                         }
-                    } else {
+                    }
+                    Async::NotReady => {
                         StateTransition {
-                            new_state: State::Receive(receive),
+                            new_state: State::Dispatch(dispatch),
                             output: None,
                         }
                     }
                 }
             }
-            (state @ State::Processing, _) => StateTransition {
+            state => StateTransition {
                 new_state: state,
-                output: Some(Output::ResponseMessage(
-                    ResponseMessage::Error { code: ErrorCode::ChannelBusy },
-                    packet_channel_id,
-                )),
+                output: None,
             },
-            (State::Unknown, _) => panic!(),
         };
+
         self.state = transition.new_state;
         Ok(transition.output)
     }
 
-    pub fn transition_to_responding(&mut self) -> Option<ChannelId> {
-        None // TODO
+    fn error_output(error_code: ErrorCode, channel_id: ChannelId) -> Response {
+        Response {
+            channel_id: channel_id,
+            message: ResponseMessage::Error { code: error_code },
+        }
     }
 
-    fn allocate_channel(&mut self) -> Result<ChannelId, ()> {
-        self.channels.allocate()
-    }
-
-    fn handle_request_message(
+    fn handle_request(
         &mut self,
-        message: RequestMessage,
-        channel_id: ChannelId,
-    ) -> Result<Option<Output>, ()> {
-        match message {
+        request: Request,
+    ) -> Result<Box<Future<Item = ResponseMessage, Error = io::Error>>, io::Error> {
+        let channel_id = request.channel_id;
+        match request.message {
             RequestMessage::EncapsulatedRequest { data } => {
-                Ok(Some(Output::Request(Request::decode(&data).unwrap()))) // TODO no unwrap
+                // TODO no unwrap
+                let request = u2f_core::Request::decode(&data).unwrap();
+                Ok(self.dispatch(request))
             }
             RequestMessage::Init { nonce } => {
                 // TODO Check what channnel message came in on
                 // TODO check unwrap
-                let new_channel_id = self.allocate_channel().unwrap();
-                Ok(Some(Output::ResponseMessage(
-                    ResponseMessage::Init {
-                        nonce,
-                        channel_id: new_channel_id,
-                        u2fhid_protocol_version: U2FHID_PROTOCOL_VERSION,
-                        major_device_version_number: MAJOR_DEVICE_VERSION_NUMBER,
-                        minor_device_version_number: MINOR_DEVICE_VERSION_NUMBER,
-                        build_device_version_number: BUILD_DEVICE_VERSION_NUMBER,
-                        capabilities: CapabilityFlags::CAPFLAG_WINK,
-                    },
-                    channel_id,
-                )))
+                let new_channel_id = self.channels.allocate().unwrap();
+                info!(self.logger, "Init"; "new_channel_id" => new_channel_id);
+                Ok(Box::new(future::ok(ResponseMessage::Init {
+                    nonce,
+                    new_channel_id: new_channel_id,
+                    u2fhid_protocol_version: U2FHID_PROTOCOL_VERSION,
+                    major_device_version_number: MAJOR_DEVICE_VERSION_NUMBER,
+                    minor_device_version_number: MINOR_DEVICE_VERSION_NUMBER,
+                    build_device_version_number: BUILD_DEVICE_VERSION_NUMBER,
+                    capabilities: CapabilityFlags::CAPFLAG_WINK,
+                })))
             }
-            RequestMessage::Ping { data } => Ok(Some(Output::ResponseMessage(
-                ResponseMessage::Ping { data: data },
-                channel_id,
-            ))),
-            RequestMessage::Wink => Ok(Some(Output::Request(Request::Wink))),
+            RequestMessage::Ping { data } => Ok(Box::new(
+                future::ok(ResponseMessage::Pong { data: data }),
+            )),
+            RequestMessage::Wink => Ok(self.dispatch(u2f_core::Request::Wink)),
             RequestMessage::Lock { lock_time } => {
-                if lock_time == 0 {
-                    // TODO self.release_lock();
+                if lock_time == Duration::from_secs(0) {
+                    // TODO Enforce correct channel
+                    self.lock.release();
                 } else {
                     // TODO enforce range of 1-10
+                    // TODO check channel_id matches current lock state
+                    self.lock.lock(lock_time, channel_id, &self.handle)?;
                 }
-                Ok(None)
+                Ok(Box::new(future::ok(ResponseMessage::Lock)))
             }
         }
+    }
+
+    fn dispatch(
+        &mut self,
+        request: u2f_core::Request,
+    ) -> Box<Future<Item = ResponseMessage, Error = io::Error>> {
+        Box::new(
+            self.service
+                .call(request)
+                .map(|response| response.into())
+                // .map_err(|err| match err {
+                //     ResponseError::Io(io_err) => io_err,
+                //     ResponseError::Signing(err) => {
+                //         io::Error::new(io::ErrorKind::Other, "Signing error")
+                //     }
+                // }),
+        )
     }
 }
 

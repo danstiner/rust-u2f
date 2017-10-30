@@ -1,7 +1,13 @@
 use std::cmp;
-use std::io::{Cursor, Read};
+use std::collections::vec_deque::VecDeque;
+use std::io::{Cursor, Read, Write};
+use std::mem::size_of;
+use std::time::Duration;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use slog;
+
+use u2f_core;
 
 pub const MAJOR_DEVICE_VERSION_NUMBER: u8 = 0;
 pub const MINOR_DEVICE_VERSION_NUMBER: u8 = 1;
@@ -28,7 +34,38 @@ const U2FHID_ERROR: u8 = FRAME_TYPE_INIT | 0x3f; // Error response
 const U2FHID_VENDOR_FIRST: u8 = FRAME_TYPE_INIT | 0x40; // First vendor defined command
 const U2FHID_VENDOR_LAST: u8 = FRAME_TYPE_INIT | 0x7f; // Last vendor defined command
 
-pub type ChannelId = u32;
+pub const BROADCAST_CHANNEL_ID: ChannelId = ChannelId(0xffffffff);
+
+pub fn packet_timeout_duration() -> Duration {
+    Duration::from_millis(500)
+}
+pub fn transaction_timeout_duration() -> Duration {
+    Duration::from_millis(3000)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
+pub struct ChannelId(pub u32);
+
+impl ChannelId {
+    pub fn checked_add(self, number: u32) -> Option<ChannelId> {
+        self.0.checked_add(number).map(|id| ChannelId(id))
+    }
+
+    pub fn write<W: WriteBytesExt>(&self, write: &mut W) {
+        write.write_u32::<BigEndian>(self.0).unwrap();
+    }
+}
+
+impl slog::Value for ChannelId {
+    fn serialize(
+        &self,
+        record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut slog::Serializer,
+    ) -> slog::Result {
+        format!("{:#01$X}", self.0, size_of::<u32>() * 2).serialize(record, key, serializer)
+    }
+}
 
 bitflags! {
     pub struct CapabilityFlags: u8 {
@@ -52,8 +89,8 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
-    fn to_byte(&self) -> u8 {
-        match *self {
+    fn into_byte(self) -> u8 {
+        match self {
             ErrorCode::None => 0x00,
             ErrorCode::InvalidCommand => 0x01,
             ErrorCode::InvalidParameter => 0x02,
@@ -94,6 +131,20 @@ pub enum Packet {
     },
 }
 
+impl slog::Value for Packet {
+    fn serialize(
+        &self,
+        record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut slog::Serializer,
+    ) -> slog::Result {
+        match self {
+            &Packet::Initialization { .. } => "Initialization",
+            &Packet::Continuation { .. } => "Continuation",
+        }.serialize(record, key, serializer)
+    }
+}
+
 impl Packet {
     pub fn channel_id(&self) -> ChannelId {
         match self {
@@ -103,9 +154,10 @@ impl Packet {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Packet, ()> {
-        // TODO assert corerct bytes length
+        // TODO assert_eq!(bytes.len(), HID_REPORT_LEN);
         let mut reader = Cursor::new(bytes);
-        let channel_id = reader.read_u32::<BigEndian>().unwrap();
+        let skip_byte = reader.read_u8().unwrap();
+        let channel_id = ChannelId(reader.read_u32::<BigEndian>().unwrap());
         let frame_type_byte = reader.read_u8().unwrap();
         if frame_type_byte & FRAME_TYPE_MASK == FRAME_TYPE_INIT {
             let command = match frame_type_byte {
@@ -122,7 +174,7 @@ impl Packet {
                 _ => return Err(()),
             };
             let payload_len = reader.read_u16::<BigEndian>().unwrap();
-            let mut packet_data = Vec::with_capacity(INITIAL_PACKET_DATA_LEN);
+            let mut packet_data = vec![0u8; INITIAL_PACKET_DATA_LEN];
             reader
                 .read_exact(&mut packet_data[0..INITIAL_PACKET_DATA_LEN])
                 .unwrap();
@@ -157,17 +209,17 @@ impl Packet {
             } => {
                 // Offset Length Mnemonic Description
                 // 0      4      CID      Channel identifier
-                bytes.write_u32::<BigEndian>(channel_id).unwrap();
+                channel_id.write(&mut bytes);
 
                 // 4      1      CMD      Command identifier (bit 7 always set)
                 let command_byte = match command {
                     Command::Msg => U2FHID_MSG,
                     Command::Ping => U2FHID_PING,
-                    Command::Init => 0x06,
-                    Command::Error => 0x3f,
-                    Command::Wink => 0x08,
-                    Command::Lock => 0x04,
-                    Command::Sync => 0x3c,
+                    Command::Init => U2FHID_INIT,
+                    Command::Error => U2FHID_ERROR,
+                    Command::Wink => U2FHID_WINK,
+                    Command::Lock => U2FHID_LOCK,
+                    Command::Sync => U2FHID_SYNC,
                     Command::Vendor { identifier } => identifier,
                 };
                 bytes.push(command_byte);
@@ -178,6 +230,9 @@ impl Packet {
 
                 // 7      (s-7)  DATA     Payload data (s is equal to the fixed packet size)
                 bytes.extend_from_slice(&data);
+                for _ in data.len()..INITIAL_PACKET_DATA_LEN {
+                    bytes.push(0u8);
+                }
             }
             Packet::Continuation {
                 channel_id,
@@ -186,7 +241,7 @@ impl Packet {
             } => {
                 // Offset Length Mnemonic Description
                 // 0      4      CID      Channel identifier
-                bytes.write_u32::<BigEndian>(channel_id).unwrap();
+                channel_id.write(&mut bytes);
 
                 // 4      1      SEQ      Packet sequence 0x00..0x7f (bit 7 always cleared)
                 assert!(sequence_number & FRAME_TYPE_MASK == FRAME_TYPE_CONT);
@@ -194,6 +249,9 @@ impl Packet {
 
                 // 5      (s-5)  DATA     Payload data (s is equal to the fixed packet size)
                 bytes.extend_from_slice(&data);
+                for _ in data.len()..CONTINUATION_PACKET_DATA_LEN {
+                    bytes.push(0u8);
+                }
             }
         }
         assert_eq!(bytes.len(), HID_REPORT_LEN);
@@ -201,11 +259,18 @@ impl Packet {
     }
 }
 
+#[derive(Debug)]
+pub struct Request {
+    pub channel_id: ChannelId,
+    pub message: RequestMessage,
+}
+
+#[derive(Debug)]
 pub enum RequestMessage {
     EncapsulatedRequest { data: Vec<u8> },
     Init { nonce: [u8; 8] },
     // Lock time in seconds 0..10. A value of 0 immediately releases the lock
-    Lock { lock_time: u8 },
+    Lock { lock_time: Duration },
     Ping { data: Vec<u8> },
     Wink,
 }
@@ -229,7 +294,9 @@ impl RequestMessage {
                 if data.len() != 1 {
                     Err(())
                 } else {
-                    Ok(RequestMessage::Lock { lock_time: data[0] })
+                    Ok(RequestMessage::Lock {
+                        lock_time: Duration::from_secs(data[0].into()),
+                    })
                 }
             }
             &Command::Sync => {
@@ -243,31 +310,21 @@ impl RequestMessage {
 }
 
 #[derive(Debug)]
-pub enum ResponseMessage {
-    EncapsulatedResponse { data: Vec<u8> },
-    Init {
-        nonce: [u8; 8],
-        channel_id: ChannelId,
-        u2fhid_protocol_version: u8,
-        major_device_version_number: u8,
-        minor_device_version_number: u8,
-        build_device_version_number: u8,
-        capabilities: CapabilityFlags,
-    },
-    Ping { data: Vec<u8> },
-    Error { code: ErrorCode },
-    Wink,
+pub struct Response {
+    pub channel_id: ChannelId,
+    pub message: ResponseMessage,
 }
 
-impl ResponseMessage {
-    pub fn to_packets(self, channel_id: ChannelId) -> Vec<Packet> {
-        match self {
+impl Response {
+    pub fn to_packets(self) -> VecDeque<Packet> {
+        let channel_id = self.channel_id;
+        match self.message {
             ResponseMessage::EncapsulatedResponse { data } => {
                 encode_response(channel_id, Command::Msg, &data)
             }
             ResponseMessage::Init {
                 nonce,
-                channel_id,
+                new_channel_id,
                 u2fhid_protocol_version,
                 major_device_version_number,
                 minor_device_version_number,
@@ -276,7 +333,7 @@ impl ResponseMessage {
             } => {
                 let mut data = Vec::with_capacity(17);
                 data.extend_from_slice(&nonce);
-                data.write_u32::<BigEndian>(channel_id).unwrap();
+                new_channel_id.write(&mut data);
                 data.push(u2fhid_protocol_version);
                 data.push(major_device_version_number);
                 data.push(minor_device_version_number);
@@ -285,28 +342,71 @@ impl ResponseMessage {
                 assert_eq!(data.len(), 17);
                 encode_response(channel_id, Command::Init, &data)
             }
-            ResponseMessage::Ping { data } => encode_response(channel_id, Command::Ping, &data),
+            ResponseMessage::Pong { data } => encode_response(channel_id, Command::Ping, &data),
             ResponseMessage::Error { code } => {
-                let data = vec![code.to_byte()];
+                let data = vec![code.into_byte()];
                 encode_response(channel_id, Command::Error, &data)
             }
             ResponseMessage::Wink => encode_response(channel_id, Command::Wink, &[]),
+            ResponseMessage::Lock => encode_response(channel_id, Command::Lock, &[]),
         }
     }
 }
 
-fn encode_response(channel_id: ChannelId, command: Command, data: &[u8]) -> Vec<Packet> {
-    let mut packets: Vec<Packet> = Vec::new();
+#[derive(Debug)]
+pub enum ResponseMessage {
+    EncapsulatedResponse { data: Vec<u8> },
+    Init {
+        nonce: [u8; 8],
+        new_channel_id: ChannelId,
+        u2fhid_protocol_version: u8,
+        major_device_version_number: u8,
+        minor_device_version_number: u8,
+        build_device_version_number: u8,
+        capabilities: CapabilityFlags,
+    },
+    Pong { data: Vec<u8> },
+    Error { code: ErrorCode },
+    Wink,
+    Lock,
+}
+
+impl slog::Value for ResponseMessage {
+    fn serialize(
+        &self,
+        record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut slog::Serializer,
+    ) -> slog::Result {
+        match self {
+            &ResponseMessage::EncapsulatedResponse { .. } => "EncapsulatedResponse",
+            &ResponseMessage::Init { .. } => "Init",
+            &ResponseMessage::Pong { .. } => "Pong",
+            &ResponseMessage::Error { .. } => "Error",
+            &ResponseMessage::Wink => "Wink",
+            &ResponseMessage::Lock => "Lock",
+        }.serialize(record, key, serializer)
+    }
+}
+
+impl From<u2f_core::Response> for ResponseMessage {
+    fn from(response: u2f_core::Response) -> ResponseMessage {
+        ResponseMessage::EncapsulatedResponse { data: response.as_bytes() }
+    }
+}
+
+fn encode_response(channel_id: ChannelId, command: Command, data: &[u8]) -> VecDeque<Packet> {
+    let mut packets = VecDeque::new();
     let split_index = cmp::min(data.len(), INITIAL_PACKET_DATA_LEN);
     let (initial, remaining) = data.split_at(split_index);
-    packets.push(Packet::Initialization {
+    packets.push_back(Packet::Initialization {
         channel_id: channel_id,
         command: command,
         payload_len: data.len(),
         data: initial.to_vec(),
     });
     for (i, chunk) in remaining.chunks(CONTINUATION_PACKET_DATA_LEN).enumerate() {
-        packets.push(Packet::Continuation {
+        packets.push_back(Packet::Continuation {
             channel_id: channel_id,
             sequence_number: i as u8,
             data: chunk.to_vec(),

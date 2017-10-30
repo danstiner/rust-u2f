@@ -7,6 +7,9 @@ extern crate futures;
 extern crate quick_error;
 extern crate mio;
 extern crate nix;
+#[macro_use]
+extern crate slog;
+extern crate slog_stdlog;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate uhid_linux_bindings;

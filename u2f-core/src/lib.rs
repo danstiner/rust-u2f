@@ -6,6 +6,9 @@ extern crate byteorder;
 extern crate futures;
 extern crate openssl;
 extern crate rand;
+#[macro_use]
+extern crate slog;
+extern crate slog_stdlog;
 extern crate subtle;
 extern crate tokio_service;
 extern crate u2f_header;
@@ -30,6 +33,7 @@ use openssl::x509::X509;
 use rand::OsRng;
 use rand::Rand;
 use rand::Rng;
+use slog::Drain;
 
 use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM,
                               SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
@@ -69,6 +73,7 @@ pub enum Request {
 
 impl Request {
     pub fn decode(data: &[u8]) -> Result<Request, ()> {
+        panic!("decode not implemented");
         Err(())
     }
 }
@@ -93,7 +98,8 @@ pub enum Response {
 }
 
 impl Response {
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn as_bytes(&self) -> Vec<u8> {
+        panic!("Not implemented");
         Vec::new() // TODO
     }
 }
@@ -106,6 +112,15 @@ quick_error! {
         }
         Signing(err: SignError) {
             from()
+        }
+    }
+}
+
+impl Into<io::Error> for ResponseError {
+    fn into(self: Self) -> io::Error {
+        match self {
+            ResponseError::Io(err) => err,
+            ResponseError::Signing(_) => io::Error::new(io::ErrorKind::Other, "Signing error"),
         }
     }
 }
@@ -341,20 +356,26 @@ quick_error! {
 
 pub struct U2F<'a> {
     approval: &'a UserPresence,
+    logger: slog::Logger,
     operations: &'a CryptoOperations,
     storage: &'a mut SecretStore,
 }
 
 impl<'a> U2F<'a> {
-    pub fn new(
+    pub fn new<L: Into<Option<slog::Logger>>>(
         approval: &'a UserPresence,
         operations: &'a CryptoOperations,
         storage: &'a mut SecretStore,
-    ) -> io::Result<U2F<'a>> {
+        logger: L,
+    ) -> io::Result<Self> {
         Ok(U2F {
             approval: approval,
             operations: operations,
             storage: storage,
+            logger: logger.into().unwrap_or(slog::Logger::root(
+                slog_stdlog::StdLog.fuse(),
+                o!(),
+            )),
         })
     }
 
@@ -364,6 +385,7 @@ impl<'a> U2F<'a> {
         challenge: &ChallengeParameter,
         key_handle: &KeyHandle,
     ) -> Result<Authentication, AuthenticateError> {
+        debug!(self.logger, "authenticate");
         if !self.approval.approve_authentication(application)? {
             return Err(AuthenticateError::ApprovalRequired);
         }
@@ -405,6 +427,7 @@ impl<'a> U2F<'a> {
         key_handle: &KeyHandle,
         application: &ApplicationParameter,
     ) -> io::Result<bool> {
+        debug!(self.logger, "is_valid_key_handle");
         match self.storage.retrieve_application_key(
             application,
             key_handle,
@@ -419,6 +442,7 @@ impl<'a> U2F<'a> {
         application: &ApplicationParameter,
         challenge: &ChallengeParameter,
     ) -> Result<Registration, RegisterError> {
+        debug!(self.logger, "register");
         if !self.approval.approve_registration(application)? {
             return Err(RegisterError::ApprovalRequired);
         }
@@ -466,7 +490,7 @@ pub trait Service {
 impl<'a> Service for U2F<'a> {
     type Request = Request;
     type Response = Response;
-    type Error = ResponseError;
+    type Error = io::Error;
     type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
 
     fn call(&mut self, req: Self::Request) -> Self::Future {
@@ -477,20 +501,27 @@ impl<'a> Service for U2F<'a> {
             } => {
                 match self.register(&application, &challenge) {
                     Ok(registration) => {
-                        futures::finished(Response::Registration {
+                        Box::new(futures::finished(Response::Registration {
                             user_public_key: registration.user_public_key,
                             key_handle: registration.key_handle,
                             attestation_certificate: registration.attestation_certificate,
                             signature: registration.signature,
-                        }).boxed()
+                        }))
                     }
                     Err(error) => {
                         match error {
                             RegisterError::ApprovalRequired => {
-                                futures::finished(Response::TestOfUserPresenceNotSatisfied).boxed()
+                                Box::new(
+                                    futures::finished(Response::TestOfUserPresenceNotSatisfied),
+                                )
                             }
-                            RegisterError::Io(err) => futures::failed(err.into()).boxed(),
-                            RegisterError::Signing(err) => futures::failed(err.into()).boxed(),
+                            RegisterError::Io(err) => Box::new(futures::failed(err.into())),
+                            RegisterError::Signing(err) => Box::new(
+                                futures::failed(io::Error::new(
+                                    io::ErrorKind::Other,
+                                    "Signing error",
+                                )),
+                            ),
                         }
                     }
                 }
@@ -506,55 +537,57 @@ impl<'a> Service for U2F<'a> {
                         match self.is_valid_key_handle(&key_handle, &application) {
                             Ok(is_valid) => {
                                 if is_valid {
-                                    futures::finished(Response::TestOfUserPresenceNotSatisfied)
-                                        .boxed()
+                                    Box::new(
+                                        futures::finished(Response::TestOfUserPresenceNotSatisfied),
+                                    )
                                 } else {
-                                    futures::finished(Response::InvalidKeyHandle).boxed()
+                                    Box::new(futures::finished(Response::InvalidKeyHandle))
                                 }
                             }
-                            Err(err) => futures::failed(err.into()).boxed(),
+                            Err(err) => Box::new(futures::failed(err.into())),
                         }
                     }
                     AuthenticateControlCode::EnforceUserPresenceAndSign => {
                         match self.authenticate(&application, &challenge, &key_handle) {
                             Ok(authentication) => {
-                                futures::finished(Response::Authentication {
+                                Box::new(futures::finished(Response::Authentication {
                                     counter: authentication.counter,
                                     signature: authentication.signature,
                                     user_present: authentication.user_present,
-                                }).boxed()
+                                }))
                             }
                             Err(error) => {
                                 match error {
                                     AuthenticateError::ApprovalRequired => {
-                                        futures::finished(Response::TestOfUserPresenceNotSatisfied)
-                                            .boxed()
+                                        Box::new(
+                                            futures::finished(Response::TestOfUserPresenceNotSatisfied),
+                                        )
                                     }
                                     AuthenticateError::InvalidKeyHandle => {
-                                        futures::finished(Response::InvalidKeyHandle).boxed()
+                                        Box::new(futures::finished(Response::InvalidKeyHandle))
                                     }
                                     AuthenticateError::Io(err) => {
-                                        futures::finished(Response::Unknown).boxed()
+                                        Box::new(futures::finished(Response::Unknown))
                                     }
                                     AuthenticateError::Signing(err) => {
-                                        futures::finished(Response::Unknown).boxed()
+                                        Box::new(futures::finished(Response::Unknown))
                                     }
                                 }
                             }
                         }
                     }
                     AuthenticateControlCode::DontEnforceUserPresenceAndSign => {
-                        futures::finished(Response::TestOfUserPresenceNotSatisfied).boxed()
+                        Box::new(futures::finished(Response::TestOfUserPresenceNotSatisfied))
                     }
                 }
             }
             Request::GetVersion => {
                 let response = Response::Version { version_string: self.get_version_string() };
-                futures::finished(response).boxed()
+                Box::new(futures::finished(response))
             }
             Request::Wink => {
                 assert!(false); // not implemented
-                futures::finished(Response::DidWink).boxed()
+                Box::new(futures::finished(Response::DidWink))
             }
         }
     }
@@ -684,29 +717,6 @@ impl AsRef<[u8]> for RawSignature {
     }
 }
 
-struct FakeUserPresence {
-    pub should_approve_authentication: bool,
-    pub should_approve_registration: bool,
-}
-
-impl FakeUserPresence {
-    fn always_approve() -> FakeUserPresence {
-        FakeUserPresence {
-            should_approve_authentication: true,
-            should_approve_registration: true,
-        }
-    }
-}
-
-impl UserPresence for FakeUserPresence {
-    fn approve_authentication(&self, application: &ApplicationParameter) -> io::Result<bool> {
-        Ok(self.should_approve_authentication)
-    }
-    fn approve_registration(&self, application: &ApplicationParameter) -> io::Result<bool> {
-        Ok(self.should_approve_registration)
-    }
-}
-
 pub struct InMemoryStorage {
     application_keys: HashMap<ApplicationParameter, ApplicationKey>,
     counters: HashMap<ApplicationParameter, Counter>,
@@ -786,6 +796,29 @@ mod tests {
 
     const ALL_ZERO_HASH: [u8; 32] = [0; 32];
     const ALL_ZERO_KEY_HANDLE: KeyHandle = KeyHandle([0; 128]);
+
+    struct FakeUserPresence {
+        pub should_approve_authentication: bool,
+        pub should_approve_registration: bool,
+    }
+
+    impl FakeUserPresence {
+        fn always_approve() -> FakeUserPresence {
+            FakeUserPresence {
+                should_approve_authentication: true,
+                should_approve_registration: true,
+            }
+        }
+    }
+
+    impl UserPresence for FakeUserPresence {
+        fn approve_authentication(&self, _: &ApplicationParameter) -> io::Result<bool> {
+            Ok(self.should_approve_authentication)
+        }
+        fn approve_registration(&self, _: &ApplicationParameter) -> io::Result<bool> {
+            Ok(self.should_approve_registration)
+        }
+    }
 
     fn get_test_attestation() -> Attestation {
         Attestation {

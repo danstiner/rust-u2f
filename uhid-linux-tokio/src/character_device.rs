@@ -1,10 +1,16 @@
 use std::fmt;
 use std::io;
 use std::io::Write;
+use std::iter::repeat;
 
+use bytes::buf::FromBuf;
 use bytes::BytesMut;
 use futures::{Async, AsyncSink, Poll, Stream, StartSend, Sink};
+use slog;
+use slog::Value;
 use tokio_io::AsyncRead;
+
+use uhid_codec::OutputEvent;
 
 /// Decoding of items in buffers.
 ///
@@ -78,6 +84,7 @@ pub struct CharacterDevice<T, E, D> {
     inner: T,
     encoder: E,
     decoder: D,
+    logger: slog::Logger,
 }
 
 // ===== impl CharacterDevice =====
@@ -88,11 +95,12 @@ where
     E: Encoder,
     D: Decoder,
 {
-    pub fn new(inner: T, encoder: E, decoder: D) -> CharacterDevice<T, E, D> {
+    pub fn new(inner: T, encoder: E, decoder: D, logger: slog::Logger) -> CharacterDevice<T, E, D> {
         CharacterDevice {
-            inner: inner,
-            encoder: encoder,
             decoder: decoder,
+            encoder: encoder,
+            inner: inner,
+            logger: logger,
         }
     }
 }
@@ -111,25 +119,40 @@ impl<T, E, D> Stream for CharacterDevice<T, E, D>
 where
     T: AsyncRead,
     D: Decoder,
+    <D as Decoder>::Item: slog::Value,
 {
     type Item = D::Item;
     type Error = D::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        debug!(self.logger, "poll");
         let read_len = self.decoder.read_len();
-        let mut buffer = BytesMut::with_capacity(read_len);
-        match self.inner.read(&mut buffer) {
-            Ok(0) => Ok(Async::Ready(None)),
+        let mut buffer = vec![0u8; read_len];
+        debug!(self.logger, "read"; "read_len" => read_len);
+        let read = self.inner.read(&mut buffer[..]);
+        match read {
+            Ok(0) => {
+                debug!(self.logger, "read(0)");
+                Ok(Async::Ready(None))
+            }
             Ok(n) => {
                 if n != read_len {
                     return Err(
                         io::Error::new(io::ErrorKind::InvalidData, "short read").into(),
                     );
                 }
-                let frame = self.decoder.decode(&mut buffer)?;
+                let frame = self.decoder.decode(&mut BytesMut::from_buf(buffer))?;
+                debug!(self.logger, "decode"; "frame" => &frame);
                 return Ok(Async::Ready(Some(frame)));
             }
-            Err(e) => return Err(e.into()),
+            Err(ref e) if e.kind() == ::std::io::ErrorKind::WouldBlock => {
+                debug!(self.logger, "WouldBlock");
+                return Ok(Async::NotReady);
+            }
+            Err(e) => {
+                debug!(self.logger, "errored");
+                return Err(e.into());
+            }
         }
     }
 }

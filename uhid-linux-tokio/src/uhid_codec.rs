@@ -5,6 +5,7 @@ use std::mem;
 use std::slice;
 
 use bytes::BytesMut;
+use slog;
 
 use character_device::{Encoder, Decoder};
 use uhid_linux_bindings as bindings;
@@ -107,6 +108,25 @@ pub enum OutputEvent {
         report_type: ReportType,
         data: Vec<u8>,
     },
+}
+
+impl slog::Value for OutputEvent {
+    fn serialize(
+        &self,
+        record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut slog::Serializer,
+    ) -> slog::Result {
+        match self {
+            &OutputEvent::Start { .. } => "Start",
+            &OutputEvent::Stop => "Stop",
+            &OutputEvent::Open => "Open",
+            &OutputEvent::Close => "Close",
+            &OutputEvent::Output { .. } => "Output",
+            &OutputEvent::GetReport { .. } => "GetReport",
+            &OutputEvent::SetReport { .. } => "SetReport",
+        }.serialize(record, key, serializer)
+    }
 }
 
 #[derive(Debug, Default)]

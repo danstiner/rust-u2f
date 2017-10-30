@@ -9,6 +9,8 @@ futures = "0.1.16"
 openssl = "0.9.20"
 quick-error = "1.2.1"
 rand = "0.3.17"
+slog = "2.0.12"
+slog-stdlog = "3.0.2"
 subtle = "0.3.0"
 tokio-service = "0.1.0"
 

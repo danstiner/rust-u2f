@@ -6,6 +6,9 @@ use std::path::Path;
 use futures::{Async, AsyncSink, Stream, Sink, Poll, StartSend};
 use nix;
 use nix::fcntl;
+use slog_stdlog;
+use slog;
+use slog::Drain;
 use tokio_core::reactor::Handle;
 use tokio_io::AsyncRead;
 
@@ -16,6 +19,7 @@ use uhid_codec::*;
 
 pub struct UHIDDevice<T> {
     inner: CharacterDevice<T, UHIDCodec, UHIDCodec>,
+    logger: slog::Logger,
 }
 
 pub struct CreateParams {
@@ -33,17 +37,19 @@ pub struct CreateParams {
 // ===== impl UHIDDevice =====
 
 impl UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>> {
-    pub fn create(
+    pub fn create<L: Into<Option<slog::Logger>>>(
         handle: &Handle,
         params: CreateParams,
+        logger: L,
     ) -> io::Result<UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>>> {
-        Self::create_with_path(Path::new("/dev/uhid"), handle, params)
+        Self::create_with_path(Path::new("/dev/uhid"), handle, params, logger)
     }
 
-    pub fn create_with_path(
+    pub fn create_with_path<L: Into<Option<slog::Logger>>>(
         path: &Path,
         handle: &Handle,
         params: CreateParams,
+        logger: L,
     ) -> io::Result<UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>>> {
         let fd = fcntl::open(
             path,
@@ -58,7 +64,11 @@ impl UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>> {
         })?;
         let file: File = unsafe { File::from_raw_fd(fd) };
         let device_file = CharacterDeviceFile::new(file);
-        Ok(Self::create_with(device_file.into_io(handle)?, params))
+        Ok(Self::create_with(
+            device_file.into_io(handle)?,
+            params,
+            logger,
+        ))
     }
 }
 
@@ -66,8 +76,20 @@ impl<T> UHIDDevice<T>
 where
     T: AsyncRead + Write,
 {
-    fn create_with(inner: T, params: CreateParams) -> UHIDDevice<T> {
-        let mut device = UHIDDevice { inner: CharacterDevice::new(inner, UHIDCodec, UHIDCodec) };
+    fn create_with<L: Into<Option<slog::Logger>>>(
+        inner: T,
+        params: CreateParams,
+        logger: L,
+    ) -> UHIDDevice<T> {
+        let logger = logger.into().unwrap_or(slog::Logger::root(
+            slog_stdlog::StdLog.fuse(),
+            o!(),
+        ));
+        let mut device = UHIDDevice {
+            inner: CharacterDevice::new(inner, UHIDCodec, UHIDCodec, logger.new(o!())),
+            logger: logger,
+        };
+        debug!(device.logger, "Send create device event");
         device
             .inner
             .send(InputEvent::Create {
@@ -82,10 +104,12 @@ where
                 data: params.data,
             })
             .unwrap();
+        debug!(device.logger, "Sent create device event");
         device
     }
 
     pub fn send_input(&mut self, data: &[u8]) -> Result<(), <UHIDCodec as Encoder>::Error> {
+        debug!(self.logger, "Send input event");
         self.inner.send(InputEvent::Input { data: data.to_vec() })
     }
 
@@ -101,6 +125,7 @@ impl<T: AsyncRead> Stream for UHIDDevice<T> {
     type Error = <UHIDCodec as Decoder>::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        debug!(self.logger, "poll");
         self.inner.poll()
     }
 }
@@ -110,11 +135,13 @@ impl<T: Write> Sink for UHIDDevice<T> {
     type SinkError = <UHIDCodec as Encoder>::Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        debug!(self.logger, "start_send");
         self.inner.send(item)?;
         Ok(AsyncSink::Ready)
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
+        debug!(self.logger, "poll_complete");
         self.inner.flush()?;
         Ok(Async::Ready(()))
     }
