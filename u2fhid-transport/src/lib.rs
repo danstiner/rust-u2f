@@ -25,7 +25,7 @@ use tokio_core::reactor::Handle;
 use definitions::*;
 use protocol_state_machine::StateMachine;
 use segmenting_sink::{Segmenter, SegmentingSink};
-use u2f_core::U2F;
+use u2f_core::{Service, U2F};
 
 struct PacketSegmenter;
 
@@ -38,13 +38,13 @@ impl Segmenter for PacketSegmenter {
     }
 }
 
-pub struct U2FHID<'a, T: Sink + Stream> {
+pub struct U2FHID<T: Sink + Stream, S> {
     logger: slog::Logger,
-    state_machine: StateMachine<'a>,
+    state_machine: StateMachine<S>,
     transport: SegmentingSink<T, PacketSegmenter>,
 }
 
-impl<'a, T> U2FHID<'a, T>
+impl<'a, T> U2FHID<T, U2F<'a>>
 where
     T: Sink<SinkItem = Packet, SinkError = io::Error>
         + Stream<Item = Packet, Error = io::Error>,
@@ -54,7 +54,7 @@ where
         transport: T,
         service: U2F<'a>,
         logger: L,
-    ) -> U2FHID<'a, T> {
+    ) -> U2FHID<T, U2F<'a>> {
         let logger = logger.into().unwrap_or(slog::Logger::root(
             slog_stdlog::StdLog.fuse(),
             o!(),
@@ -68,10 +68,21 @@ where
     }
 }
 
-impl<'a, T> Future for U2FHID<'a, T>
+impl<T, S> Future for U2FHID<T, S>
 where
     T: Sink<SinkItem = Packet, SinkError = io::Error>
         + Stream<Item = Packet, Error = io::Error>,
+    S: Service<
+        Request = u2f_core::Request,
+        Response = u2f_core::Response,
+        Error = io::Error,
+        Future = Box<
+            Future<
+                Item = u2f_core::Response,
+                Error = io::Error,
+            >,
+        >,
+    >,
 {
     type Item = ();
     type Error = io::Error;

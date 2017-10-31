@@ -38,25 +38,25 @@ use slog::Drain;
 use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM,
                               SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
 
-const REGISTER_COMMAND_CODE: u8     = 0x01;
+const REGISTER_COMMAND_CODE: u8 = 0x01;
 const AUTHENTICATE_COMMAND_CODE: u8 = 0x02;
-const VERSION_COMMAND_CODE: u8      = 0x03;
+const VERSION_COMMAND_CODE: u8 = 0x03;
 const VENDOR_FIRST_COMMAND_CODE: u8 = 0x40;
-const VENDOR_LAST_COMMAND_CODE: u8  = 0xbf;
+const VENDOR_LAST_COMMAND_CODE: u8 = 0xbf;
 
-const SW_NO_ERROR: u16                 = 0x9000; // The command completed successfully without error.
-const SW_WRONG_DATA: u16               = 0x6A80; // The request was rejected due to an invalid key handle.
+const SW_NO_ERROR: u16 = 0x9000; // The command completed successfully without error.
+const SW_WRONG_DATA: u16 = 0x6A80; // The request was rejected due to an invalid key handle.
 const SW_CONDITIONS_NOT_SATISFIED: u16 = 0x6985; // The request was rejected due to test-of-user-presence being required.
-const SW_COMMAND_NOT_ALLOWED: u16      = 0x6986;
-const SW_INS_NOT_SUPPORTED: u16        = 0x6D00; // The Instruction of the request is not supported.
-const SW_WRONG_LENGTH: u16             = 0x6700; // The length of the request was invalid.
-const SW_CLA_NOT_SUPPORTED: u16        = 0x6E00; // The Class byte of the request is not supported.
-const SW_UNKNOWN: u16                  = 0x6F00; // Response status : No precise diagnosis
+const SW_COMMAND_NOT_ALLOWED: u16 = 0x6986;
+const SW_INS_NOT_SUPPORTED: u16 = 0x6D00; // The Instruction of the request is not supported.
+const SW_WRONG_LENGTH: u16 = 0x6700; // The length of the request was invalid.
+const SW_CLA_NOT_SUPPORTED: u16 = 0x6E00; // The Class byte of the request is not supported.
+const SW_UNKNOWN: u16 = 0x6F00; // Response status : No precise diagnosis
 
 
-const AUTH_ENFORCE: u8    = 0x03; // Enforce user presence and sign
+const AUTH_ENFORCE: u8 = 0x03; // Enforce user presence and sign
 const AUTH_CHECK_ONLY: u8 = 0x07; // Check only
-const AUTH_FLAG_TUP: u8   = 0x01; // Test of user presence set
+const AUTH_FLAG_TUP: u8 = 0x01; // Test of user presence set
 
 #[derive(Debug)]
 pub enum StatusCode {
@@ -216,7 +216,9 @@ impl Request {
                 let control_code = match parameter1 {
                     AUTH_CHECK_ONLY => AuthenticateControlCode::CheckOnly,
                     AUTH_ENFORCE => AuthenticateControlCode::EnforceUserPresenceAndSign,
-                    AUTH_ENFORCE | AUTH_FLAG_TUP => AuthenticateControlCode::DontEnforceUserPresenceAndSign,
+                    AUTH_ENFORCE | AUTH_FLAG_TUP => {
+                        AuthenticateControlCode::DontEnforceUserPresenceAndSign
+                    }
                     _ => panic!("Unknown control code"),
                 };
 
@@ -789,16 +791,13 @@ impl<'a> Service for U2F<'a> {
                             RegisterError::Io(err) => {
                                 debug!(self.logger, "Request::Register IoError");
                                 Box::new(futures::failed(err.into()))
-                            },
+                            }
                             RegisterError::Signing(err) => {
                                 debug!(self.logger, "Request::Register SigningError");
-                                Box::new(
-                                futures::failed(io::Error::new(
-                                    io::ErrorKind::Other,
-                                    "Signing error",
-                                )),
-                            )}
-                            ,
+                                Box::new(futures::failed(
+                                    io::Error::new(io::ErrorKind::Other, "Signing error"),
+                                ))
+                            }
                         }
                     }
                 }
@@ -1070,21 +1069,16 @@ pub fn self_signed_attestation() -> Attestation {
     }
 }
 
-// struct TestContext<'a> {
-//     u2f: U2F<'a>,
-//     approval: AlwaysApproveService,
-//     operations: FakeOperations,
-//     storage: InMemoryStorage,
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use openssl::sign::Verifier;
 
-    const ALL_ZERO_HASH: [u8; 32] = [0; 32];
-    const ALL_ZERO_KEY_HANDLE: KeyHandle = KeyHandle([0; 128]);
+    const ALL_ZERO_HASH: [u8; 32] = [0u8; 32];
+    fn all_zero_key_handle() -> KeyHandle {
+        KeyHandle(vec![0u8; 128])
+    }
 
     struct FakeUserPresence {
         pub should_approve_authentication: bool,
@@ -1139,27 +1133,15 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         }
     }
 
-    // fn new_test_context<'a>() -> TestContext<'a> {
-    //     let approval = AlwaysApproveService;
-    //     let operations = FakeOperations;
-    //     let mut storage: InMemoryStorage = InMemoryStorage::new();
-    //     TestContext {
-    //         u2f: U2F::new(&approval, &operations, &mut storage).unwrap(),
-    //         approval: approval,
-    //         operations: operations,
-    //         storage: storage,
-    //     }
-    // }
-
     #[test]
     fn is_valid_key_handle_with_invalid_handle_is_false() {
         let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
+        let u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
-        let key_handle = ALL_ZERO_KEY_HANDLE;
+        let key_handle = all_zero_key_handle();
 
         assert_matches!(
             u2f.is_valid_key_handle(&key_handle, &application),
@@ -1172,7 +1154,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
@@ -1189,11 +1171,11 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
-        let key_handle = ALL_ZERO_KEY_HANDLE;
+        let key_handle = all_zero_key_handle();
 
         assert_matches!(
             u2f.authenticate(&application, &challenge, &key_handle),
@@ -1206,7 +1188,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
@@ -1224,7 +1206,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         };
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
@@ -1244,7 +1226,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         };
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
@@ -1260,7 +1242,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
 
         let mut os_rng = OsRng::new().unwrap();
         let application = ApplicationParameter(os_rng.gen());
@@ -1297,7 +1279,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let approval = FakeUserPresence::always_approve();
         let operations = SecureCryptoOperations::new(get_test_attestation());
         let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage).unwrap();
+        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
 
         let mut os_rng = OsRng::new().unwrap();
         let application = ApplicationParameter(os_rng.gen());
@@ -1306,9 +1288,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let registration = u2f.register(&application, &challenge).unwrap();
 
-        let attestation_certificate = X509::from_der(&registration.attestation_certificate)
-            .unwrap();
-        let public_key = attestation_certificate.public_key().unwrap();
+        let public_key = registration.attestation_certificate.0.public_key().unwrap();
         let signed_data = message_to_sign_for_register(
             &application,
             &challenge,

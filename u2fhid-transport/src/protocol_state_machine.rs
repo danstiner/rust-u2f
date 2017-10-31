@@ -5,12 +5,14 @@ use std::time::Duration;
 
 use futures::{Async, Future, Poll};
 use futures::future;
+use slog_stdlog;
+use slog::{self, Drain, Logger};
+use tokio_core::reactor::Core;
 use tokio_core::reactor::Handle;
 use tokio_core::reactor::Timeout;
-use slog::Logger;
 
 use definitions::*;
-use u2f_core::{self, ResponseError, Service, U2F};
+use u2f_core::{self, ResponseError, Service};
 
 macro_rules! try_some {
     ($e:expr) => (match $e {
@@ -133,17 +135,26 @@ struct StateTransition<O> {
     output: O,
 }
 
-pub struct StateMachine<'a> {
+pub struct StateMachine<S> {
     channels: Channels,
     handle: Handle,
     lock: LockState,
     logger: Logger,
-    service: U2F<'a>,
+    service: S,
     state: State,
 }
 
-impl<'a> StateMachine<'a> {
-    pub fn new(service: U2F<'a>, handle: Handle, logger: Logger) -> StateMachine<'a> {
+impl<S> StateMachine<S>
+where
+    S: Service<
+        Request = u2f_core::Request,
+        Response = u2f_core::Response,
+        Error = io::Error,
+        Future = Box<Future<Item = u2f_core::Response, Error = io::Error>>,
+    >,
+    ResponseMessage: From<<S as u2f_core::Service>::Response>,
+{
+    pub fn new(service: S, handle: Handle, logger: Logger) -> StateMachine<S> {
         StateMachine {
             channels: Channels::new(),
             handle: handle,
@@ -437,7 +448,9 @@ impl<'a> StateMachine<'a> {
             RequestMessage::Init { nonce } => {
                 // TODO Check what channnel message came in on
                 // TODO check unwrap
-                let new_channel_id = self.channels.allocate().expect("Failed to allocate new channel");
+                let new_channel_id = self.channels.allocate().expect(
+                    "Failed to allocate new channel",
+                );
                 debug!(self.logger, "RequestMessage::Init"; "new_channel_id" => new_channel_id);
                 Ok(Box::new(future::ok(ResponseMessage::Init {
                     nonce,
@@ -473,17 +486,7 @@ impl<'a> StateMachine<'a> {
         &mut self,
         request: u2f_core::Request,
     ) -> Box<Future<Item = ResponseMessage, Error = io::Error>> {
-        Box::new(
-            self.service
-                .call(request)
-                .map(|response| response.into())
-                // .map_err(|err| match err {
-                //     ResponseError::Io(io_err) => io_err,
-                //     ResponseError::Signing(err) => {
-                //         io::Error::new(io::ErrorKind::Other, "Signing error")
-                //     }
-                // }),
-        )
+        Box::new(self.service.call(request).map(|response| response.into()))
     }
 }
 
@@ -495,6 +498,19 @@ mod tests {
     use self::rand::OsRng;
     use self::rand::Rand;
     use self::rand::Rng;
+
+    struct FakeU2FService;
+
+    impl Service for FakeU2FService {
+        type Request = u2f_core::Request;
+        type Response = u2f_core::Response;
+        type Error = io::Error;
+        type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
+
+        fn call(&mut self, req: Self::Request) -> Self::Future {
+            panic!("Fake service, not implemented");
+        }
+    }
 
     #[test]
     fn channels_broadcast_channel_is_valid() {
@@ -511,11 +527,21 @@ mod tests {
 
     #[test]
     fn init() {
-        let mut state_machine = StateMachine::new();
+        let logger = slog::Logger::root(slog_stdlog::StdLog.fuse(), o!());
+        let mut core = Core::new().unwrap();
+        let mut state_machine = StateMachine::new(FakeU2FService, core.handle(), logger);
         init_channel(&mut state_machine);
     }
 
-    fn init_channel(state_machine: &mut StateMachine) -> ChannelId {
+    fn init_channel<S>(state_machine: &mut StateMachine<S>) -> ChannelId
+    where
+        S: Service<
+            Request = u2f_core::Request,
+            Response = u2f_core::Response,
+            Error = io::Error,
+            Future = Box<Future<Item = u2f_core::Response, Error = io::Error>>,
+        >,
+    {
         let mut os_rng = OsRng::new().unwrap();
         let request_nonce: [u8; 8] = os_rng.gen();
         let data = request_nonce.to_vec();
@@ -531,12 +557,18 @@ mod tests {
             .unwrap();
 
         match res {
-            Some(Output::ResponseMessage(ResponseMessage::Init { channel_id, nonce, .. },
-                                         response_channel_id)) => {
+            Some(Response {
+                     channel_id: response_channel_id,
+                     message: ResponseMessage::Init {
+                         new_channel_id,
+                         nonce,
+                         ..
+                     },
+                 }) => {
                 assert_eq!(response_channel_id, BROADCAST_CHANNEL_ID);
                 assert_eq!(request_nonce, nonce);
-                assert!(state_machine.channels.is_valid(channel_id));
-                channel_id
+                assert!(state_machine.channels.is_valid(new_channel_id));
+                new_channel_id
             }
             _ => panic!(),
         }
@@ -544,10 +576,12 @@ mod tests {
 
     #[test]
     fn ping() {
+        let logger = slog::Logger::root(slog_stdlog::StdLog.fuse(), o!());
+        let mut core = Core::new().unwrap();
         let mut os_rng = OsRng::new().unwrap();
-        let mut state_machine = StateMachine::new();
-        let request_data: [u8; 8] = os_rng.gen();
-        let packet_data = request_data.to_vec();
+        let mut state_machine = StateMachine::new(FakeU2FService, core.handle(), logger);
+        let ping_data: [u8; 8] = os_rng.gen();
+        let packet_data = ping_data.to_vec();
         let packet_data_len = packet_data.len();
 
         let channel_id = init_channel(&mut state_machine);
@@ -562,9 +596,12 @@ mod tests {
             .unwrap();
 
         match res {
-            Some(Output::ResponseMessage(ResponseMessage::Ping { data }, response_channel_id)) => {
+            Some(Response {
+                     channel_id: response_channel_id,
+                     message: ResponseMessage::Pong { data: response_data },
+                 }) => {
                 assert_eq!(response_channel_id, channel_id);
-                assert_eq!(request_data, data[..]);
+                assert_eq!(response_data[..], ping_data);
             }
             _ => panic!(),
         };
