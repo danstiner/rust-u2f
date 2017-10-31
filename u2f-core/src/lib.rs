@@ -15,12 +15,12 @@ extern crate u2f_header;
 
 mod self_signed_attestation;
 
+use std::io::Read;
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
-use std::io;
+use std::io::{self, Cursor};
 use std::result::Result;
-
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use futures::Future;
 use openssl::bn::BigNumContext;
 use openssl::bn::BigNumContextRef;
@@ -38,6 +38,26 @@ use slog::Drain;
 use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM,
                               SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
 
+const REGISTER_COMMAND_CODE: u8     = 0x01;
+const AUTHENTICATE_COMMAND_CODE: u8 = 0x02;
+const VERSION_COMMAND_CODE: u8      = 0x03;
+const VENDOR_FIRST_COMMAND_CODE: u8 = 0x40;
+const VENDOR_LAST_COMMAND_CODE: u8  = 0xbf;
+
+const SW_NO_ERROR: u16                 = 0x9000; // The command completed successfully without error.
+const SW_WRONG_DATA: u16               = 0x6A80; // The request was rejected due to an invalid key handle.
+const SW_CONDITIONS_NOT_SATISFIED: u16 = 0x6985; // The request was rejected due to test-of-user-presence being required.
+const SW_COMMAND_NOT_ALLOWED: u16      = 0x6986;
+const SW_INS_NOT_SUPPORTED: u16        = 0x6D00; // The Instruction of the request is not supported.
+const SW_WRONG_LENGTH: u16             = 0x6700; // The length of the request was invalid.
+const SW_CLA_NOT_SUPPORTED: u16        = 0x6E00; // The Class byte of the request is not supported.
+const SW_UNKNOWN: u16                  = 0x6F00; // Response status : No precise diagnosis
+
+
+const AUTH_ENFORCE: u8    = 0x03; // Enforce user presence and sign
+const AUTH_CHECK_ONLY: u8 = 0x07; // Check only
+const AUTH_FLAG_TUP: u8   = 0x01; // Test of user presence set
+
 #[derive(Debug)]
 pub enum StatusCode {
     NoError,
@@ -46,6 +66,22 @@ pub enum StatusCode {
     RequestLengthInvalid,
     RequestClassNotSupported,
     RequestInstructionNotSuppored,
+    UnknownError,
+}
+
+impl StatusCode {
+    pub fn write<W: WriteBytesExt>(&self, write: &mut W) {
+        let value = match self {
+            &StatusCode::NoError => SW_NO_ERROR,
+            &StatusCode::TestOfUserPresenceNotSatisfied => SW_CONDITIONS_NOT_SATISFIED,
+            &StatusCode::InvalidKeyHandle => SW_WRONG_DATA,
+            &StatusCode::RequestLengthInvalid => SW_WRONG_LENGTH,
+            &StatusCode::RequestClassNotSupported => SW_CLA_NOT_SUPPORTED,
+            &StatusCode::RequestInstructionNotSuppored => SW_INS_NOT_SUPPORTED,
+            &StatusCode::UnknownError => SW_UNKNOWN,
+        };
+        write.write_u16::<BigEndian>(value).unwrap();
+    }
 }
 
 #[derive(Debug)]
@@ -58,13 +94,13 @@ pub enum AuthenticateControlCode {
 #[derive(Debug)]
 pub enum Request {
     Register {
-        challenge: ChallengeParameter,
         application: ApplicationParameter,
+        challenge: ChallengeParameter,
     },
     Authenticate {
-        control_code: AuthenticateControlCode,
-        challenge: ChallengeParameter,
         application: ApplicationParameter,
+        challenge: ChallengeParameter,
+        control_code: AuthenticateControlCode,
         key_handle: KeyHandle,
     },
     GetVersion,
@@ -72,9 +108,149 @@ pub enum Request {
 }
 
 impl Request {
+    /// Only supports Extended Length Encoding
     pub fn decode(data: &[u8]) -> Result<Request, ()> {
-        panic!("decode not implemented");
-        Err(())
+        let mut reader = Cursor::new(data);
+
+        // CLA: Reserved to be used by the underlying transport protocol
+        let class_byte = reader.read_u8().unwrap();
+        // TODO check or error with RequestClassNotSupported
+
+        // INS: U2F command code
+        let command_code = reader.read_u8().unwrap();
+        // TODO check or error with RequestInstructionNotSuppored
+
+        // P1, P2: Parameter 1 and 2, defined by each command.
+        let parameter1 = reader.read_u8().unwrap();
+        let parameter2 = reader.read_u8().unwrap();
+
+        // Lc: The length of the request-data.
+        // If there are no request data bytes, Lc is omitted.
+        let remaining_len = data.len() - reader.position() as usize;
+        let request_data_len = match remaining_len {
+            3 => {
+                // Lc is omitted because there are no request data bytes
+                0
+            }
+            _ => {
+                let zero_byte = reader.read_u8().unwrap();
+                assert_eq!(zero_byte, 0);
+                let mut value = reader.read_u16::<BigEndian>().unwrap() as usize;
+                if value == 0 {
+                    // Maximum length of request-data is 65 535 bytes.
+                    // The MSB is lost when encoding to two bytes, but
+                    // since Lc is omitted when there are no request data
+                    // bytes, we can unambigously assume 0 to mean 65 535
+                    value = 65535;
+                }
+                value
+            }
+        };
+
+        // Request-data
+        let mut request_data = vec![0u8; request_data_len];
+        reader.read_exact(&mut request_data[..]).unwrap();
+
+        // Le: The maximum expected length of the response data.
+        // If no response data are expected, Le may be omitted.
+        let remaining_len = data.len() - reader.position() as usize;
+        let max_response_data_len = match remaining_len {
+            0 => {
+                // Instruction is not expected to yield any response bytes, Le omitted
+                0
+            }
+            2 => {
+                // When Lc is present, i.e. Nc > 0, Le is encoded as: Le1 Le2
+                // When N e = 65 536, let Le1 = 0 and Le2 = 0.
+                let mut value = reader.read_u16::<BigEndian>().unwrap() as usize;
+                if value == 0 {
+                    // Maximum length of request-data is 65 535 bytes.
+                    // The MSB is lost when encoding to two bytes, but
+                    // since Lc is omitted when there are no request data
+                    // bytes, we can unambigously assume 0 to mean 65 535
+                    value = 65535;
+                }
+                value
+            }
+            3 => {
+                // When L c is absent, i.e. if Nc = 0,
+                // Le is encoded as: 0 Le1 Le2
+                // In other words, Le has a single-byte prefix of 0 when Lc is absent.
+                let zero_byte = reader.read_u8().unwrap();
+                assert_eq!(zero_byte, 0);
+                let mut value = reader.read_u16::<BigEndian>().unwrap() as usize;
+                if value == 0 {
+                    // Maximum length of request-data is 65 535 bytes.
+                    // The MSB is lost when encoding to two bytes, but
+                    // since Lc is omitted when there are no request data
+                    // bytes, we can unambigously assume 0 to mean 65 535
+                    value = 65535;
+                }
+                value
+            }
+            _ => return Err(()),
+        };
+
+        // TODO If the instruction is not expected to yield any response bytes, L e may be omitted. O
+        let mut reader = Cursor::new(request_data);
+        let request = match command_code {
+            REGISTER_COMMAND_CODE => {
+                // The challenge parameter [32 bytes].
+                let mut challenge_parameter = [0u8; 32];
+                reader.read_exact(&mut challenge_parameter[..]).unwrap();
+
+                // The application parameter [32 bytes].
+                let mut application_parameter = [0u8; 32];
+                reader.read_exact(&mut application_parameter[..]).unwrap();
+
+                assert_eq!(reader.position() as usize, request_data_len);
+                Request::Register {
+                    application: ApplicationParameter(application_parameter),
+                    challenge: ChallengeParameter(challenge_parameter),
+                }
+            }
+            AUTHENTICATE_COMMAND_CODE => {
+                assert_eq!(parameter2, 0);
+
+                // Control byte (P1).
+                let control_code = match parameter1 {
+                    AUTH_CHECK_ONLY => AuthenticateControlCode::CheckOnly,
+                    AUTH_ENFORCE => AuthenticateControlCode::EnforceUserPresenceAndSign,
+                    AUTH_ENFORCE | AUTH_FLAG_TUP => AuthenticateControlCode::DontEnforceUserPresenceAndSign,
+                    _ => panic!("Unknown control code"),
+                };
+
+                // The challenge parameter [32 bytes].
+                let mut challenge_parameter = [0u8; 32];
+                reader.read_exact(&mut challenge_parameter[..]).unwrap();
+
+                // The application parameter [32 bytes].
+                let mut application_parameter = [0u8; 32];
+                reader.read_exact(&mut application_parameter[..]).unwrap();
+
+                // key handle length byte [1 byte]
+                let key_handle_len = reader.read_u8().unwrap();
+
+                // key handle [length specified in previous field]
+                let mut key_handle_bytes = vec![0u8; key_handle_len as usize];
+                reader.read_exact(&mut key_handle_bytes[..]).unwrap();
+
+                Request::Authenticate {
+                    application: ApplicationParameter(application_parameter),
+                    challenge: ChallengeParameter(challenge_parameter),
+                    control_code: control_code,
+                    key_handle: KeyHandle::from(&key_handle_bytes),
+                }
+            }
+            VERSION_COMMAND_CODE => {
+                assert_eq!(parameter1, 0);
+                assert_eq!(parameter2, 0);
+                assert_eq!(request_data_len, 0);
+                Request::GetVersion
+            }
+            _ => panic!("Not implemented"),
+        };
+        Ok(request)
     }
 }
 
@@ -82,7 +258,7 @@ pub enum Response {
     Registration {
         user_public_key: Vec<u8>,
         key_handle: KeyHandle,
-        attestation_certificate: Vec<u8>,
+        attestation_certificate: AttestationCertificate,
         signature: Box<Signature>,
     },
     Authentication {
@@ -94,13 +270,88 @@ pub enum Response {
     DidWink,
     TestOfUserPresenceNotSatisfied,
     InvalidKeyHandle,
-    Unknown,
+    UnknownError,
 }
 
 impl Response {
-    pub fn as_bytes(&self) -> Vec<u8> {
-        panic!("Not implemented");
-        Vec::new() // TODO
+    pub fn into_bytes(self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        match self {
+            Response::Registration {
+                user_public_key,
+                key_handle,
+                attestation_certificate,
+                signature,
+            } => {
+                // reserved byte [1 byte], which for legacy reasons has the value 0x05.
+                bytes.push(0x05);
+
+                // user public key [65 bytes]. This is the (uncompressed) x,y-representation of a curve point on the P-256 NIST elliptic curve.
+                bytes.extend_from_slice(&user_public_key);
+
+                // key handle length byte [1 byte], which specifies the length of the key handle (see below). The value is unsigned (range 0-255).
+                let key_handle_bytes = key_handle.as_ref();
+                bytes.push(key_handle_bytes.len() as u8);
+
+                // A key handle [length specified in previous field].
+                bytes.extend_from_slice(key_handle_bytes);
+
+                // An attestation certificate [variable length]. This is a certificate in X.509 DER format
+                bytes.extend_from_slice(&attestation_certificate.to_der());
+
+                // A signature [variable length, 71-73 bytes]
+                let signature_bytes = signature.as_ref().as_ref();
+                bytes.extend_from_slice(signature_bytes);
+
+                // Status word: The command completed successfully without error.
+                StatusCode::NoError.write(&mut bytes);
+            }
+            Response::Authentication {
+                counter,
+                signature,
+                user_present,
+            } => {
+                let user_presence_byte = user_presence_byte(user_present);
+
+                // A user presence byte [1 byte].
+                bytes.push(user_presence_byte);
+
+                // A counter [4 bytes].
+                bytes.write_u32::<BigEndian>(counter).unwrap();
+
+                // A signature [variable length, 71-73 bytes]
+                bytes.extend_from_slice(signature.as_ref().as_ref());
+
+                // Status word: The command completed successfully without error.
+                StatusCode::NoError.write(&mut bytes);
+            }
+            Response::Version { version_string } => {
+                // The response message's raw representation is the
+                // ASCII representation of the string 'U2F_V2'
+                // (without quotes, and without any NUL terminator).
+                bytes.extend_from_slice(version_string.as_bytes());
+
+                // Status word: The command completed successfully without error.
+                StatusCode::NoError.write(&mut bytes);
+            }
+            Response::DidWink => {
+                // Status word: The command completed successfully without error.
+                StatusCode::NoError.write(&mut bytes);
+            }
+            Response::TestOfUserPresenceNotSatisfied => {
+                // Status word: The command completed successfully without error.
+                StatusCode::TestOfUserPresenceNotSatisfied.write(&mut bytes);
+            }
+            Response::InvalidKeyHandle => {
+                // Status word: The command completed successfully without error.
+                StatusCode::InvalidKeyHandle.write(&mut bytes);
+            }
+            Response::UnknownError => {
+                // Status word: The command completed successfully without error.
+                StatusCode::UnknownError.write(&mut bytes);
+            }
+        }
+        bytes
     }
 }
 
@@ -146,10 +397,21 @@ impl AsRef<[u8]> for ChallengeParameter {
     }
 }
 
-const MaxKeyHandleSize: usize = u2f_header::U2F_MAX_KH_SIZE as usize;
+const MAX_KEY_HANDLE_LEN: usize = u2f_header::U2F_MAX_KH_SIZE as usize;
 
-#[derive(Copy)]
-pub struct KeyHandle([u8; MaxKeyHandleSize]);
+#[derive(Clone)]
+pub struct KeyHandle(Vec<u8>);
+
+impl KeyHandle {
+    fn from(bytes: &[u8]) -> KeyHandle {
+        assert!(bytes.len() <= MAX_KEY_HANDLE_LEN);
+        KeyHandle(bytes.to_vec())
+    }
+
+    fn eq_consttime(&self, other: &KeyHandle) -> bool {
+        self.0.len() == other.0.len() && subtle::slices_equal(&self.0, &other.0) == 1
+    }
+}
 
 impl AsRef<[u8]> for KeyHandle {
     fn as_ref(&self) -> &[u8] {
@@ -157,18 +419,12 @@ impl AsRef<[u8]> for KeyHandle {
     }
 }
 
-impl Clone for KeyHandle {
-    fn clone(&self) -> KeyHandle {
-        KeyHandle(self.0)
-    }
-}
-
 impl Rand for KeyHandle {
     #[inline]
     fn rand<R: Rng>(rng: &mut R) -> KeyHandle {
-        let mut bytes = [0u8; MaxKeyHandleSize];
-        for byte in bytes.iter_mut() {
-            *byte = rng.gen::<u8>();
+        let mut bytes = Vec::with_capacity(MAX_KEY_HANDLE_LEN);
+        for _ in 0..MAX_KEY_HANDLE_LEN {
+            bytes.push(rng.gen::<u8>());
         }
         KeyHandle(bytes)
     }
@@ -281,12 +537,19 @@ impl AttestationCertificate {
     }
 }
 
+impl Debug for AttestationCertificate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "AttestationCertificate")
+    }
+}
+
 #[derive(Debug)]
 pub enum SignError {}
 
 pub trait UserPresence {
     fn approve_registration(&self, application: &ApplicationParameter) -> io::Result<bool>;
     fn approve_authentication(&self, application: &ApplicationParameter) -> io::Result<bool>;
+    fn wink(&self) -> io::Result<()>;
 }
 
 pub trait CryptoOperations {
@@ -316,7 +579,7 @@ pub trait SecretStore {
 pub struct Registration {
     user_public_key: Vec<u8>,
     key_handle: KeyHandle,
-    attestation_certificate: Vec<u8>,
+    attestation_certificate: AttestationCertificate,
     signature: Box<Signature>,
 }
 
@@ -464,9 +727,13 @@ impl<'a> U2F<'a> {
         Ok(Registration {
             user_public_key: public_key_bytes,
             key_handle: application_key.handle,
-            attestation_certificate: attestation_certificate.to_der(),
+            attestation_certificate: attestation_certificate,
             signature: signature,
         })
+    }
+
+    fn wink(&self) -> io::Result<()> {
+        self.approval.wink()
     }
 }
 
@@ -494,13 +761,16 @@ impl<'a> Service for U2F<'a> {
     type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
 
     fn call(&mut self, req: Self::Request) -> Self::Future {
+        debug!(self.logger, "call U2F service");
         match req {
             Request::Register {
                 challenge,
                 application,
             } => {
+                debug!(self.logger, "Request::Register");
                 match self.register(&application, &challenge) {
                     Ok(registration) => {
+                        debug!(self.logger, "Request::Register Ok");
                         Box::new(futures::finished(Response::Registration {
                             user_public_key: registration.user_public_key,
                             key_handle: registration.key_handle,
@@ -511,17 +781,24 @@ impl<'a> Service for U2F<'a> {
                     Err(error) => {
                         match error {
                             RegisterError::ApprovalRequired => {
+                                debug!(self.logger, "Request::Register ApprovalRequired");
                                 Box::new(
                                     futures::finished(Response::TestOfUserPresenceNotSatisfied),
                                 )
                             }
-                            RegisterError::Io(err) => Box::new(futures::failed(err.into())),
-                            RegisterError::Signing(err) => Box::new(
+                            RegisterError::Io(err) => {
+                                debug!(self.logger, "Request::Register IoError");
+                                Box::new(futures::failed(err.into()))
+                            },
+                            RegisterError::Signing(err) => {
+                                debug!(self.logger, "Request::Register SigningError");
+                                Box::new(
                                 futures::failed(io::Error::new(
                                     io::ErrorKind::Other,
                                     "Signing error",
                                 )),
-                            ),
+                            )}
+                            ,
                         }
                     }
                 }
@@ -532,6 +809,7 @@ impl<'a> Service for U2F<'a> {
                 application,
                 key_handle,
             } => {
+                debug!(self.logger, "Request::Authenticate");
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
                         match self.is_valid_key_handle(&key_handle, &application) {
@@ -550,6 +828,7 @@ impl<'a> Service for U2F<'a> {
                     AuthenticateControlCode::EnforceUserPresenceAndSign => {
                         match self.authenticate(&application, &challenge, &key_handle) {
                             Ok(authentication) => {
+                                info!(self.logger, "authenticated"; "counter" => &authentication.counter, "user_present" => &authentication.user_present);
                                 Box::new(futures::finished(Response::Authentication {
                                     counter: authentication.counter,
                                     signature: authentication.signature,
@@ -559,18 +838,22 @@ impl<'a> Service for U2F<'a> {
                             Err(error) => {
                                 match error {
                                     AuthenticateError::ApprovalRequired => {
+                                        info!(self.logger, "TestOfUserPresenceNotSatisfied");
                                         Box::new(
                                             futures::finished(Response::TestOfUserPresenceNotSatisfied),
                                         )
                                     }
                                     AuthenticateError::InvalidKeyHandle => {
+                                        info!(self.logger, "InvalidKeyHandle");
                                         Box::new(futures::finished(Response::InvalidKeyHandle))
                                     }
                                     AuthenticateError::Io(err) => {
-                                        Box::new(futures::finished(Response::Unknown))
+                                        info!(self.logger, "i/o error");
+                                        Box::new(futures::finished(Response::UnknownError))
                                     }
                                     AuthenticateError::Signing(err) => {
-                                        Box::new(futures::finished(Response::Unknown))
+                                        info!(self.logger, "Signing error");
+                                        Box::new(futures::finished(Response::UnknownError))
                                     }
                                 }
                             }
@@ -582,12 +865,18 @@ impl<'a> Service for U2F<'a> {
                 }
             }
             Request::GetVersion => {
+                debug!(self.logger, "Request::GetVersion");
                 let response = Response::Version { version_string: self.get_version_string() };
                 Box::new(futures::finished(response))
             }
             Request::Wink => {
-                assert!(false); // not implemented
-                Box::new(futures::finished(Response::DidWink))
+                match self.wink() {
+                    Ok(()) => Box::new(futures::finished(Response::DidWink)),
+                    Err(err) => {
+                        info!(self.logger, "i/o error");
+                        Box::new(futures::finished(Response::UnknownError))
+                    }
+                }
             }
         }
     }
@@ -701,7 +990,11 @@ impl CryptoOperations for SecureCryptoOperations {
         let pkey = PKey::from_ec_key(ec_key).unwrap();
         let mut signer = Signer::new(MessageDigest::sha256(), &pkey).unwrap();
         signer.update(data).unwrap();
+        // ASN.1 DSA signature
         let signature = signer.finish().unwrap();
+        // TODO can be 70 bytes, assert!(signature.len() >= 71);
+        assert!(signature.len() >= 70);
+        assert!(signature.len() <= 73);
         Ok(Box::new(RawSignature(signature)))
     }
 }
@@ -759,7 +1052,7 @@ impl SecretStore for InMemoryStorage {
     ) -> io::Result<Option<&ApplicationKey>> {
         match self.application_keys.get(application) {
             Some(key) => {
-                if key_handles_eq_consttime(&key.handle, handle) {
+                if key.handle.eq_consttime(handle) {
                     Ok(Some(key))
                 } else {
                     Ok(None)
@@ -768,10 +1061,6 @@ impl SecretStore for InMemoryStorage {
             None => Ok(None),
         }
     }
-}
-
-fn key_handles_eq_consttime(key_handle1: &KeyHandle, key_handle2: &KeyHandle) -> bool {
-    subtle::slices_equal(&key_handle1.0, &key_handle2.0) == 1
 }
 
 pub fn self_signed_attestation() -> Attestation {
@@ -817,6 +1106,9 @@ mod tests {
         }
         fn approve_registration(&self, _: &ApplicationParameter) -> io::Result<bool> {
             Ok(self.should_approve_registration)
+        }
+        fn wink(&self) -> io::Result<()> {
+            Ok(())
         }
     }
 

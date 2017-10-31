@@ -125,7 +125,6 @@ impl<T: AsyncRead> Stream for UHIDDevice<T> {
     type Error = <UHIDCodec as Decoder>::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        debug!(self.logger, "poll");
         self.inner.poll()
     }
 }

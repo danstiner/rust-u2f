@@ -117,6 +117,26 @@ pub enum Command {
     Vendor { identifier: u8 },
 }
 
+impl slog::Value for Command {
+    fn serialize(
+        &self,
+        record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut slog::Serializer,
+    ) -> slog::Result {
+        match self {
+            &Command::Msg => "Msg",
+            &Command::Ping => "Ping",
+            &Command::Init => "Init",
+            &Command::Error => "Error",
+            &Command::Wink => "Wink",
+            &Command::Lock => "Lock",
+            &Command::Sync => "Sync",
+            &Command::Vendor { identifier } => "Vendor",
+        }.serialize(record, key, serializer)
+    }
+}
+
 pub enum Packet {
     Initialization {
         channel_id: ChannelId,
@@ -156,7 +176,7 @@ impl Packet {
     pub fn from_bytes(bytes: &[u8]) -> Result<Packet, ()> {
         // TODO assert_eq!(bytes.len(), HID_REPORT_LEN);
         let mut reader = Cursor::new(bytes);
-        let skip_byte = reader.read_u8().unwrap();
+        let skip_byte = reader.read_u8().unwrap(); // TODO why is this here
         let channel_id = ChannelId(reader.read_u32::<BigEndian>().unwrap());
         let frame_type_byte = reader.read_u8().unwrap();
         if frame_type_byte & FRAME_TYPE_MASK == FRAME_TYPE_INIT {
@@ -175,9 +195,7 @@ impl Packet {
             };
             let payload_len = reader.read_u16::<BigEndian>().unwrap();
             let mut packet_data = vec![0u8; INITIAL_PACKET_DATA_LEN];
-            reader
-                .read_exact(&mut packet_data[0..INITIAL_PACKET_DATA_LEN])
-                .unwrap();
+            reader.read_exact(&mut packet_data[..]).unwrap();
             Ok(Packet::Initialization {
                 channel_id: channel_id,
                 command: command,
@@ -186,10 +204,8 @@ impl Packet {
             })
         } else {
             let sequence_number = frame_type_byte;
-            let mut packet_data = Vec::with_capacity(CONTINUATION_PACKET_DATA_LEN);
-            reader
-                .read_exact(&mut packet_data[0..CONTINUATION_PACKET_DATA_LEN])
-                .unwrap();
+            let mut packet_data = vec![0u8; CONTINUATION_PACKET_DATA_LEN];
+            reader.read_exact(&mut packet_data[..]).unwrap();
             Ok(Packet::Continuation {
                 channel_id: channel_id,
                 sequence_number: sequence_number,
@@ -244,7 +260,7 @@ impl Packet {
                 channel_id.write(&mut bytes);
 
                 // 4      1      SEQ      Packet sequence 0x00..0x7f (bit 7 always cleared)
-                assert!(sequence_number & FRAME_TYPE_MASK == FRAME_TYPE_CONT);
+                assert_eq!(sequence_number & FRAME_TYPE_MASK, FRAME_TYPE_CONT);
                 bytes.push(sequence_number);
 
                 // 5      (s-5)  DATA     Payload data (s is equal to the fixed packet size)
@@ -391,18 +407,19 @@ impl slog::Value for ResponseMessage {
 
 impl From<u2f_core::Response> for ResponseMessage {
     fn from(response: u2f_core::Response) -> ResponseMessage {
-        ResponseMessage::EncapsulatedResponse { data: response.as_bytes() }
+        ResponseMessage::EncapsulatedResponse { data: response.into_bytes() }
     }
 }
 
 fn encode_response(channel_id: ChannelId, command: Command, data: &[u8]) -> VecDeque<Packet> {
     let mut packets = VecDeque::new();
+    let payload_len = data.len();
     let split_index = cmp::min(data.len(), INITIAL_PACKET_DATA_LEN);
     let (initial, remaining) = data.split_at(split_index);
     packets.push_back(Packet::Initialization {
         channel_id: channel_id,
         command: command,
-        payload_len: data.len(),
+        payload_len: payload_len,
         data: initial.to_vec(),
     });
     for (i, chunk) in remaining.chunks(CONTINUATION_PACKET_DATA_LEN).enumerate() {

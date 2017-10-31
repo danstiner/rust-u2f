@@ -125,14 +125,12 @@ where
     type Error = D::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        debug!(self.logger, "poll");
         let read_len = self.decoder.read_len();
         let mut buffer = vec![0u8; read_len];
-        debug!(self.logger, "read"; "read_len" => read_len);
         let read = self.inner.read(&mut buffer[..]);
         match read {
             Ok(0) => {
-                debug!(self.logger, "read(0)");
+                debug!(self.logger, "poll::read(0)");
                 Ok(Async::Ready(None))
             }
             Ok(n) => {
@@ -142,15 +140,15 @@ where
                     );
                 }
                 let frame = self.decoder.decode(&mut BytesMut::from_buf(buffer))?;
-                debug!(self.logger, "decode"; "frame" => &frame);
+                debug!(self.logger, "poll:Ok"; "frame" => &frame);
                 return Ok(Async::Ready(Some(frame)));
             }
             Err(ref e) if e.kind() == ::std::io::ErrorKind::WouldBlock => {
-                debug!(self.logger, "WouldBlock");
+                debug!(self.logger, "poll:WouldBlock");
                 return Ok(Async::NotReady);
             }
             Err(e) => {
-                debug!(self.logger, "errored");
+                debug!(self.logger, "poll:Err");
                 return Err(e.into());
             }
         }

@@ -97,9 +97,13 @@ where
             match try_ready!(self.transport.poll()) {
                 Some(packet) => {
                     debug!(self.logger, "Run state machine with read packet"; "packet" => &packet);
-                    let response = try_ready!(self.state_machine.accept_packet(packet));
-                    debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
-                    assert_send(&mut self.transport, response)?;
+                    match self.state_machine.accept_packet(packet)? {
+                        Some(response) => {
+                            debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
+                            assert_send(&mut self.transport, response)?;
+                        }
+                        None => {}
+                    }
                 }
                 None => {
                     // TODO close

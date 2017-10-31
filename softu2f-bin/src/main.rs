@@ -43,6 +43,11 @@ impl UserPresence for CommandPromptUserPresence {
     fn approve_authentication(&self, _: &ApplicationParameter) -> io::Result<bool> {
         Self::approve("Approve authentication [y/n]: ")
     }
+
+    fn wink(&self) -> io::Result<()> {
+        println!(";)");
+        Ok(())
+    }
 }
 
 fn output_to_packet(output_event: OutputEvent) -> Option<Packet> {
@@ -120,11 +125,11 @@ fn run(logger: slog::Logger) -> io::Result<()> {
     let approval = CommandPromptUserPresence;
     let operations: SecureCryptoOperations = SecureCryptoOperations::new(attestation);
     let mut storage: InMemoryStorage = InMemoryStorage::new();
+
     let service = U2F::new(&approval, &operations, &mut storage, logger.new(o!()))?;
-
     let future = U2FHID::bind_service(&handle, transport, service, logger.new(o!()));
-
     core.run(future)?;
+
     Ok(())
 }
 

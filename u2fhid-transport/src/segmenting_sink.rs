@@ -54,12 +54,13 @@ where
     }
 
     fn try_empty_buffer(&mut self) -> Poll<(), S::SinkError> {
-        let started_some = !self.buf.is_empty();
+        let mut started_some = false;
         while let Some(item) = self.buf.pop_front() {
             if let AsyncSink::NotReady(item) = try!(self.sink.start_send(item)) {
                 self.buf.push_front(item);
                 return Ok(Async::NotReady);
             }
+            started_some = true;
         }
 
         if started_some {

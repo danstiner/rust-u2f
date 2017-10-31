@@ -14,7 +14,7 @@ use u2f_core::{self, ResponseError, Service, U2F};
 
 macro_rules! try_some {
     ($e:expr) => (match $e {
-        Ok(Some(t)) => return Ok(Async::Ready(t)),
+        Ok(Some(t)) => return Ok(Some(t)),
         Ok(None) => {},
         Err(e) => return Err(From::from(e)),
     })
@@ -195,13 +195,23 @@ impl<'a> StateMachine<'a> {
         Ok(transition.output)
     }
 
-    pub fn accept_packet(&mut self, packet: Packet) -> Poll<Response, io::Error> {
+    pub fn accept_packet(&mut self, packet: Packet) -> Result<Option<Response>, io::Error> {
+        debug!(self.logger, "check_channel_id");
         try_some!(self.check_channel_id(&packet));
+
+        debug!(self.logger, "check_lock");
         try_some!(self.check_lock(&packet));
+
+        debug!(self.logger, "step_with_packet");
         try_some!(self.step_with_packet(packet));
+
+        debug!(self.logger, "try_complete_receive");
         try_some!(self.try_complete_receive());
+
+        debug!(self.logger, "try_complete_dispatch");
         try_some!(self.try_complete_dispatch());
-        Ok(Async::NotReady)
+
+        Ok(None)
     }
 
     fn check_channel_id(&self, packet: &Packet) -> Result<Option<Response>, io::Error> {
@@ -242,7 +252,7 @@ impl<'a> StateMachine<'a> {
                  payload_len,
                  command,
              }) => {
-                debug!(self.logger, "Begin transaction");
+                debug!(self.logger, "Begin transaction"; "channel_id" => &channel_id, "command" => &command, "payload_len" => payload_len);
                 StateTransition {
                     new_state: State::Receive(ReceiveState {
                         buffer: data.to_vec(),
@@ -339,6 +349,7 @@ impl<'a> StateMachine<'a> {
         let transition = match self.state.take() {
             State::Receive(receive) => {
                 if receive.buffer.len() >= receive.payload_len {
+                    debug!(self.logger, "Received entire payload"; "payload_len" => receive.payload_len);
                     let message = RequestMessage::decode(
                         &receive.command,
                         &receive.buffer[0..receive.payload_len],
@@ -419,14 +430,15 @@ impl<'a> StateMachine<'a> {
         match request.message {
             RequestMessage::EncapsulatedRequest { data } => {
                 // TODO no unwrap
+                debug!(self.logger, "RequestMessage::EncapsulatedRequest"; "data.len" => data.len());
                 let request = u2f_core::Request::decode(&data).unwrap();
                 Ok(self.dispatch(request))
             }
             RequestMessage::Init { nonce } => {
                 // TODO Check what channnel message came in on
                 // TODO check unwrap
-                let new_channel_id = self.channels.allocate().unwrap();
-                info!(self.logger, "Init"; "new_channel_id" => new_channel_id);
+                let new_channel_id = self.channels.allocate().expect("Failed to allocate new channel");
+                debug!(self.logger, "RequestMessage::Init"; "new_channel_id" => new_channel_id);
                 Ok(Box::new(future::ok(ResponseMessage::Init {
                     nonce,
                     new_channel_id: new_channel_id,
@@ -437,11 +449,13 @@ impl<'a> StateMachine<'a> {
                     capabilities: CapabilityFlags::CAPFLAG_WINK,
                 })))
             }
-            RequestMessage::Ping { data } => Ok(Box::new(
-                future::ok(ResponseMessage::Pong { data: data }),
-            )),
+            RequestMessage::Ping { data } => {
+                debug!(self.logger, "RequestMessage::Ping"; "data.len" => data.len());
+                Ok(Box::new(future::ok(ResponseMessage::Pong { data: data })))
+            }
             RequestMessage::Wink => Ok(self.dispatch(u2f_core::Request::Wink)),
             RequestMessage::Lock { lock_time } => {
+                debug!(self.logger, "RequestMessage::Lock"; "lock_time" => lock_time.as_secs());
                 if lock_time == Duration::from_secs(0) {
                     // TODO Enforce correct channel
                     self.lock.release();
