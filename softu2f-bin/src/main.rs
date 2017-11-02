@@ -5,7 +5,7 @@ extern crate slog;
 extern crate slog_term;
 extern crate tokio_core;
 extern crate u2f_core;
-extern crate u2fhid_transport;
+extern crate u2fhid_protocol;
 extern crate uhid_linux_tokio;
 extern crate tokio_io;
 
@@ -17,7 +17,7 @@ use slog::*;
 use tokio_core::reactor::Core;
 
 use u2f_core::{ApplicationParameter, UserPresence, InMemoryStorage, SecureCryptoOperations, U2F};
-use u2fhid_transport::{Packet, U2FHID};
+use u2fhid_protocol::{Packet, U2FHID};
 use uhid_linux_tokio::{Bus, CreateParams, UHIDDevice, InputEvent, OutputEvent, StreamError};
 
 struct CommandPromptUserPresence;

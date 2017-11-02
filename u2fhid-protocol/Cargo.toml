@@ -1,6 +1,6 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
-name = "u2fhid-transport"
+name = "u2fhid-protocol"
 version = "0.1.0"
 [dependencies]
 bitflags = "1.0.0"
@@ -12,9 +12,6 @@ tokio-core = "0.1.9"
 
 [dependencies.u2f-core]
 path = "../u2f-core"
-
-[dependencies.u2fhid-transport-header]
-path = "../u2fhid-transport-header"
 
 [dev-dependencies]
 rand = "0.3.17"

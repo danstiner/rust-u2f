@@ -14,8 +14,8 @@ tokio-service = "0.1.0"
 [dependencies.u2f-core]
 path = "../u2f-core"
 
-[dependencies.u2fhid-transport]
-path = "../u2fhid-transport"
+[dependencies.u2fhid-protocol]
+path = "../u2fhid-protocol"
 
 [dependencies.uhid-linux-tokio]
 path = "../uhid-linux-tokio"
