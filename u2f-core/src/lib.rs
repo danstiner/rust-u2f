@@ -1091,11 +1091,7 @@ impl CryptoOperations for SecureCryptoOperations {
         let pkey = PKey::from_ec_key(ec_key).unwrap();
         let mut signer = Signer::new(MessageDigest::sha256(), &pkey).unwrap();
         signer.update(data).unwrap();
-        // ASN.1 DSA signature
         let signature = signer.finish().unwrap();
-        // TODO can be 70 bytes, assert!(signature.len() >= 71);
-        assert!(signature.len() >= 70);
-        assert!(signature.len() <= 73);
         Ok(Box::new(RawSignature(signature)))
     }
 }
