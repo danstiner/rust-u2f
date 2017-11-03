@@ -51,7 +51,7 @@ impl State {
     }
 }
 
-const MAX_CHANNEL_ID: ChannelId = ChannelId(5);
+const MAX_CHANNEL_ID: ChannelId = ChannelId(BROADCAST_CHANNEL_ID.0 - 1);
 const MIN_CHANNEL_ID: ChannelId = ChannelId(1);
 
 #[derive(Debug)]
