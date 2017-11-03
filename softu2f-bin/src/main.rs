@@ -11,6 +11,8 @@ extern crate tokio_io;
 
 use std::ascii::AsciiExt;
 use std::io;
+use std::thread;
+use std::time;
 
 use futures::{future, Future, Stream, Sink};
 use slog::*;
@@ -27,6 +29,9 @@ impl CommandPromptUserPresence {
         loop {
             let reply = rprompt::prompt_reply_stdout(prompt)?;
             if reply.eq_ignore_ascii_case("y") {
+                let approve_delay = time::Duration::from_secs(3);
+                println!("Waiting {} seconds. Switch back to your browser or operation will fail.", approve_delay.as_secs());
+                thread::sleep(approve_delay);
                 return Ok(true);
             } else if reply.eq_ignore_ascii_case("n") {
                 return Ok(false);
