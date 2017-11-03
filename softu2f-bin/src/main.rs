@@ -9,6 +9,8 @@ extern crate u2fhid_protocol;
 extern crate uhid_linux_tokio;
 extern crate tokio_io;
 
+mod user_presence;
+
 use std::ascii::AsciiExt;
 use std::io;
 use std::thread;
@@ -18,42 +20,10 @@ use futures::{future, Future, Stream, Sink};
 use slog::*;
 use tokio_core::reactor::Core;
 
-use u2f_core::{ApplicationParameter, UserPresence, InMemoryStorage, SecureCryptoOperations, U2F};
+use u2f_core::{InMemoryStorage, SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
 use uhid_linux_tokio::{Bus, CreateParams, UHIDDevice, InputEvent, OutputEvent, StreamError};
-
-struct CommandPromptUserPresence;
-
-impl CommandPromptUserPresence {
-    fn approve(prompt: &str) -> io::Result<bool> {
-        loop {
-            let reply = rprompt::prompt_reply_stdout(prompt)?;
-            if reply.eq_ignore_ascii_case("y") {
-                let approve_delay = time::Duration::from_secs(3);
-                println!("Waiting {} seconds. Switch back to your browser or operation will fail.", approve_delay.as_secs());
-                thread::sleep(approve_delay);
-                return Ok(true);
-            } else if reply.eq_ignore_ascii_case("n") {
-                return Ok(false);
-            }
-        }
-    }
-}
-
-impl UserPresence for CommandPromptUserPresence {
-    fn approve_registration(&self, _: &ApplicationParameter) -> io::Result<bool> {
-        Self::approve("Approve registration [y/n]: ")
-    }
-
-    fn approve_authentication(&self, _: &ApplicationParameter) -> io::Result<bool> {
-        Self::approve("Approve authentication [y/n]: ")
-    }
-
-    fn wink(&self) -> io::Result<()> {
-        println!(";)");
-        Ok(())
-    }
-}
+use user_presence::CommandPromptUserPresence;
 
 fn output_to_packet(output_event: OutputEvent) -> Option<Packet> {
     match output_event {
