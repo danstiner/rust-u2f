@@ -752,11 +752,6 @@ impl<'a> U2F<'a> {
         key_handle: &KeyHandle,
     ) -> Result<Authentication, AuthenticateError> {
         debug!(self.logger, "authenticate");
-        if !self.approval.approve_authentication(application)? {
-            return Err(AuthenticateError::ApprovalRequired);
-        }
-
-        let user_present = true;
         let application_key = match self.storage.retrieve_application_key(
             application,
             key_handle,
@@ -764,6 +759,12 @@ impl<'a> U2F<'a> {
             Some(key) => key.clone(),
             None => return Err(AuthenticateError::InvalidKeyHandle),
         };
+
+        if !self.approval.approve_authentication(application)? {
+            return Err(AuthenticateError::ApprovalRequired);
+        }
+
+        let user_present = true;
         let counter = self.storage.get_then_increment_counter(application)?;
         let user_presence_byte = user_presence_byte(user_present);
 
