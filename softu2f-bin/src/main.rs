@@ -1,25 +1,33 @@
-extern crate futures;
-extern crate rprompt;
+#[macro_use]
+extern crate serde_derive;
 #[macro_use]
 extern crate slog;
+
+extern crate futures;
+extern crate rprompt;
+extern crate serde_json;
+extern crate serde;
 extern crate slog_term;
 extern crate tokio_core;
+extern crate tokio_io;
 extern crate u2f_core;
 extern crate u2fhid_protocol;
 extern crate uhid_linux_tokio;
-extern crate tokio_io;
 
+mod file_storage;
 mod user_presence;
 
-use std::ascii::AsciiExt;
+use std::collections::HashMap;
+use std::env;
+use std::ffi::OsStr;
 use std::io;
-use std::thread;
-use std::time;
+use std::path::{Path, PathBuf};
 
 use futures::{future, Future, Stream, Sink};
 use slog::*;
 use tokio_core::reactor::Core;
 
+use file_storage::FileStorage;
 use u2f_core::{InMemoryStorage, SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
 use uhid_linux_tokio::{Bus, CreateParams, UHIDDevice, InputEvent, OutputEvent, StreamError};
@@ -73,7 +81,7 @@ const REPORT_DESCRIPTOR: [u8; 34] = [
         0xc0,                         // END_COLLECTION
 ];
 
-fn run(logger: slog::Logger) -> io::Result<()> {
+fn run(logger: slog::Logger, key_store_path: PathBuf) -> io::Result<()> {
     let create_params = CreateParams {
         name: String::from("SoftU2F-Linux"),
         phys: String::from(""),
@@ -99,7 +107,7 @@ fn run(logger: slog::Logger) -> io::Result<()> {
     let attestation = u2f_core::self_signed_attestation();
     let approval = CommandPromptUserPresence;
     let operations: SecureCryptoOperations = SecureCryptoOperations::new(attestation);
-    let mut storage: InMemoryStorage = InMemoryStorage::new();
+    let mut storage = FileStorage::new(key_store_path)?;
 
     let service = U2F::new(&approval, &operations, &mut storage, logger.new(o!()))?;
     let future = U2FHID::bind_service(&handle, transport, service, logger.new(o!()));
@@ -111,6 +119,15 @@ fn run(logger: slog::Logger) -> io::Result<()> {
 fn main() {
     let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
+
+    let args: Vec<_> = env::args().collect();
+    let filename = Path::new(&args[0]).file_name().unwrap_or(OsStr::new("")).to_str().unwrap();
+    if args.len() != 2 {
+        println!("Usage: {} <key-store.json>", filename);
+        return;
+    }
+
     info!(logger, "SoftU2F started");
-    run(logger).unwrap();
+    let key_store_path = PathBuf::from(&args[1]);
+    run(logger, key_store_path).unwrap();
 }

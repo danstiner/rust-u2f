@@ -1,13 +1,18 @@
 #[macro_use]
 extern crate assert_matches;
 #[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate slog;
+#[macro_use]
 extern crate quick_error;
+
+extern crate base64;
 extern crate byteorder;
 extern crate futures;
 extern crate openssl;
 extern crate rand;
-#[macro_use]
-extern crate slog;
+extern crate serde;
 extern crate slog_stdlog;
 extern crate subtle;
 extern crate tokio_service;
@@ -15,11 +20,7 @@ extern crate u2f_header;
 
 mod self_signed_attestation;
 
-use std::io::Read;
-use std::collections::HashMap;
-use std::fmt::{self, Debug};
-use std::io::{self, Cursor};
-use std::result::Result;
+use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use futures::Future;
 use openssl::bn::BigNumContext;
@@ -34,6 +35,11 @@ use rand::OsRng;
 use rand::Rand;
 use rand::Rng;
 use slog::Drain;
+use std::collections::HashMap;
+use std::fmt::{self, Debug};
+use std::io::{self, Cursor};
+use std::io::Read;
+use std::result::Result;
 
 use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM,
                               SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
@@ -378,16 +384,51 @@ impl Into<io::Error> for ResponseError {
     }
 }
 
-type Counter = u32;
+pub type Counter = u32;
 type SHA256Hash = [u8; 32];
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct ApplicationParameter(SHA256Hash);
+pub struct ApplicationParameter(
+    SHA256Hash
+);
 
 impl AsRef<[u8]> for ApplicationParameter {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
+}
+
+impl Serialize for ApplicationParameter {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        as_base64(&self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ApplicationParameter {
+    fn deserialize<D>(deserializer: D) -> Result<ApplicationParameter, D::Error>
+        where D: Deserializer<'de>
+    {
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(&from_base64(deserializer)?);
+        Ok(ApplicationParameter(bytes))
+    }
+}
+
+fn as_base64<T, S>(buffer: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where T: AsRef<[u8]>,
+          S: Serializer
+{
+    serializer.serialize_str(&base64::encode(buffer.as_ref()))
+}
+
+fn from_base64<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where D: Deserializer<'de>
+{
+    use serde::de::Error;
+    String::deserialize(deserializer)
+        .and_then(|string| base64::decode(&string).map_err(|err| Error::custom(err.to_string())))
 }
 
 #[derive(Debug)]
@@ -410,7 +451,7 @@ impl KeyHandle {
         KeyHandle(bytes.to_vec())
     }
 
-    fn eq_consttime(&self, other: &KeyHandle) -> bool {
+    pub fn eq_consttime(&self, other: &KeyHandle) -> bool {
         self.0.len() == other.0.len() && subtle::slices_equal(&self.0, &other.0) == 1
     }
 }
@@ -438,6 +479,22 @@ impl Debug for KeyHandle {
     }
 }
 
+impl Serialize for KeyHandle {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        as_base64(&self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for KeyHandle {
+    fn deserialize<D>(deserializer: D) -> Result<KeyHandle, D::Error>
+        where D: Deserializer<'de>
+    {
+        Ok(KeyHandle(from_base64(deserializer)?))
+    }
+}
+
 pub struct Key(EcKey);
 
 impl Key {
@@ -455,6 +512,50 @@ impl Clone for Key {
 impl Debug for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Key")
+    }
+}
+
+impl Serialize for Key {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        PrivateKeyAsPEM::from_key(self).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Key {
+    fn deserialize<D>(deserializer: D) -> Result<Key, D::Error>
+        where D: Deserializer<'de>
+    {
+        Ok(PrivateKeyAsPEM::deserialize(deserializer)?.as_key())
+    }
+}
+
+struct PrivateKeyAsPEM(Vec<u8>);
+
+impl PrivateKeyAsPEM {
+    fn as_key(&self) -> Key {
+        Key(EcKey::private_key_from_pem(&self.0).unwrap())
+    }
+
+    fn from_key(key: &Key) -> PrivateKeyAsPEM {
+        PrivateKeyAsPEM(key.0.private_key_to_pem().unwrap())
+    }
+}
+
+impl Serialize for PrivateKeyAsPEM {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        as_base64(&self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PrivateKeyAsPEM {
+    fn deserialize<D>(deserializer: D) -> Result<PrivateKeyAsPEM, D::Error>
+        where D: Deserializer<'de>
+    {
+        Ok(PrivateKeyAsPEM(from_base64(deserializer)?))
     }
 }
 
@@ -514,10 +615,10 @@ impl PublicKey {
 
 pub trait Signature: AsRef<[u8]> + Debug + Send {}
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ApplicationKey {
-    application: ApplicationParameter,
-    handle: KeyHandle,
+    pub application: ApplicationParameter,
+    pub handle: KeyHandle,
     key: Key,
 }
 
