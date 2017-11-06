@@ -59,7 +59,7 @@ impl SecretStore for FileStorage {
         Ok(())
     }
 
-    fn get_then_increment_counter(
+    fn get_and_increment_counter(
         &mut self,
         application: &ApplicationParameter,
     ) -> io::Result<Counter> {

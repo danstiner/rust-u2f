@@ -667,7 +667,7 @@ pub trait CryptoOperations {
 
 pub trait SecretStore {
     fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()>;
-    fn get_then_increment_counter(
+    fn get_and_increment_counter(
         &mut self,
         application: &ApplicationParameter,
     ) -> io::Result<Counter>;
@@ -765,7 +765,7 @@ impl<'a> U2F<'a> {
         }
 
         let user_present = true;
-        let counter = self.storage.get_then_increment_counter(application)?;
+        let counter = self.storage.get_and_increment_counter(application)?;
         let user_presence_byte = user_presence_byte(user_present);
 
         let signature = self.operations.sign(
@@ -1127,7 +1127,7 @@ impl SecretStore for InMemoryStorage {
         Ok(())
     }
 
-    fn get_then_increment_counter(
+    fn get_and_increment_counter(
         &mut self,
         application: &ApplicationParameter,
     ) -> io::Result<Counter> {
