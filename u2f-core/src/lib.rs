@@ -873,6 +873,7 @@ impl<'a> Service for U2F<'a> {
             } => {
                 debug!(self.logger, "Request::Register");
                 match self.register(&application, &challenge) {
+                    info!(self.logger, "registered");
                     Ok(registration) => {
                         debug!(self.logger, "Request::Register Ok");
                         Box::new(futures::finished(Response::Registration {
