@@ -1,6 +1,6 @@
 FROM rust:latest
 
-RUN apt-get update && apt-get install -y llvm-3.9-dev libclang-3.9-dev clang-3.9
+RUN apt-get update && apt-get install -y clang-3.9 libssl-dev
 
 WORKDIR /app
 COPY . .
