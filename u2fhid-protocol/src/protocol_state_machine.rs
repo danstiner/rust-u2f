@@ -167,7 +167,7 @@ where
 
     pub fn step(&mut self) -> Result<Option<Response>, io::Error> {
         // Tick the lock for possible timeout
-        self.lock.tick();
+        self.lock.tick()?;
 
         let transition = match self.state.take() {
             State::Receive(receive) => {
