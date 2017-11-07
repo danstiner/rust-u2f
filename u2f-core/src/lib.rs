@@ -20,9 +20,9 @@ extern crate u2f_header;
 
 mod self_signed_attestation;
 
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use futures::Future;
+use futures::future;
 use openssl::bn::BigNumContext;
 use openssl::bn::BigNumContextRef;
 use openssl::ec::{self, EcGroup, EcKey, EcPoint, EcGroupRef, EcPointRef};
@@ -34,11 +34,12 @@ use openssl::x509::X509;
 use rand::OsRng;
 use rand::Rand;
 use rand::Rng;
+use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use slog::Drain;
-use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::io::{self, Cursor};
 use std::io::Read;
+use std::rc::Rc;
 use std::result::Result;
 
 use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM,
@@ -58,7 +59,6 @@ const SW_INS_NOT_SUPPORTED: u16 = 0x6D00; // The Instruction of the request is n
 const SW_WRONG_LENGTH: u16 = 0x6700; // The length of the request was invalid.
 const SW_CLA_NOT_SUPPORTED: u16 = 0x6E00; // The Class byte of the request is not supported.
 const SW_UNKNOWN: u16 = 0x6F00; // Response status : No precise diagnosis
-
 
 const AUTH_ENFORCE: u8 = 0x03; // Enforce user presence and sign
 const AUTH_CHECK_ONLY: u8 = 0x07; // Check only
@@ -388,9 +388,7 @@ pub type Counter = u32;
 type SHA256Hash = [u8; 32];
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct ApplicationParameter(
-    SHA256Hash
-);
+pub struct ApplicationParameter(SHA256Hash);
 
 impl AsRef<[u8]> for ApplicationParameter {
     fn as_ref(&self) -> &[u8] {
@@ -400,7 +398,8 @@ impl AsRef<[u8]> for ApplicationParameter {
 
 impl Serialize for ApplicationParameter {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         as_base64(&self, serializer)
     }
@@ -408,7 +407,8 @@ impl Serialize for ApplicationParameter {
 
 impl<'de> Deserialize<'de> for ApplicationParameter {
     fn deserialize<D>(deserializer: D) -> Result<ApplicationParameter, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&from_base64(deserializer)?);
@@ -417,21 +417,24 @@ impl<'de> Deserialize<'de> for ApplicationParameter {
 }
 
 fn as_base64<T, S>(buffer: &T, serializer: S) -> Result<S::Ok, S::Error>
-    where T: AsRef<[u8]>,
-          S: Serializer
+where
+    T: AsRef<[u8]>,
+    S: Serializer,
 {
     serializer.serialize_str(&base64::encode(buffer.as_ref()))
 }
 
 fn from_base64<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-    where D: Deserializer<'de>
+where
+    D: Deserializer<'de>,
 {
     use serde::de::Error;
-    String::deserialize(deserializer)
-        .and_then(|string| base64::decode(&string).map_err(|err| Error::custom(err.to_string())))
+    String::deserialize(deserializer).and_then(|string| {
+        base64::decode(&string).map_err(|err| Error::custom(err.to_string()))
+    })
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ChallengeParameter(SHA256Hash);
 
 impl AsRef<[u8]> for ChallengeParameter {
@@ -481,7 +484,8 @@ impl Debug for KeyHandle {
 
 impl Serialize for KeyHandle {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         as_base64(&self, serializer)
     }
@@ -489,7 +493,8 @@ impl Serialize for KeyHandle {
 
 impl<'de> Deserialize<'de> for KeyHandle {
     fn deserialize<D>(deserializer: D) -> Result<KeyHandle, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         Ok(KeyHandle(from_base64(deserializer)?))
     }
@@ -517,7 +522,8 @@ impl Debug for Key {
 
 impl Serialize for Key {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         PrivateKeyAsPEM::from_key(self).serialize(serializer)
     }
@@ -525,7 +531,8 @@ impl Serialize for Key {
 
 impl<'de> Deserialize<'de> for Key {
     fn deserialize<D>(deserializer: D) -> Result<Key, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         Ok(PrivateKeyAsPEM::deserialize(deserializer)?.as_key())
     }
@@ -545,7 +552,8 @@ impl PrivateKeyAsPEM {
 
 impl Serialize for PrivateKeyAsPEM {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         as_base64(&self.0, serializer)
     }
@@ -553,7 +561,8 @@ impl Serialize for PrivateKeyAsPEM {
 
 impl<'de> Deserialize<'de> for PrivateKeyAsPEM {
     fn deserialize<D>(deserializer: D) -> Result<PrivateKeyAsPEM, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         Ok(PrivateKeyAsPEM(from_base64(deserializer)?))
     }
@@ -650,9 +659,15 @@ impl Debug for AttestationCertificate {
 pub enum SignError {}
 
 pub trait UserPresence {
-    fn approve_registration(&self, application: &ApplicationParameter) -> io::Result<bool>;
-    fn approve_authentication(&self, application: &ApplicationParameter) -> io::Result<bool>;
-    fn wink(&self) -> io::Result<()>;
+    fn approve_registration(
+        &self,
+        application: &ApplicationParameter,
+    ) -> Box<Future<Item = bool, Error = io::Error>>;
+    fn approve_authentication(
+        &self,
+        application: &ApplicationParameter,
+    ) -> Box<Future<Item = bool, Error = io::Error>>;
+    fn wink(&self) -> Box<Future<Item = (), Error = io::Error>>;
 }
 
 pub trait CryptoOperations {
@@ -666,16 +681,19 @@ pub trait CryptoOperations {
 }
 
 pub trait SecretStore {
-    fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()>;
+    fn add_application_key(
+        &self,
+        key: &ApplicationKey,
+    ) -> Box<Future<Item = (), Error = io::Error>>;
     fn get_and_increment_counter(
-        &mut self,
+        &self,
         application: &ApplicationParameter,
-    ) -> io::Result<Counter>;
+    ) -> Box<Future<Item = Counter, Error = io::Error>>;
     fn retrieve_application_key(
         &self,
         application: &ApplicationParameter,
         handle: &KeyHandle,
-    ) -> io::Result<Option<&ApplicationKey>>;
+    ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>>;
 }
 
 #[derive(Debug)]
@@ -720,59 +738,137 @@ quick_error! {
     }
 }
 
-pub struct U2F<'a> {
-    approval: &'a UserPresence,
+pub struct U2F(Rc<U2FInner>);
+
+struct U2FInner {
+    approval: Box<UserPresence>,
     logger: slog::Logger,
-    operations: &'a CryptoOperations,
-    storage: &'a mut SecretStore,
+    operations: Box<CryptoOperations>,
+    storage: Box<SecretStore>,
 }
 
-impl<'a> U2F<'a> {
+impl U2F {
     pub fn new<L: Into<Option<slog::Logger>>>(
-        approval: &'a UserPresence,
-        operations: &'a CryptoOperations,
-        storage: &'a mut SecretStore,
+        approval: Box<UserPresence>,
+        operations: Box<CryptoOperations>,
+        storage: Box<SecretStore>,
         logger: L,
     ) -> io::Result<Self> {
-        Ok(U2F {
+        let logger = logger.into().unwrap_or(slog::Logger::root(
+            slog_stdlog::StdLog.fuse(),
+            o!(),
+        ));
+        let inner = U2FInner {
             approval: approval,
+            logger: logger,
             operations: operations,
             storage: storage,
-            logger: logger.into().unwrap_or(slog::Logger::root(
-                slog_stdlog::StdLog.fuse(),
-                o!(),
-            )),
-        })
+        };
+        Ok(U2F(Rc::new(inner)))
     }
 
     pub fn authenticate(
-        &mut self,
-        application: &ApplicationParameter,
-        challenge: &ChallengeParameter,
-        key_handle: &KeyHandle,
-    ) -> Result<Authentication, AuthenticateError> {
-        debug!(self.logger, "authenticate");
-        let application_key = match self.storage.retrieve_application_key(
-            application,
-            key_handle,
-        )? {
-            Some(key) => key.clone(),
-            None => return Err(AuthenticateError::InvalidKeyHandle),
-        };
+        &self,
+        application: ApplicationParameter,
+        challenge: ChallengeParameter,
+        key_handle: KeyHandle,
+    ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
+        debug!(self.0.logger, "authenticate");
+        Self::_authenticate_step1(self.0.clone(), application, challenge, key_handle)
+    }
 
-        if !self.approval.approve_authentication(application)? {
-            return Err(AuthenticateError::ApprovalRequired);
+    fn _authenticate_step1(
+        self_rc: Rc<U2FInner>,
+        application: ApplicationParameter,
+        challenge: ChallengeParameter,
+        key_handle: KeyHandle,
+    ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
+        let application_key_future = {
+            self_rc.storage.retrieve_application_key(&application, &key_handle).from_err()
+        };
+        
+        Box::new(
+            application_key_future.and_then(move |application_key_option| match application_key_option {
+                    Some(application_key) => {
+                        Self::_authenticate_step2(
+                            self_rc,
+                            application,
+                            challenge,
+                            key_handle,
+                            application_key,
+                        )
+                    }
+                    None => Box::new(future::err(AuthenticateError::InvalidKeyHandle)),
+                }),
+        )
+    }
+
+    fn _authenticate_step2(
+        self_rc: Rc<U2FInner>,
+        application: ApplicationParameter,
+        challenge: ChallengeParameter,
+        key_handle: KeyHandle,
+        application_key: ApplicationKey,
+    ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
+        Box::new(
+            self_rc
+                .approval
+                .approve_authentication(&application)
+                .from_err()
+                .and_then(move |user_present| {
+                    Self::_authenticate_step3(
+                        self_rc,
+                        application,
+                        challenge,
+                        key_handle,
+                        application_key,
+                        user_present,
+                    )
+                }),
+        )
+    }
+
+    fn _authenticate_step3(
+        self_rc: Rc<U2FInner>,
+        application: ApplicationParameter,
+        challenge: ChallengeParameter,
+        key_handle: KeyHandle,
+        application_key: ApplicationKey,
+        user_present: bool,
+    ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
+        if !user_present {
+            return Box::new(future::err(AuthenticateError::ApprovalRequired));
         }
 
-        let user_present = true;
-        let counter = self.storage.get_and_increment_counter(application)?;
-        let user_presence_byte = user_presence_byte(user_present);
-
-        let signature = self.operations.sign(
-            &application_key.key,
-            &message_to_sign_for_authenticate(
+        Box::new(self_rc.storage.get_and_increment_counter(&application).from_err().and_then(move |counter| {
+            Self::_authenticate_step4(
+                self_rc,
                 application,
                 challenge,
+                key_handle,
+                application_key,
+                user_present,
+                counter,
+            )
+        }))
+    }
+
+    fn _authenticate_step4(
+        self_rc: Rc<U2FInner>,
+        application: ApplicationParameter,
+        challenge: ChallengeParameter,
+        key_handle: KeyHandle,
+        application_key: ApplicationKey,
+        user_present: bool,
+        counter: Counter,
+    ) -> Result<Authentication, AuthenticateError> {
+        let user_presence_byte = user_presence_byte(user_present);
+
+        let signature = self_rc.operations.sign(
+            &application_key.key,
+            &message_to_sign_for_authenticate(
+                &application,
+                &challenge,
                 user_presence_byte,
                 counter,
             ),
@@ -793,40 +889,80 @@ impl<'a> U2F<'a> {
         &self,
         key_handle: &KeyHandle,
         application: &ApplicationParameter,
-    ) -> io::Result<bool> {
-        debug!(self.logger, "is_valid_key_handle");
-        match self.storage.retrieve_application_key(
-            application,
-            key_handle,
-        )? {
-            Some(_) => Ok(true),
-            None => Ok(false),
-        }
+    ) -> Box<Future<Item = bool, Error = io::Error>> {
+        debug!(self.0.logger, "is_valid_key_handle");
+        Box::new(
+            self.0
+                .storage
+                .retrieve_application_key(application, key_handle)
+                .map(|res| match res {
+                    Some(_) => true,
+                    None => false,
+                }),
+        )
     }
 
     pub fn register(
-        &mut self,
-        application: &ApplicationParameter,
-        challenge: &ChallengeParameter,
-    ) -> Result<Registration, RegisterError> {
-        debug!(self.logger, "register");
-        if !self.approval.approve_registration(application)? {
-            return Err(RegisterError::ApprovalRequired);
+        &self,
+        application: ApplicationParameter,
+        challenge: ChallengeParameter,
+    ) -> Box<Future<Item = Registration, Error = RegisterError>> {
+        debug!(self.0.logger, "register");
+        Self::_register_step1(self.0.clone(), application, challenge)
+    }
+
+    fn _register_step1(
+        self_rc: Rc<U2FInner>,
+        application: ApplicationParameter,
+        challenge: ChallengeParameter,
+    ) -> Box<Future<Item = Registration, Error = RegisterError>> {
+        Box::new(
+            self_rc
+                .approval
+                .approve_registration(&application)
+                .from_err()
+                .and_then(move |user_present| {
+                    Self::_register_step2(self_rc, application, challenge, user_present)
+                }),
+        )
+    }
+
+    fn _register_step2(
+        mut self_rc: Rc<U2FInner>,
+        application: ApplicationParameter,
+        challenge: ChallengeParameter,
+        user_present: bool,
+    ) -> Box<Future<Item = Registration, Error = RegisterError>> {
+        if !user_present {
+            return Box::new(future::err(RegisterError::ApprovalRequired));
         }
 
-        let mut ctx = BigNumContext::new().unwrap();
-        let application_key = self.operations.generate_application_key(application)?;
-        self.storage.add_application_key(&application_key)?;
+        let application_key = match self_rc.operations.generate_application_key(&application) {
+            Ok(application_key) => application_key,
+            Err(err) => return Box::new(future::err(err).from_err()),
+        };
 
+        Box::new(self_rc.storage.add_application_key(&application_key).from_err().and_then(move |_| {
+            Self::_register_step3(self_rc, application, challenge, application_key)
+        }))
+    }
+
+    fn _register_step3(
+        self_rc: Rc<U2FInner>,
+        application: ApplicationParameter,
+        challenge: ChallengeParameter,
+        application_key: ApplicationKey,
+    ) -> Result<Registration, RegisterError> {
+        let mut ctx = BigNumContext::new().unwrap();
         let public_key = PublicKey::from_key(&application_key.key, &mut ctx);
         let public_key_bytes: Vec<u8> = public_key.to_raw(&mut ctx);
-        let signature = self.operations.attest(&message_to_sign_for_register(
+        let signature = self_rc.operations.attest(&message_to_sign_for_register(
             &application_key.application,
-            challenge,
+            &challenge,
             &public_key_bytes,
             &application_key.handle,
         ))?;
-        let attestation_certificate = self.operations.get_attestation_certificate();
+        let attestation_certificate = self_rc.operations.get_attestation_certificate();
 
         Ok(Registration {
             user_public_key: public_key_bytes,
@@ -836,8 +972,8 @@ impl<'a> U2F<'a> {
         })
     }
 
-    fn wink(&self) -> io::Result<()> {
-        self.approval.wink()
+    fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
+        self.0.approval.wink()
     }
 }
 
@@ -855,55 +991,52 @@ pub trait Service {
     type Future: Future<Item = Self::Response, Error = Self::Error>;
 
     /// Process the request and return the response asynchronously.
-    fn call(&mut self, req: Self::Request) -> Self::Future;
+    fn call(&self, req: Self::Request) -> Self::Future;
 }
 
-impl<'a> Service for U2F<'a> {
+impl Service for U2F {
     type Request = Request;
     type Response = Response;
     type Error = io::Error;
     type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
 
-    fn call(&mut self, req: Self::Request) -> Self::Future {
-        debug!(self.logger, "call U2F service");
+    fn call(&self, req: Self::Request) -> Self::Future {
+        let logger = self.0.logger.clone();
+        debug!(logger, "call U2F service");
         match req {
             Request::Register {
                 challenge,
                 application,
             } => {
-                debug!(self.logger, "Request::Register");
-                match self.register(&application, &challenge) {
-                    info!(self.logger, "registered");
-                    Ok(registration) => {
-                        debug!(self.logger, "Request::Register Ok");
-                        Box::new(futures::finished(Response::Registration {
-                            user_public_key: registration.user_public_key,
-                            key_handle: registration.key_handle,
-                            attestation_certificate: registration.attestation_certificate,
-                            signature: registration.signature,
-                        }))
-                    }
-                    Err(error) => {
-                        match error {
+                let logger2 = self.0.logger.clone();
+                debug!(logger, "Request::Register");
+                Box::new(
+                    self.register(application, challenge)
+                        .map(move |registration| {
+                            info!(logger, "registered");
+                            debug!(logger, "Request::Register Ok");
+                            Response::Registration {
+                                user_public_key: registration.user_public_key,
+                                key_handle: registration.key_handle,
+                                attestation_certificate: registration.attestation_certificate,
+                                signature: registration.signature,
+                            }
+                        })
+                        .or_else(move |err| match err {
                             RegisterError::ApprovalRequired => {
-                                debug!(self.logger, "Request::Register ApprovalRequired");
-                                Box::new(
-                                    futures::finished(Response::TestOfUserPresenceNotSatisfied),
-                                )
+                                debug!(logger2, "Request::Register ApprovalRequired");
+                                Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
                             RegisterError::Io(err) => {
-                                debug!(self.logger, "Request::Register IoError");
-                                Box::new(futures::failed(err.into()))
+                                debug!(logger2, "Request::Register IoError");
+                                Err(err.into())
                             }
                             RegisterError::Signing(err) => {
-                                debug!(self.logger, "Request::Register SigningError");
-                                Box::new(futures::failed(
-                                    io::Error::new(io::ErrorKind::Other, "Signing error"),
-                                ))
+                                debug!(logger2, "Request::Register SigningError");
+                                Err(io::Error::new(io::ErrorKind::Other, "Signing error").into())
                             }
-                        }
-                    }
-                }
+                        }),
+                )
             }
             Request::Authenticate {
                 control_code,
@@ -911,74 +1044,61 @@ impl<'a> Service for U2F<'a> {
                 application,
                 key_handle,
             } => {
-                debug!(self.logger, "Request::Authenticate");
+                debug!(self.0.logger, "Request::Authenticate");
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
-                        match self.is_valid_key_handle(&key_handle, &application) {
-                            Ok(is_valid) => {
-                                if is_valid {
-                                    Box::new(
-                                        futures::finished(Response::TestOfUserPresenceNotSatisfied),
-                                    )
-                                } else {
-                                    Box::new(futures::finished(Response::InvalidKeyHandle))
-                                }
-                            }
-                            Err(err) => Box::new(futures::failed(err.into())),
-                        }
+                        Box::new(self.is_valid_key_handle(&key_handle, &application).map(
+                            |is_valid| match is_valid {
+                                true => Response::TestOfUserPresenceNotSatisfied,
+                                false => Response::InvalidKeyHandle,
+                            },
+                        ))
                     }
                     AuthenticateControlCode::EnforceUserPresenceAndSign => {
-                        match self.authenticate(&application, &challenge, &key_handle) {
-                            Ok(authentication) => {
-                                info!(self.logger, "authenticated"; "counter" => &authentication.counter, "user_present" => &authentication.user_present);
-                                Box::new(futures::finished(Response::Authentication {
-                                    counter: authentication.counter,
-                                    signature: authentication.signature,
-                                    user_present: authentication.user_present,
-                                }))
+                        let logger_map = self.0.logger.clone();
+                        let logger_map_err = self.0.logger.clone();
+                        Box::new(self.authenticate(application, challenge, key_handle).map(move |authentication| {
+                            info!(logger_map, "authenticated"; "counter" => &authentication.counter, "user_present" => &authentication.user_present);
+                            Response::Authentication {
+                                counter: authentication.counter,
+                                signature: authentication.signature,
+                                user_present: authentication.user_present,
                             }
-                            Err(error) => {
-                                match error {
-                                    AuthenticateError::ApprovalRequired => {
-                                        info!(self.logger, "TestOfUserPresenceNotSatisfied");
-                                        Box::new(
-                                            futures::finished(Response::TestOfUserPresenceNotSatisfied),
-                                        )
-                                    }
-                                    AuthenticateError::InvalidKeyHandle => {
-                                        info!(self.logger, "InvalidKeyHandle");
-                                        Box::new(futures::finished(Response::InvalidKeyHandle))
-                                    }
-                                    AuthenticateError::Io(err) => {
-                                        info!(self.logger, "i/o error");
-                                        Box::new(futures::finished(Response::UnknownError))
-                                    }
-                                    AuthenticateError::Signing(err) => {
-                                        info!(self.logger, "Signing error");
-                                        Box::new(futures::finished(Response::UnknownError))
-                                    }
-                                }
+                        }).or_else(move |err| match err {
+                            AuthenticateError::ApprovalRequired => {
+                                info!(logger_map_err, "TestOfUserPresenceNotSatisfied");
+                                Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
-                        }
+                            AuthenticateError::InvalidKeyHandle => {
+                                info!(logger_map_err, "InvalidKeyHandle");
+                                Ok(Response::InvalidKeyHandle)
+                            }
+                            AuthenticateError::Io(err) => {
+                                info!(logger_map_err, "I/O error"; "error" => format!("{:?}", err));
+                                Ok(Response::UnknownError)
+                            }
+                            AuthenticateError::Signing(err) => {
+                                info!(logger_map_err, "Signing error"; "error" => format!("{:?}", err));
+                                Ok(Response::UnknownError)
+                            }
+                        }))
                     }
                     AuthenticateControlCode::DontEnforceUserPresenceAndSign => {
+                        // TODO Implement
                         Box::new(futures::finished(Response::TestOfUserPresenceNotSatisfied))
                     }
                 }
             }
             Request::GetVersion => {
-                debug!(self.logger, "Request::GetVersion");
+                debug!(logger, "Request::GetVersion");
                 let response = Response::Version { version_string: self.get_version_string() };
-                Box::new(futures::finished(response))
+                Box::new(future::ok(response))
             }
             Request::Wink => {
-                match self.wink() {
-                    Ok(()) => Box::new(futures::finished(Response::DidWink)),
-                    Err(err) => {
-                        info!(self.logger, "i/o error");
-                        Box::new(futures::finished(Response::UnknownError))
-                    }
-                }
+                Box::new(self.wink().map(|_| Response::DidWink).or_else(move |err| {
+                    info!(logger, "I/O error"; "error" => format!("{:?}", err));
+                    Ok(Response::UnknownError)
+                }))
             }
         }
     }
@@ -1108,59 +1228,6 @@ impl AsRef<[u8]> for RawSignature {
     }
 }
 
-pub struct InMemoryStorage {
-    application_keys: HashMap<ApplicationParameter, ApplicationKey>,
-    counters: HashMap<ApplicationParameter, Counter>,
-}
-
-impl InMemoryStorage {
-    pub fn new() -> InMemoryStorage {
-        InMemoryStorage {
-            application_keys: HashMap::new(),
-            counters: HashMap::new(),
-        }
-    }
-}
-
-impl SecretStore for InMemoryStorage {
-    fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()> {
-        self.application_keys.insert(key.application, key.clone());
-        Ok(())
-    }
-
-    fn get_and_increment_counter(
-        &mut self,
-        application: &ApplicationParameter,
-    ) -> io::Result<Counter> {
-        if let Some(counter) = self.counters.get_mut(application) {
-            let counter_value = *counter;
-            *counter += 1;
-            return Ok(counter_value);
-        }
-
-        let initial_counter = 0;
-        self.counters.insert(*application, initial_counter);
-        Ok(initial_counter)
-    }
-
-    fn retrieve_application_key(
-        &self,
-        application: &ApplicationParameter,
-        handle: &KeyHandle,
-    ) -> io::Result<Option<&ApplicationKey>> {
-        match self.application_keys.get(application) {
-            Some(key) => {
-                if key.handle.eq_consttime(handle) {
-                    Ok(Some(key))
-                } else {
-                    Ok(None)
-                }
-            }
-            None => Ok(None),
-        }
-    }
-}
-
 pub fn self_signed_attestation() -> Attestation {
     Attestation {
         certificate: AttestationCertificate::from_pem(SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM),
@@ -1173,6 +1240,8 @@ mod tests {
     use super::*;
 
     use openssl::sign::Verifier;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
 
     const ALL_ZERO_HASH: [u8; 32] = [0u8; 32];
     fn all_zero_key_handle() -> KeyHandle {
@@ -1194,14 +1263,79 @@ mod tests {
     }
 
     impl UserPresence for FakeUserPresence {
-        fn approve_authentication(&self, _: &ApplicationParameter) -> io::Result<bool> {
-            Ok(self.should_approve_authentication)
+        fn approve_authentication(
+            &self,
+            _: &ApplicationParameter,
+        ) -> Box<Future<Item = bool, Error = io::Error>> {
+            Box::new(future::ok(self.should_approve_authentication))
         }
-        fn approve_registration(&self, _: &ApplicationParameter) -> io::Result<bool> {
-            Ok(self.should_approve_registration)
+        fn approve_registration(
+            &self,
+            _: &ApplicationParameter,
+        ) -> Box<Future<Item = bool, Error = io::Error>> {
+            Box::new(future::ok(self.should_approve_registration))
         }
-        fn wink(&self) -> io::Result<()> {
-            Ok(())
+        fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
+            Box::new(future::ok(()))
+        }
+    }
+
+    struct InMemoryStorage(RefCell<InMemoryStorageInner>);
+
+    struct InMemoryStorageInner {
+        application_keys: HashMap<ApplicationParameter, ApplicationKey>,
+        counters: HashMap<ApplicationParameter, Counter>,
+    }
+
+    impl InMemoryStorage {
+        fn new() -> InMemoryStorage {
+            InMemoryStorage(RefCell::new(InMemoryStorageInner {
+                application_keys: HashMap::new(),
+                counters: HashMap::new(),
+            }))
+        }
+    }
+
+    impl SecretStore for InMemoryStorage {
+        fn add_application_key(
+            &self,
+            key: &ApplicationKey,
+        ) -> Box<Future<Item = (), Error = io::Error>> {
+            self.0.borrow_mut().application_keys.insert(key.application, key.clone());
+            Box::new(future::ok(()))
+        }
+
+        fn get_and_increment_counter(
+            &self,
+            application: &ApplicationParameter,
+        ) -> Box<Future<Item = Counter, Error = io::Error>> {
+            let mut borrow = self.0.borrow_mut();
+            if let Some(counter) = borrow.counters.get_mut(application) {
+                let counter_value = *counter;
+                *counter += 1;
+                return Box::new(future::ok(counter_value));
+            }
+
+            let initial_counter = 0;
+            borrow.counters.insert(*application, initial_counter);
+            Box::new(future::ok(initial_counter))
+        }
+
+        fn retrieve_application_key(
+            &self,
+            application: &ApplicationParameter,
+            handle: &KeyHandle,
+        ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>> {
+            Box::new(future::ok(match self.0.borrow().application_keys.get(application) {
+                Some(key) => {
+                    if key.handle.eq_consttime(handle) {
+                        Some(key.clone())
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            }))
         }
     }
 
@@ -1234,135 +1368,145 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn is_valid_key_handle_with_invalid_handle_is_false() {
-        let approval = FakeUserPresence::always_approve();
-        let operations = SecureCryptoOperations::new(get_test_attestation());
-        let mut storage = InMemoryStorage::new();
-        let u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let mut storage = Box::new(InMemoryStorage::new());
+        let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let key_handle = all_zero_key_handle();
 
         assert_matches!(
-            u2f.is_valid_key_handle(&key_handle, &application),
+            u2f.is_valid_key_handle(&key_handle, &application).wait(),
             Ok(false)
         );
     }
 
     #[test]
     fn is_valid_key_handle_with_valid_handle_is_true() {
-        let approval = FakeUserPresence::always_approve();
-        let operations = SecureCryptoOperations::new(get_test_attestation());
-        let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let mut storage = Box::new(InMemoryStorage::new());
+        let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
-        let registration = u2f.register(&application, &challenge).unwrap();
+        let registration = u2f.register(application.clone(), challenge).wait().unwrap();
 
         assert_matches!(
-            u2f.is_valid_key_handle(&registration.key_handle, &application),
+            u2f.is_valid_key_handle(&registration.key_handle, &application)
+                .wait(),
             Ok(true)
         );
     }
 
     #[test]
     fn authenticate_with_invalid_handle_errors() {
-        let approval = FakeUserPresence::always_approve();
-        let operations = SecureCryptoOperations::new(get_test_attestation());
-        let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let mut storage = Box::new(InMemoryStorage::new());
+        let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
         let key_handle = all_zero_key_handle();
 
         assert_matches!(
-            u2f.authenticate(&application, &challenge, &key_handle),
+            u2f.authenticate(application, challenge, key_handle).wait(),
             Err(AuthenticateError::InvalidKeyHandle)
         );
     }
 
     #[test]
     fn authenticate_with_valid_handle_succeeds() {
-        let approval = FakeUserPresence::always_approve();
-        let operations = SecureCryptoOperations::new(get_test_attestation());
-        let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let mut storage = Box::new(InMemoryStorage::new());
+        let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
-        let registration = u2f.register(&application, &challenge).unwrap();
+        let registration = u2f.register(application.clone(), challenge.clone())
+            .wait()
+            .unwrap();
 
-        u2f.authenticate(&application, &challenge, &registration.key_handle)
+        u2f.authenticate(application, challenge, registration.key_handle)
+            .wait()
             .unwrap();
     }
 
     #[test]
     fn authenticate_with_rejected_approval_errors() {
-        let approval = FakeUserPresence {
+        let approval = Box::new(FakeUserPresence {
             should_approve_authentication: false,
             should_approve_registration: true,
-        };
-        let operations = SecureCryptoOperations::new(get_test_attestation());
-        let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
+        });
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let mut storage = Box::new(InMemoryStorage::new());
+        let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
-        let registration = u2f.register(&application, &challenge).unwrap();
+        let registration = u2f.register(application.clone(), challenge.clone())
+            .wait()
+            .unwrap();
 
         assert_matches!(
-            u2f.authenticate(&application, &challenge, &registration.key_handle),
+            u2f.authenticate(application, challenge, registration.key_handle)
+                .wait(),
             Err(AuthenticateError::ApprovalRequired)
         );
     }
 
     #[test]
     fn register_with_rejected_approval_errors() {
-        let approval = FakeUserPresence {
+        let approval = Box::new(FakeUserPresence {
             should_approve_authentication: true,
             should_approve_registration: false,
-        };
-        let operations = SecureCryptoOperations::new(get_test_attestation());
-        let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
+        });
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let mut storage = Box::new(InMemoryStorage::new());
+        let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let application = ApplicationParameter(ALL_ZERO_HASH);
         let challenge = ChallengeParameter(ALL_ZERO_HASH);
 
         assert_matches!(
-            u2f.register(&application, &challenge),
+            u2f.register(application, challenge).wait(),
             Err(RegisterError::ApprovalRequired)
         );
     }
 
     #[test]
     fn authenticate_signature() {
-        let approval = FakeUserPresence::always_approve();
-        let operations = SecureCryptoOperations::new(get_test_attestation());
-        let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let mut storage = Box::new(InMemoryStorage::new());
+        let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let mut os_rng = OsRng::new().unwrap();
         let application = ApplicationParameter(os_rng.gen());
         let register_challenge = ChallengeParameter(os_rng.gen());
         let mut ctx = BigNumContext::new().unwrap();
 
-        let registration = u2f.register(&application, &register_challenge).unwrap();
+        let registration = u2f.register(application.clone(), register_challenge.clone())
+            .wait()
+            .unwrap();
 
-        let authenticate_challenge = ChallengeParameter(os_rng.gen());
+        let authentication_challenge = ChallengeParameter(os_rng.gen());
         let authentication = u2f.authenticate(
-            &application,
-            &authenticate_challenge,
-            &registration.key_handle,
-        ).unwrap();
+            application.clone(),
+            authentication_challenge.clone(),
+            registration.key_handle.clone(),
+        ).wait()
+            .unwrap();
 
         let user_presence_byte = user_presence_byte(true);
         let user_public_key = PublicKey::from_raw(&registration.user_public_key, &mut ctx).unwrap();
         let user_pkey = PKey::from_ec_key(user_public_key.to_ec_key()).unwrap();
         let signed_data = message_to_sign_for_authenticate(
             &application,
-            &authenticate_challenge,
+            &authentication_challenge,
             user_presence_byte,
             authentication.counter,
         );
@@ -1375,17 +1519,19 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn register_signature() {
-        let approval = FakeUserPresence::always_approve();
-        let operations = SecureCryptoOperations::new(get_test_attestation());
-        let mut storage = InMemoryStorage::new();
-        let mut u2f = U2F::new(&approval, &operations, &mut storage, None).unwrap();
+        let approval = Box::new(FakeUserPresence::always_approve());
+        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
+        let mut storage = Box::new(InMemoryStorage::new());
+        let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let mut os_rng = OsRng::new().unwrap();
         let application = ApplicationParameter(os_rng.gen());
         let challenge = ChallengeParameter(os_rng.gen());
         let mut ctx = BigNumContext::new().unwrap();
 
-        let registration = u2f.register(&application, &challenge).unwrap();
+        let registration = u2f.register(application.clone(), challenge.clone())
+            .wait()
+            .unwrap();
 
         let public_key = registration.attestation_certificate.0.public_key().unwrap();
         let signed_data = message_to_sign_for_register(

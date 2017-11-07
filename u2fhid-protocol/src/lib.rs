@@ -44,7 +44,7 @@ pub struct U2FHID<T: Sink + Stream, S> {
     transport: SegmentingSink<T, PacketSegmenter>,
 }
 
-impl<'a, T> U2FHID<T, U2F<'a>>
+impl<T> U2FHID<T, U2F>
 where
     T: Sink<SinkItem = Packet, SinkError = io::Error>
         + Stream<Item = Packet, Error = io::Error>,
@@ -52,9 +52,9 @@ where
     pub fn bind_service<L: Into<Option<slog::Logger>>>(
         handle: &Handle,
         transport: T,
-        service: U2F<'a>,
+        service: U2F,
         logger: L,
-    ) -> U2FHID<T, U2F<'a>> {
+    ) -> U2FHID<T, U2F> {
         let logger = logger.into().unwrap_or(slog::Logger::root(
             slog_stdlog::StdLog.fuse(),
             o!(),

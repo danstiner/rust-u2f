@@ -15,9 +15,9 @@ extern crate u2fhid_protocol;
 extern crate uhid_linux_tokio;
 
 mod file_storage;
+mod stdin_stream;
 mod user_presence;
 
-use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 use std::io;
@@ -28,7 +28,7 @@ use slog::*;
 use tokio_core::reactor::Core;
 
 use file_storage::FileStorage;
-use u2f_core::{InMemoryStorage, SecureCryptoOperations, U2F};
+use u2f_core::{SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
 use uhid_linux_tokio::{Bus, CreateParams, UHIDDevice, InputEvent, OutputEvent, StreamError};
 use user_presence::CommandPromptUserPresence;
@@ -47,10 +47,10 @@ fn packet_to_input(packet: Packet) -> Box<Future<Item = InputEvent, Error = Stre
 fn stream_error_to_io_error(err: StreamError) -> io::Error {
     match err {
         StreamError::Io(err) => err,
-        StreamError::UnknownEventType(event_type_value) => {
+        StreamError::UnknownEventType(_) => {
             io::Error::new(io::ErrorKind::Other, "Unknown event type")
         }
-        StreamError::BufferOverflow(data_size, max_size) => {
+        StreamError::BufferOverflow(_, _) => {
             io::Error::new(io::ErrorKind::Other, "Buffer overflow")
         }
         StreamError::Nul(err) => io::Error::new(io::ErrorKind::Other, err),
@@ -105,11 +105,11 @@ fn run(logger: slog::Logger, key_store_path: PathBuf) -> io::Result<()> {
         .sink_map_err(stream_error_to_io_error);
 
     let attestation = u2f_core::self_signed_attestation();
-    let approval = CommandPromptUserPresence;
-    let operations: SecureCryptoOperations = SecureCryptoOperations::new(attestation);
-    let mut storage = FileStorage::new(key_store_path)?;
+    let user_presence = Box::new(CommandPromptUserPresence::new(core.handle()));
+    let operations = Box::new(SecureCryptoOperations::new(attestation));
+    let storage = Box::new(FileStorage::new(key_store_path)?);
 
-    let service = U2F::new(&approval, &operations, &mut storage, logger.new(o!()))?;
+    let service = U2F::new(user_presence, operations, storage, logger.new(o!()))?;
     let future = U2FHID::bind_service(&handle, transport, service, logger.new(o!()));
     core.run(future)?;
 

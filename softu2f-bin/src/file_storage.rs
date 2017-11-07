@@ -1,10 +1,13 @@
+use futures::{Future, IntoFuture};
+use futures::future;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::collections::HashMap;
 
 use serde_json;
 
@@ -18,7 +21,7 @@ struct Store {
 
 pub struct FileStorage {
     path: PathBuf,
-    store: Store,
+    store: RefCell<Store>,
 }
 
 impl FileStorage {
@@ -26,13 +29,13 @@ impl FileStorage {
         let store = Self::load_store(&path)?;
         Ok(FileStorage {
             path: path,
-            store: store,
+            store: RefCell::new(store),
         })
     }
 
     fn save(&self) -> io::Result<()> {
         overwrite_file_atomic(&self.path, |writer| {
-            serde_json::to_writer_pretty(writer, &self.store).unwrap();
+            serde_json::to_writer_pretty(writer, &*self.store.borrow()).unwrap();
             Ok(())
         })
     }
@@ -50,50 +53,55 @@ impl FileStorage {
 }
 
 impl SecretStore for FileStorage {
-    fn add_application_key(&mut self, key: &ApplicationKey) -> io::Result<()> {
-        self.store.application_keys.insert(
+    fn add_application_key(&self, key: &ApplicationKey) -> Box<Future<Item=(), Error=io::Error>> {
+        self.store.borrow_mut().application_keys.insert(
             key.application,
             key.clone(),
         );
-        self.save()?;
-        Ok(())
+
+        Box::new(self.save().into_future())
     }
 
     fn get_and_increment_counter(
-        &mut self,
+        &self,
         application: &ApplicationParameter,
-    ) -> io::Result<Counter> {
-        if !self.store.counters.contains_key(application) {
-            self.store.counters.insert(*application, 0);
-        }
-        let value = match self.store.counters.get_mut(application) {
-            Some(counter) => {
-                let value = *counter;
-                *counter = value + 1;
-                value
-            },
-            None => unreachable!(),
+    ) -> Box<Future<Item=Counter, Error=io::Error>> {
+        let value = {
+            let mut store = self.store.borrow_mut();
+
+            if !store.counters.contains_key(application) {
+                store.counters.insert(*application, 0);
+            }
+
+            match store.counters.get_mut(application) {
+                Some(counter) => {
+                    let value = *counter;
+                    *counter = value + 1;
+                    value
+                },
+                None => unreachable!(),
+            }
         };
 
-        self.save()?;
-        Ok(value)
+        Box::new(self.save().into_future().map(move |_| value))
     }
 
     fn retrieve_application_key(
         &self,
         application: &ApplicationParameter,
         handle: &KeyHandle,
-    ) -> io::Result<Option<&ApplicationKey>> {
-        match self.store.application_keys.get(application) {
+    ) -> Box<Future<Item=Option<ApplicationKey>, Error=io::Error>> {
+        let res = match self.store.borrow().application_keys.get(application) {
             Some(key) => {
                 if key.handle.eq_consttime(handle) {
-                    Ok(Some(key))
+                    Some(key.clone())
                 } else {
-                    Ok(None)
+                    None
                 }
             }
-            None => Ok(None),
-        }
+            None => None,
+        };
+        Box::new(future::ok(res))
     }
 }
 

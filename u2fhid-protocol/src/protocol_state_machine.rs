@@ -507,7 +507,7 @@ mod tests {
         type Error = io::Error;
         type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
 
-        fn call(&mut self, req: Self::Request) -> Self::Future {
+        fn call(&self, req: Self::Request) -> Self::Future {
             panic!("Fake service, not implemented");
         }
     }
