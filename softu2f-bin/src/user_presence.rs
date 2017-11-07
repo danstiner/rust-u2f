@@ -54,11 +54,17 @@ impl CommandPromptUserPresence {
 }
 
 impl UserPresence for CommandPromptUserPresence {
-    fn approve_registration(&self, _: &ApplicationParameter) -> Box<Future<Item = bool, Error = io::Error>> {
+    fn approve_registration(
+        &self,
+        _: &ApplicationParameter,
+    ) -> Box<Future<Item = bool, Error = io::Error>> {
         self.test_user_presence("Approve registration [y/n]: ")
     }
 
-    fn approve_authentication(&self, _: &ApplicationParameter) -> Box<Future<Item = bool, Error = io::Error>> {
+    fn approve_authentication(
+        &self,
+        _: &ApplicationParameter,
+    ) -> Box<Future<Item = bool, Error = io::Error>> {
         self.test_user_presence("Approve authentication [y/n]: ")
     }
 

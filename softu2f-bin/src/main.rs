@@ -121,7 +121,11 @@ fn main() {
     let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
 
     let args: Vec<_> = env::args().collect();
-    let filename = Path::new(&args[0]).file_name().unwrap_or(OsStr::new("")).to_str().unwrap();
+    let filename = Path::new(&args[0])
+        .file_name()
+        .unwrap_or(OsStr::new(""))
+        .to_str()
+        .unwrap();
     if args.len() != 2 {
         println!("Usage: {} <key-store.json>", filename);
         return;

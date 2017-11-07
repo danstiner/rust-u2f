@@ -66,7 +66,7 @@ fn main() {
         data: RDESC.to_vec(),
     };
 
-    let mut core = tokio_core::reactor::Core::new().unwrap();
+    let core = tokio_core::reactor::Core::new().unwrap();
     let handle = core.handle();
     let mut uhid_device = UHIDDevice::create(&handle, create_params, None).unwrap();
 

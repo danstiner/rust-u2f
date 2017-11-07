@@ -592,7 +592,7 @@ impl PublicKey {
     /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
     /// I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
     /// uncompressed point compression method.
-    fn from_raw(bytes: &[u8], ctx: &mut BigNumContext) -> Result<PublicKey, String> {
+    fn from_bytes(bytes: &[u8], ctx: &mut BigNumContext) -> Result<PublicKey, String> {
         if bytes.len() != 65 {
             return Err(String::from(
                 format!("Expected 65 bytes, found {}", bytes.len()),
@@ -784,22 +784,22 @@ impl U2F {
         key_handle: KeyHandle,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
         let application_key_future = {
-            self_rc.storage.retrieve_application_key(&application, &key_handle).from_err()
+            self_rc
+                .storage
+                .retrieve_application_key(&application, &key_handle)
+                .from_err()
         };
-        
-        Box::new(
-            application_key_future.and_then(move |application_key_option| match application_key_option {
+
+        Box::new(application_key_future.and_then(
+            move |application_key_option| {
+                match application_key_option {
                     Some(application_key) => {
-                        Self::_authenticate_step2(
-                            self_rc,
-                            application,
-                            challenge,
-                            application_key,
-                        )
+                        Self::_authenticate_step2(self_rc, application, challenge, application_key)
                     }
                     None => Box::new(future::err(AuthenticateError::InvalidKeyHandle)),
-                }),
-        )
+                }
+            },
+        ))
     }
 
     fn _authenticate_step2(
@@ -836,16 +836,22 @@ impl U2F {
             return Box::new(future::err(AuthenticateError::ApprovalRequired));
         }
 
-        Box::new(self_rc.storage.get_and_increment_counter(&application).from_err().and_then(move |counter| {
-            Self::_authenticate_step4(
-                self_rc,
-                application,
-                challenge,
-                application_key,
-                user_present,
-                counter,
-            )
-        }))
+        Box::new(
+            self_rc
+                .storage
+                .get_and_increment_counter(&application)
+                .from_err()
+                .and_then(move |counter| {
+                    Self::_authenticate_step4(
+                        self_rc,
+                        application,
+                        challenge,
+                        application_key,
+                        user_present,
+                        counter,
+                    )
+                }),
+        )
     }
 
     fn _authenticate_step4(
@@ -936,9 +942,15 @@ impl U2F {
             Err(err) => return Box::new(future::err(err).from_err()),
         };
 
-        Box::new(self_rc.storage.add_application_key(&application_key).from_err().and_then(move |_| {
-            Self::_register_step3(self_rc, challenge, application_key)
-        }))
+        Box::new(
+            self_rc
+                .storage
+                .add_application_key(&application_key)
+                .from_err()
+                .and_then(move |_| {
+                    Self::_register_step3(self_rc, challenge, application_key)
+                }),
+        )
     }
 
     fn _register_step3(
@@ -1294,7 +1306,10 @@ mod tests {
             &self,
             key: &ApplicationKey,
         ) -> Box<Future<Item = (), Error = io::Error>> {
-            self.0.borrow_mut().application_keys.insert(key.application, key.clone());
+            self.0.borrow_mut().application_keys.insert(
+                key.application,
+                key.clone(),
+            );
             Box::new(future::ok(()))
         }
 
@@ -1319,16 +1334,18 @@ mod tests {
             application: &ApplicationParameter,
             handle: &KeyHandle,
         ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>> {
-            Box::new(future::ok(match self.0.borrow().application_keys.get(application) {
-                Some(key) => {
-                    if key.handle.eq_consttime(handle) {
-                        Some(key.clone())
-                    } else {
-                        None
+            Box::new(future::ok(
+                match self.0.borrow().application_keys.get(application) {
+                    Some(key) => {
+                        if key.handle.eq_consttime(handle) {
+                            Some(key.clone())
+                        } else {
+                            None
+                        }
                     }
-                }
-                None => None,
-            }))
+                    None => None,
+                },
+            ))
         }
     }
 
@@ -1495,7 +1512,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
             .unwrap();
 
         let user_presence_byte = user_presence_byte(true);
-        let user_public_key = PublicKey::from_raw(&registration.user_public_key, &mut ctx).unwrap();
+        let user_public_key = PublicKey::from_bytes(&registration.user_public_key, &mut ctx)
+            .unwrap();
         let user_pkey = PKey::from_ec_key(user_public_key.to_ec_key()).unwrap();
         let signed_data = message_to_sign_for_authenticate(
             &application,

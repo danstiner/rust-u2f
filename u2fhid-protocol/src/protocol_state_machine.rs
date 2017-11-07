@@ -108,10 +108,7 @@ impl LockState {
     fn tick(&mut self) -> Result<(), io::Error> {
         // Check lock timeout
         let timed_out = match self {
-            &mut LockState::Locked {
-                ref mut timeout,
-                ..
-            } => {
+            &mut LockState::Locked { ref mut timeout, .. } => {
                 match timeout.poll()? {
                     Async::Ready(()) => true,
                     Async::NotReady => false,

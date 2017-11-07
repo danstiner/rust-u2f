@@ -53,7 +53,10 @@ impl FileStorage {
 }
 
 impl SecretStore for FileStorage {
-    fn add_application_key(&self, key: &ApplicationKey) -> Box<Future<Item=(), Error=io::Error>> {
+    fn add_application_key(
+        &self,
+        key: &ApplicationKey,
+    ) -> Box<Future<Item = (), Error = io::Error>> {
         self.store.borrow_mut().application_keys.insert(
             key.application,
             key.clone(),
@@ -65,7 +68,7 @@ impl SecretStore for FileStorage {
     fn get_and_increment_counter(
         &self,
         application: &ApplicationParameter,
-    ) -> Box<Future<Item=Counter, Error=io::Error>> {
+    ) -> Box<Future<Item = Counter, Error = io::Error>> {
         let value = {
             let mut store = self.store.borrow_mut();
 
@@ -78,7 +81,7 @@ impl SecretStore for FileStorage {
                     let value = *counter;
                     *counter = value + 1;
                     value
-                },
+                }
                 None => unreachable!(),
             }
         };
@@ -90,7 +93,7 @@ impl SecretStore for FileStorage {
         &self,
         application: &ApplicationParameter,
         handle: &KeyHandle,
-    ) -> Box<Future<Item=Option<ApplicationKey>, Error=io::Error>> {
+    ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>> {
         let res = match self.store.borrow().application_keys.get(application) {
             Some(key) => {
                 if key.handle.eq_consttime(handle) {
