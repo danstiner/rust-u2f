@@ -127,7 +127,7 @@ fn main() {
         return;
     }
 
-    info!(logger, "SoftU2F started");
+    trace!(logger, "SoftU2F started");
     let key_store_path = PathBuf::from(&args[1]);
     run(logger, key_store_path).unwrap();
 }

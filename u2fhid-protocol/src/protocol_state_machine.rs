@@ -1,18 +1,15 @@
-use std::collections::VecDeque;
 use std::io;
 use std::mem;
 use std::time::Duration;
 
-use futures::{Async, Future, Poll};
+use futures::{Async, Future};
 use futures::future;
-use slog_stdlog;
-use slog::{self, Drain, Logger};
-use tokio_core::reactor::Core;
+use slog::Logger;
 use tokio_core::reactor::Handle;
 use tokio_core::reactor::Timeout;
 
 use definitions::*;
-use u2f_core::{self, ResponseError, Service};
+use u2f_core::{self, Service};
 
 macro_rules! try_some {
     ($e:expr) => (match $e {
@@ -109,10 +106,11 @@ impl LockState {
     }
 
     fn tick(&mut self) -> Result<(), io::Error> {
+        // Check lock timeout
         let timed_out = match self {
             &mut LockState::Locked {
-                ref channel_id,
                 ref mut timeout,
+                ..
             } => {
                 match timeout.poll()? {
                     Async::Ready(()) => true,
@@ -125,6 +123,8 @@ impl LockState {
         if timed_out {
             *self = LockState::None;
         }
+
+        // TODO Check frame and transation timeouts
 
         Ok(())
     }
@@ -207,19 +207,19 @@ where
     }
 
     pub fn accept_packet(&mut self, packet: Packet) -> Result<Option<Response>, io::Error> {
-        debug!(self.logger, "check_channel_id");
+        trace!(self.logger, "check_channel_id");
         try_some!(self.check_channel_id(&packet));
 
-        debug!(self.logger, "check_lock");
+        trace!(self.logger, "check_lock");
         try_some!(self.check_lock(&packet));
 
-        debug!(self.logger, "step_with_packet");
+        trace!(self.logger, "step_with_packet");
         try_some!(self.step_with_packet(packet));
 
-        debug!(self.logger, "try_complete_receive");
+        trace!(self.logger, "try_complete_receive");
         try_some!(self.try_complete_receive());
 
-        debug!(self.logger, "try_complete_dispatch");
+        trace!(self.logger, "try_complete_dispatch");
         try_some!(self.try_complete_dispatch());
 
         Ok(None)
@@ -495,9 +495,10 @@ mod tests {
     extern crate rand;
 
     use super::*;
-    use self::rand::OsRng;
-    use self::rand::Rand;
-    use self::rand::Rng;
+    use self::rand::{OsRng, Rng};
+    use slog::{self, Drain};
+    use slog_stdlog;
+    use tokio_core::reactor::Core;
 
     struct FakeU2FService;
 
@@ -528,7 +529,7 @@ mod tests {
     #[test]
     fn init() {
         let logger = slog::Logger::root(slog_stdlog::StdLog.fuse(), o!());
-        let mut core = Core::new().unwrap();
+        let core = Core::new().unwrap();
         let mut state_machine = StateMachine::new(FakeU2FService, core.handle(), logger);
         init_channel(&mut state_machine);
     }
@@ -577,7 +578,7 @@ mod tests {
     #[test]
     fn ping() {
         let logger = slog::Logger::root(slog_stdlog::StdLog.fuse(), o!());
-        let mut core = Core::new().unwrap();
+        let core = Core::new().unwrap();
         let mut os_rng = OsRng::new().unwrap();
         let mut state_machine = StateMachine::new(FakeU2FService, core.handle(), logger);
         let ping_data: [u8; 8] = os_rng.gen();

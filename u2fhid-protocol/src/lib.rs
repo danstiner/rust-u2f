@@ -4,7 +4,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate futures;
 #[macro_use]
-extern crate slog ;
+extern crate slog;
 extern crate slog_stdlog;
 extern crate tokio_core;
 extern crate u2f_core;
@@ -89,25 +89,25 @@ where
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         loop {
-            debug!(self.logger, "Tick U2FHID");
+            trace!(self.logger, "Poll U2FHID");
 
             // Always tick the transport first
             // TODO self.transport.tick();
 
-            debug!(self.logger, "Ensure sink is ready");
+            trace!(self.logger, "Ensure sink is ready");
             try_ready!(self.transport.poll_complete());
 
-            debug!(self.logger, "Try to step state machine");
+            trace!(self.logger, "Try to step state machine");
             if let Some(response) = self.state_machine.step()? {
                 debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
                 assert_send(&mut self.transport, response)?;
                 continue;
             }
 
-            debug!(self.logger, "Poll read from transport stream");
+            trace!(self.logger, "Poll read from transport stream");
             match try_ready!(self.transport.poll()) {
                 Some(packet) => {
-                    debug!(self.logger, "Run state machine with read packet"; "packet" => &packet);
+                    trace!(self.logger, "Run state machine with read packet"; "packet" => &packet);
                     match self.state_machine.accept_packet(packet)? {
                         Some(response) => {
                             debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);

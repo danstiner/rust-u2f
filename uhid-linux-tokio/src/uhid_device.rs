@@ -89,7 +89,7 @@ where
             inner: CharacterDevice::new(inner, UHIDCodec, UHIDCodec, logger.new(o!())),
             logger: logger,
         };
-        debug!(device.logger, "Send create device event");
+        trace!(device.logger, "Send create device event");
         device
             .inner
             .send(InputEvent::Create {
@@ -104,12 +104,12 @@ where
                 data: params.data,
             })
             .unwrap();
-        debug!(device.logger, "Sent create device event");
+        trace!(device.logger, "Sent create device event");
         device
     }
 
     pub fn send_input(&mut self, data: &[u8]) -> Result<(), <UHIDCodec as Encoder>::Error> {
-        debug!(self.logger, "Send input event");
+        trace!(self.logger, "Send input event");
         self.inner.send(InputEvent::Input { data: data.to_vec() })
     }
 
@@ -134,13 +134,13 @@ impl<T: Write> Sink for UHIDDevice<T> {
     type SinkError = <UHIDCodec as Encoder>::Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        debug!(self.logger, "start_send");
+        trace!(self.logger, "start_send");
         self.inner.send(item)?;
         Ok(AsyncSink::Ready)
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        debug!(self.logger, "poll_complete");
+        trace!(self.logger, "poll_complete");
         self.inner.flush()?;
         Ok(Async::Ready(()))
     }

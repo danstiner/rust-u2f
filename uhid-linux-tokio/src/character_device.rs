@@ -1,16 +1,12 @@
 use std::fmt;
 use std::io;
 use std::io::Write;
-use std::iter::repeat;
 
 use bytes::buf::FromBuf;
 use bytes::BytesMut;
-use futures::{Async, AsyncSink, Poll, Stream, StartSend, Sink};
+use futures::{Async, Poll, Stream};
 use slog;
-use slog::Value;
 use tokio_io::AsyncRead;
-
-use uhid_codec::OutputEvent;
 
 /// Decoding of items in buffers.
 ///
@@ -130,7 +126,7 @@ where
         let read = self.inner.read(&mut buffer[..]);
         match read {
             Ok(0) => {
-                debug!(self.logger, "poll::read(0)");
+                trace!(self.logger, "poll => read(0)");
                 Ok(Async::Ready(None))
             }
             Ok(n) => {
@@ -140,15 +136,15 @@ where
                     );
                 }
                 let frame = self.decoder.decode(&mut BytesMut::from_buf(buffer))?;
-                debug!(self.logger, "poll:Ok"; "frame" => &frame);
+                trace!(self.logger, "poll => Ok"; "frame" => &frame);
                 return Ok(Async::Ready(Some(frame)));
             }
             Err(ref e) if e.kind() == ::std::io::ErrorKind::WouldBlock => {
-                debug!(self.logger, "poll:WouldBlock");
+                trace!(self.logger, "poll => WouldBlock");
                 return Ok(Async::NotReady);
             }
             Err(e) => {
-                debug!(self.logger, "poll:Err");
+                trace!(self.logger, "poll => Err");
                 return Err(e.into());
             }
         }

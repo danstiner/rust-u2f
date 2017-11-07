@@ -773,7 +773,7 @@ impl U2F {
         challenge: ChallengeParameter,
         key_handle: KeyHandle,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
-        debug!(self.0.logger, "authenticate");
+        trace!(self.0.logger, "authenticate");
         Self::_authenticate_step1(self.0.clone(), application, challenge, key_handle)
     }
 
@@ -794,7 +794,6 @@ impl U2F {
                             self_rc,
                             application,
                             challenge,
-                            key_handle,
                             application_key,
                         )
                     }
@@ -807,7 +806,6 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
         challenge: ChallengeParameter,
-        key_handle: KeyHandle,
         application_key: ApplicationKey,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
         Box::new(
@@ -820,7 +818,6 @@ impl U2F {
                         self_rc,
                         application,
                         challenge,
-                        key_handle,
                         application_key,
                         user_present,
                     )
@@ -832,7 +829,6 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
         challenge: ChallengeParameter,
-        key_handle: KeyHandle,
         application_key: ApplicationKey,
         user_present: bool,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
@@ -845,7 +841,6 @@ impl U2F {
                 self_rc,
                 application,
                 challenge,
-                key_handle,
                 application_key,
                 user_present,
                 counter,
@@ -857,7 +852,6 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
         challenge: ChallengeParameter,
-        key_handle: KeyHandle,
         application_key: ApplicationKey,
         user_present: bool,
         counter: Counter,
@@ -890,7 +884,7 @@ impl U2F {
         key_handle: &KeyHandle,
         application: &ApplicationParameter,
     ) -> Box<Future<Item = bool, Error = io::Error>> {
-        debug!(self.0.logger, "is_valid_key_handle");
+        trace!(self.0.logger, "is_valid_key_handle");
         Box::new(
             self.0
                 .storage
@@ -907,7 +901,7 @@ impl U2F {
         application: ApplicationParameter,
         challenge: ChallengeParameter,
     ) -> Box<Future<Item = Registration, Error = RegisterError>> {
-        debug!(self.0.logger, "register");
+        trace!(self.0.logger, "register");
         Self::_register_step1(self.0.clone(), application, challenge)
     }
 
@@ -928,7 +922,7 @@ impl U2F {
     }
 
     fn _register_step2(
-        mut self_rc: Rc<U2FInner>,
+        self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
         challenge: ChallengeParameter,
         user_present: bool,
@@ -943,13 +937,12 @@ impl U2F {
         };
 
         Box::new(self_rc.storage.add_application_key(&application_key).from_err().and_then(move |_| {
-            Self::_register_step3(self_rc, application, challenge, application_key)
+            Self::_register_step3(self_rc, challenge, application_key)
         }))
     }
 
     fn _register_step3(
         self_rc: Rc<U2FInner>,
-        application: ApplicationParameter,
         challenge: ChallengeParameter,
         application_key: ApplicationKey,
     ) -> Result<Registration, RegisterError> {
@@ -1002,13 +995,13 @@ impl Service for U2F {
 
     fn call(&self, req: Self::Request) -> Self::Future {
         let logger = self.0.logger.clone();
-        debug!(logger, "call U2F service");
+        trace!(logger, "call U2F service");
         match req {
             Request::Register {
                 challenge,
                 application,
             } => {
-                let logger2 = self.0.logger.clone();
+                let logger_clone = self.0.logger.clone();
                 debug!(logger, "Request::Register");
                 Box::new(
                     self.register(application, challenge)
@@ -1024,15 +1017,15 @@ impl Service for U2F {
                         })
                         .or_else(move |err| match err {
                             RegisterError::ApprovalRequired => {
-                                debug!(logger2, "Request::Register ApprovalRequired");
+                                debug!(logger_clone, "Request::Register => ApprovalRequired");
                                 Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
                             RegisterError::Io(err) => {
-                                debug!(logger2, "Request::Register IoError");
+                                debug!(logger_clone, "Request::Register => IoError"; "error" => format!("{:?}", err));
                                 Err(err.into())
                             }
                             RegisterError::Signing(err) => {
-                                debug!(logger2, "Request::Register SigningError");
+                                debug!(logger_clone, "Request::Register => SigningError"; "error" => format!("{:?}", err));
                                 Err(io::Error::new(io::ErrorKind::Other, "Signing error").into())
                             }
                         }),
@@ -1090,7 +1083,7 @@ impl Service for U2F {
                 }
             }
             Request::GetVersion => {
-                debug!(logger, "Request::GetVersion");
+                trace!(logger, "Request::GetVersion");
                 let response = Response::Version { version_string: self.get_version_string() };
                 Box::new(future::ok(response))
             }

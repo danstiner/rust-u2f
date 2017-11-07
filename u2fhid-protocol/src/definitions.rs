@@ -1,6 +1,6 @@
 use std::cmp;
 use std::collections::vec_deque::VecDeque;
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read};
 use std::mem::size_of;
 use std::time::Duration;
 
@@ -132,7 +132,7 @@ impl slog::Value for Command {
             &Command::Wink => "Wink",
             &Command::Lock => "Lock",
             &Command::Sync => "Sync",
-            &Command::Vendor { identifier } => "Vendor",
+            &Command::Vendor { .. } => "Vendor",
         }.serialize(record, key, serializer)
     }
 }
@@ -176,7 +176,7 @@ impl Packet {
     pub fn from_bytes(bytes: &[u8]) -> Result<Packet, ()> {
         // TODO assert_eq!(bytes.len(), HID_REPORT_LEN);
         let mut reader = Cursor::new(bytes);
-        let skip_byte = reader.read_u8().unwrap(); // TODO why is this here
+        reader.read_u8().unwrap(); // TODO why do we have this extra byte to skip here
         let channel_id = ChannelId(reader.read_u32::<BigEndian>().unwrap());
         let frame_type_byte = reader.read_u8().unwrap();
         if frame_type_byte & FRAME_TYPE_MASK == FRAME_TYPE_INIT {

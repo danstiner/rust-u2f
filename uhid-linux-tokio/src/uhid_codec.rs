@@ -172,7 +172,7 @@ impl InputEvent {
                     payload.size = copy_bytes_sized(data, &mut payload.data)? as u16;
                 }
             }
-            InputEvent::GetReportReply { id, err, data } => {
+            InputEvent::GetReportReply { err, data, .. } => {
                 event.type_ = bindings::uhid_event_type::UHID_GET_REPORT_REPLY as u32;
                 unsafe {
                     let payload = event.u.get_report_reply.as_mut();
@@ -180,7 +180,7 @@ impl InputEvent {
                     payload.size = copy_bytes_sized(data, &mut payload.data)? as u16;
                 }
             }
-            InputEvent::SetReportReply { id, err } => {
+            InputEvent::SetReportReply { err, .. } => {
                 event.type_ = bindings::uhid_event_type::UHID_SET_REPORT_REPLY as u32;
                 unsafe {
                     let payload = event.u.set_report_reply.as_mut();

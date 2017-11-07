@@ -9,7 +9,6 @@ pub fn stdin_stream() -> Box<Stream<Item = String, Error = io::Error>> {
     thread::spawn(move || {
         let input = io::stdin();
         for line in input.lock().lines() {
-            println!("Echo {:?}", line);
             match tx.send(line).wait() {
                 Ok(s) => tx = s,
                 Err(_) => break,
