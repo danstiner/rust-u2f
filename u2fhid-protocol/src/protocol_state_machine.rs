@@ -184,7 +184,7 @@ where
                     Async::Ready(result) => {
                         let channel_id = dispatch.channel_id;
                         StateTransition {
-                            new_state: State::Dispatch(dispatch),
+                            new_state: State::Idle,
                             output: Some(Response {
                                 channel_id: channel_id,
                                 message: result,
