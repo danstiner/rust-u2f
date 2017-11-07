@@ -1,5 +1,5 @@
 use std::ascii::AsciiExt;
-use std::io;
+use std::io::{self, Write};
 use std::time::Duration;
 
 use futures::{Future, Stream};
@@ -25,14 +25,14 @@ impl CommandPromptUserPresence {
     fn test_user_presence(&self, prompt: &str) -> Box<Future<Item = bool, Error = io::Error>> {
         let handle = self.handle.clone();
         let prompt = String::from(prompt);
-        println!("{}", prompt);
+        print_prompt(&prompt);
         let replies_stream =
             stdin_stream().filter_map(move |line| if line.eq_ignore_ascii_case("y") {
                 Some(true)
             } else if line.eq_ignore_ascii_case("n") {
                 Some(false)
             } else {
-                println!("{}", prompt);
+                print_prompt(&prompt);
                 None
             });
         let reply = replies_stream.into_future().map_err(|(err, _)| err).map(
@@ -72,4 +72,9 @@ impl UserPresence for CommandPromptUserPresence {
         println!(";)");
         Box::new(future::ok(()))
     }
+}
+
+fn print_prompt(prompt: &str) {
+    print!("{}", prompt);
+    io::stdout().flush().unwrap();
 }
