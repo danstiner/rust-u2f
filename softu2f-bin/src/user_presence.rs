@@ -1,80 +1,106 @@
-use std::ascii::AsciiExt;
-use std::io::{self, Write};
-use std::time::Duration;
+use std::env;
+use std::io;
+use std::os::unix::process::CommandExt;
+use std::process::{Command, Stdio};
 
-use futures::{Future, Stream};
+use sandbox_ipc;
+use futures::{Future, Sink, Stream};
 use futures::future;
-use tokio_core::reactor::{Handle, Timeout};
-use u2f_core::{ApplicationParameter, UserPresence};
+use serde_json;
+use tokio_core::reactor::Handle;
 
-use stdin_stream::stdin_stream;
+use super::{DBUS_SESSION_BUS_ADDRESS_VAR, PreSudoEnvironment};
+use u2f_core::{ApplicationParameter, UserPresence, try_reverse_application_id};
+use softu2f_test_user_presence::{CHANNEL_ENV_VAR, UserPresenceTestParameters};
 
-fn approve_delay() -> Duration {
-    Duration::from_secs(3)
-}
-
-pub struct CommandPromptUserPresence {
+pub struct NotificationUserPresence {
     handle: Handle,
+    pre_sudo_env: PreSudoEnvironment,
 }
 
-impl CommandPromptUserPresence {
-    pub fn new(handle: Handle) -> CommandPromptUserPresence {
-        CommandPromptUserPresence { handle: handle }
+impl NotificationUserPresence {
+    pub fn new(handle: Handle, pre_sudo_env: PreSudoEnvironment) -> NotificationUserPresence {
+        NotificationUserPresence {
+            handle: handle,
+            pre_sudo_env: pre_sudo_env,
+        }
     }
 
-    fn test_user_presence(&self, prompt: &str) -> Box<Future<Item = bool, Error = io::Error>> {
-        let handle = self.handle.clone();
-        let prompt = String::from(prompt);
-        print_prompt(&prompt);
-        let replies_stream =
-            stdin_stream().filter_map(move |line| if line.eq_ignore_ascii_case("y") {
-                Some(true)
-            } else if line.eq_ignore_ascii_case("n") {
-                Some(false)
-            } else {
-                print_prompt(&prompt);
-                None
-            });
-        let reply = replies_stream.into_future().map_err(|(err, _)| err).map(
-            |(maybe_reply, _)| maybe_reply.unwrap_or(false),
-        );
-        let reply_after_delay = reply.and_then(move |res| {
-            let delay = approve_delay();
-            println!(
-                "Waiting {} seconds before approving. Switch back to your browser or approval will fail.",
-                delay.as_secs()
-            );
-            Timeout::new(delay, &handle).unwrap().map(move |_| {
-                println!("Approved.");
-                res
-            })
-        });
-        Box::new(reply_after_delay)
+    fn test_user_presence(&self, message: &str) -> Box<Future<Item = bool, Error = io::Error>> {
+        let mut child_command = match test_command() {
+            Ok(command) => command,
+            Err(err) => return Box::new(future::err(err)),
+        };
+
+        let (channel, mut child) =
+            sandbox_ipc::MessageChannel::<UserPresenceTestParameters, bool>::establish_with_child(
+                &mut child_command,
+                8192,
+                &self.handle,
+                |command, child_channel| {
+                    command
+                        .uid(self.pre_sudo_env.security_ids.uid)
+                        .gid(self.pre_sudo_env.security_ids.gid)
+                        .env_clear()
+                        .current_dir("/")
+                        .stdin(Stdio::null())
+                        .env(DBUS_SESSION_BUS_ADDRESS_VAR, &self.pre_sudo_env.dbus_session_bus_address)
+                        // .env("PATH", "/bin:/usr/bin")
+                        // .env("IFS", " \t\n")
+                        .env(
+                            CHANNEL_ENV_VAR,
+                            serde_json::to_string(child_channel).unwrap(),
+                        )
+                        .spawn()
+                },
+            ).unwrap();
+
+        Box::new(
+            channel
+                .send(UserPresenceTestParameters {
+                    message: String::from(message),
+                })
+                .and_then(|channel| {
+                    channel
+                        .into_future()
+                        .map(|(response_option, _)| response_option.unwrap_or(false))
+                        .map_err(|(err, _)| err)
+                }).then(move |res| {
+                    child.kill().ok(); // TODO Only allow certain failures
+                    res
+                })
+        )
     }
 }
 
-impl UserPresence for CommandPromptUserPresence {
+fn test_command() -> io::Result<Command> {
+    let mut path = env::current_exe()?;
+    path.set_file_name("softu2f-test-user-presence");
+    path.set_extension("");
+    Ok(Command::new(&path))
+}
+
+impl UserPresence for NotificationUserPresence {
     fn approve_registration(
         &self,
-        _: &ApplicationParameter,
+        application: &ApplicationParameter,
     ) -> Box<Future<Item = bool, Error = io::Error>> {
-        self.test_user_presence("Approve registration [y/n]: ")
+        let site_name = try_reverse_application_id(application).unwrap_or(String::from("site"));
+        let message = format!("Register with {}", site_name);
+        self.test_user_presence(&message)
     }
 
     fn approve_authentication(
         &self,
-        _: &ApplicationParameter,
+        application: &ApplicationParameter,
     ) -> Box<Future<Item = bool, Error = io::Error>> {
-        self.test_user_presence("Approve authentication [y/n]: ")
+        let site_name = try_reverse_application_id(application).unwrap_or(String::from("site"));
+        let message = format!("Authenticate with {}", site_name);
+        self.test_user_presence(&message)
     }
 
     fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
         println!(";)");
         Box::new(future::ok(()))
     }
-}
-
-fn print_prompt(prompt: &str) {
-    print!("{}", prompt);
-    io::stdout().flush().unwrap();
 }

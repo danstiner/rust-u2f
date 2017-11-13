@@ -1,0 +1,22 @@
+[package]
+authors = ["Daniel Stiner <danstiner@gmail.com>"]
+name = "softu2f-test-user-presence"
+version = "0.1.0"
+[[bin]]
+name = "softu2f-test-user-presence"
+path = "src/main.rs"
+
+[dependencies]
+futures = "0.1.16"
+lazy_static = "0.2.9"
+notify-rust = "3.4.2"
+sandbox-ipc = "0.2.0"
+serde = "1.0.17"
+serde_derive = "1.0.17"
+serde_json = "1.0.5"
+time = "0.1.38"
+tokio-core = "0.1.9"
+
+[lib]
+name = "softu2f_test_user_presence"
+path = "src/lib.rs"

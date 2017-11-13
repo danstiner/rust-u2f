@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate assert_matches;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate serde_derive;
 #[macro_use]
 extern crate slog;
@@ -9,6 +11,7 @@ extern crate quick_error;
 
 extern crate base64;
 extern crate byteorder;
+extern crate crypto;
 extern crate futures;
 extern crate openssl;
 extern crate rand;
@@ -18,9 +21,18 @@ extern crate subtle;
 extern crate tokio_service;
 extern crate u2f_header;
 
+mod known_facets;
 mod self_signed_attestation;
 
+use std::fmt::{self, Debug};
+use std::io::{self, Cursor};
+use std::io::Read;
+use std::rc::Rc;
+use std::result::Result;
+
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use crypto::digest::Digest;
+use crypto::sha2::Sha256;
 use futures::Future;
 use futures::future;
 use openssl::bn::BigNumContext;
@@ -36,11 +48,6 @@ use rand::Rand;
 use rand::Rng;
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use slog::Drain;
-use std::fmt::{self, Debug};
-use std::io::{self, Cursor};
-use std::io::Read;
-use std::rc::Rc;
-use std::result::Result;
 
 use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM,
                               SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
@@ -63,6 +70,8 @@ const SW_UNKNOWN: u16 = 0x6F00; // Response status : No precise diagnosis
 const AUTH_ENFORCE: u8 = 0x03; // Enforce user presence and sign
 const AUTH_CHECK_ONLY: u8 = 0x07; // Check only
 const AUTH_FLAG_TUP: u8 = 0x01; // Test of user presence set
+
+pub use known_facets::try_reverse_application_id;
 
 #[derive(Debug)]
 pub enum StatusCode {
@@ -389,6 +398,17 @@ type SHA256Hash = [u8; 32];
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ApplicationParameter(SHA256Hash);
+
+impl ApplicationParameter {
+    fn from_str(input: &str) -> ApplicationParameter {
+        let mut hasher = Sha256::new();
+        hasher.input_str(input);
+        let mut bytes = [0u8; 32];
+        assert_eq!(hasher.output_bytes(), bytes.len());
+        hasher.result(&mut bytes);
+        ApplicationParameter(bytes)
+    }
+}
 
 impl AsRef<[u8]> for ApplicationParameter {
     fn as_ref(&self) -> &[u8] {
