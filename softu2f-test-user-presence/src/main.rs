@@ -27,7 +27,8 @@ fn notify(parameters: UserPresenceTestParameters) -> io::Result<bool> {
     let mut res = false;
 
     let handle = Notification::new()
-        .summary(&parameters.message)
+        .summary("Security Token Request")
+        .body(&parameters.message)
         .action("approve", "Approve")
         .action("deny", "Deny")
         .icon("security-high-symbolic")
