@@ -454,6 +454,17 @@ where
     })
 }
 
+impl slog::Value for ApplicationParameter {
+    fn serialize(
+        &self,
+        record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut slog::Serializer,
+    ) -> slog::Result {
+        slog::Value::serialize(&format!("{:?}", self.0), record, key, serializer)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ChallengeParameter(SHA256Hash);
 
@@ -1034,12 +1045,12 @@ impl Service for U2F {
                 application,
             } => {
                 let logger_clone = self.0.logger.clone();
-                debug!(logger, "Request::Register");
+                debug!(logger, "Request::Register"; "app_id" => application);
                 Box::new(
                     self.register(application, challenge)
                         .map(move |registration| {
                             info!(logger, "registered");
-                            debug!(logger, "Request::Register Ok");
+                            debug!(logger, "Request::Register => Ok");
                             Response::Registration {
                                 user_public_key: registration.user_public_key,
                                 key_handle: registration.key_handle,
@@ -1069,7 +1080,7 @@ impl Service for U2F {
                 application,
                 key_handle,
             } => {
-                debug!(self.0.logger, "Request::Authenticate");
+                debug!(self.0.logger, "Request::Authenticate"; "app_id" => application);
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
                         Box::new(self.is_valid_key_handle(&key_handle, &application).map(
