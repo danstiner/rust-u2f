@@ -1,2 +1,2 @@
 [workspace]
-members = ["softu2f-bin", "softu2f-test-user-presence", "u2fhid-protocol", "uhid-linux-bindings", "uhid-linux-tokio", "uhid-linux-tokio/example", "u2f-header", "u2f-core"]
+members = ["softu2f-bin", "softu2f-test-user-presence", "u2fhid-protocol", "uhid-linux-bindings", "uhid-linux-tokio", "uhid-linux-tokio/example", "u2f-core"]

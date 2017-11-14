@@ -1,9 +1,0 @@
-[package]
-name = "u2f-header"
-version = "1.2.0"
-authors = ["Daniel Stiner <danstiner@gmail.com>"]
-
-[build-dependencies]
-bindgen = "0.29.0"
-
-[dependencies]

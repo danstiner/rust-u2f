@@ -19,7 +19,6 @@ extern crate serde;
 extern crate slog_stdlog;
 extern crate subtle;
 extern crate tokio_service;
-extern crate u2f_header;
 
 mod known_facets;
 mod self_signed_attestation;
@@ -70,6 +69,12 @@ const SW_UNKNOWN: u16 = 0x6F00; // Response status : No precise diagnosis
 const AUTH_ENFORCE: u8 = 0x03; // Enforce user presence and sign
 const AUTH_CHECK_ONLY: u8 = 0x07; // Check only
 const AUTH_FLAG_TUP: u8 = 0x01; // Test of user presence set
+
+/// Spec says 255 is max length, but the provided .C header says 128
+/// This is sufficient entropy to avoid collisions, so we stick with 128
+const MAX_KEY_HANDLE_LEN: usize = 128;
+
+const EC_POINT_FORMAT_UNCOMPRESSED: u8 = 0x04;
 
 pub use known_facets::try_reverse_application_id;
 
@@ -474,8 +479,6 @@ impl AsRef<[u8]> for ChallengeParameter {
     }
 }
 
-const MAX_KEY_HANDLE_LEN: usize = u2f_header::U2F_MAX_KH_SIZE as usize;
-
 #[derive(Clone)]
 pub struct KeyHandle(Vec<u8>);
 
@@ -629,7 +632,7 @@ impl PublicKey {
                 format!("Expected 65 bytes, found {}", bytes.len()),
             ));
         }
-        if bytes[0] != u2f_header::U2F_POINT_UNCOMPRESSED as u8 {
+        if bytes[0] != EC_POINT_FORMAT_UNCOMPRESSED {
             return Err(String::from("Expected uncompressed point"));
         }
         let group = EcGroup::from_curve_name(nid::X9_62_PRIME256V1).unwrap();

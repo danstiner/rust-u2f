@@ -18,6 +18,3 @@ slog = "2.0.12"
 slog-stdlog = "3.0.2"
 subtle = "0.3.0"
 tokio-service = "0.1.0"
-
-[dependencies.u2f-header]
-path = "../u2f-header"
