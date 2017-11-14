@@ -23,6 +23,7 @@ lazy_static! {
         facets.insert(app_id("https://api-9dcf9b83.duosecurity.com"), "https://api-9dcf9b83.duosecurity.com");
         facets.insert(app_id("https://dashboard.stripe.com"), "https://dashboard.stripe.com");
         facets.insert(ApplicationParameter([178, 69, 252, 77, 230, 119, 249, 186, 244, 183, 217, 253, 44, 8, 33, 181, 43, 115, 217, 237, 112, 141, 5, 247, 174, 17, 120, 196, 131, 70, 225, 105]), "https://www.facebook.com");
+        facets.insert(ApplicationParameter([231, 190, 150, 165, 27, 208, 25, 42, 114, 132, 13, 46, 89, 9, 247, 43, 168, 42, 47, 233, 63, 170, 98, 79, 3, 57, 107, 48, 228, 148, 200, 4]), "https://gitlab.com");
         facets
     };
 }
