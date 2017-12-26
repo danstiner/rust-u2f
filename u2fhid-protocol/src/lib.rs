@@ -1,10 +1,13 @@
-extern crate byteorder;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate futures;
 #[macro_use]
+extern crate serde_derive;
+#[macro_use]
 extern crate slog;
+
+extern crate byteorder;
 extern crate slog_stdlog;
 extern crate tokio_core;
 extern crate u2f_core;

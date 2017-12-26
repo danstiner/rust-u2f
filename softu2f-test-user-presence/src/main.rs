@@ -19,6 +19,9 @@ use tokio_core::reactor::Core;
 
 use softu2f_test_user_presence::{CHANNEL_ENV_VAR, UserPresenceTestParameters};
 
+// TODO this hardcoded keyword should be in the notifcation library
+const NOTIFICATION_CLOSE_ACTION: &str = "__closed";
+
 lazy_static! {
     static ref NOTIFICATION_TIMEOUT: Duration = Duration::seconds(10);
 }
@@ -41,8 +44,7 @@ fn notify(parameters: UserPresenceTestParameters) -> io::Result<bool> {
             |action| match action {
                 "approve" => res = true,
                 "deny" => res = false,
-                // here "__closed" is a hardcoded keyword
-                "__closed" => {
+                NOTIFICATION_CLOSE_ACTION => {
                     println!("the notification was closed");
                     res = false;
                 }

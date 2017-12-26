@@ -43,7 +43,7 @@ pub fn transaction_timeout_duration() -> Duration {
     Duration::from_millis(3000)
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct ChannelId(pub u32);
 
 impl ChannelId {
@@ -106,6 +106,7 @@ impl ErrorCode {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum Command {
     Msg,
     Ping,
@@ -137,6 +138,7 @@ impl slog::Value for Command {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum Packet {
     Initialization {
         channel_id: ChannelId,

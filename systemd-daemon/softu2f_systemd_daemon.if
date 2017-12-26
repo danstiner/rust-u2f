@@ -1,0 +1,40 @@
+
+## <summary>policy for softu2f_systemd_daemon</summary>
+
+########################################
+## <summary>
+##	Execute softu2f_systemd_daemon_exec_t in the softu2f_systemd_daemon domain.
+## </summary>
+## <param name="domain">
+## <summary>
+##	Domain allowed to transition.
+## </summary>
+## </param>
+#
+interface(`softu2f_systemd_daemon_domtrans',`
+	gen_require(`
+		type softu2f_systemd_daemon_t, softu2f_systemd_daemon_exec_t;
+	')
+
+	corecmd_search_bin($1)
+	domtrans_pattern($1, softu2f_systemd_daemon_exec_t, softu2f_systemd_daemon_t)
+')
+
+######################################
+## <summary>
+##	Execute softu2f_systemd_daemon in the caller domain.
+## </summary>
+## <param name="domain">
+##	<summary>
+##	Domain allowed access.
+##	</summary>
+## </param>
+#
+interface(`softu2f_systemd_daemon_exec',`
+	gen_require(`
+		type softu2f_systemd_daemon_exec_t;
+	')
+
+	corecmd_search_bin($1)
+	can_exec($1, softu2f_systemd_daemon_exec_t)
+')

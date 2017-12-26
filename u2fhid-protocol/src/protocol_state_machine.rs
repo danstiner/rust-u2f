@@ -286,6 +286,7 @@ where
             }
             (State::Receive(receive), Packet::Initialization { channel_id, .. }) => {
                 if channel_id == receive.channel_id {
+                    debug!(self.logger, "Invalid message sequencing");
                     StateTransition {
                         new_state: State::Idle,
                         output: Some(Response {
@@ -296,6 +297,7 @@ where
                         }),
                     }
                 } else {
+                    debug!(self.logger, "Other channel busy with transaction");
                     StateTransition {
                         new_state: State::Receive(receive),
                         output: Some(Response {
@@ -376,6 +378,7 @@ where
                         output: None,
                     }
                 } else {
+                    debug!(self.logger, "Payload incomplete"; "payload_len" => receive.payload_len, "receive_len" => receive.buffer.len());
                     StateTransition {
                         new_state: State::Receive(receive),
                         output: None,

@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+message Request {
+  oneof test_oneof {
+    CreateDeviceRequest create_device = 1;
+    Packet packet = 2;
+  }
+}
+
+message Response {
+  oneof test_oneof {
+    CreateDeviceResponse create_device = 1;
+    Packet packet = 2;
+  }
+}
+
+message CreateDeviceRequest {
+}
+
+message CreateDeviceResponse {
+    enum Result {
+        UNKNOWN_FAILURE = 0;
+        SUCCESS = 1;
+        ALREADY_EXISTS = 2;
+    }
+    Result result = 1;
+    string message = 2;
+}
+
+message Packet {
+    bytes bytes = 1;
+}

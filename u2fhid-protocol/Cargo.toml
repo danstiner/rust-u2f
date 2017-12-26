@@ -2,11 +2,12 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "u2fhid-protocol"
 version = "0.1.0"
-
 [dependencies]
 bitflags = "1.0.0"
 byteorder = "1.1.0"
 futures = "0.1.16"
+serde = "1.0.23"
+serde_derive = "1.0.23"
 slog = "2.0.12"
 slog-stdlog = "3.0.2"
 tokio-core = "0.1.9"

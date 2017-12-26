@@ -1,0 +1,5 @@
+[Socket]
+ListenStream=/run/softu2f/softu2f.sock
+
+[Install]
+WantedBy=sockets.target

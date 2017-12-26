@@ -173,8 +173,8 @@ fn run(logger: slog::Logger, pre_sudo_env: PreSudoEnvironment) -> io::Result<()>
     let storage = Box::new(UserFileStorage::new(store_path, security_ids, logger.new(o!()))?);
 
     let service = U2F::new(user_presence, operations, storage, logger.new(o!()))?;
-    let future = U2FHID::bind_service(&handle, transport, service, logger.new(o!()));
-    core.run(future)?;
+    let bind = U2FHID::bind_service(&handle, transport, service, logger.new(o!()));
+    core.run(bind)?;
 
     Ok(())
 }

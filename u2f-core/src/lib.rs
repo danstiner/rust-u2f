@@ -23,6 +23,8 @@ extern crate tokio_service;
 mod known_facets;
 mod self_signed_attestation;
 
+pub use tokio_service::Service;
+
 use std::fmt::{self, Debug};
 use std::io::{self, Cursor};
 use std::io::Read;
@@ -1014,23 +1016,6 @@ impl U2F {
     fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
         self.0.approval.wink()
     }
-}
-
-pub trait Service {
-    /// Requests handled by the service.
-    type Request;
-
-    /// Responses given by the service.
-    type Response;
-
-    /// Errors produced by the service.
-    type Error;
-
-    /// The future response value.
-    type Future: Future<Item = Self::Response, Error = Self::Error>;
-
-    /// Process the request and return the response asynchronously.
-    fn call(&self, req: Self::Request) -> Self::Future;
 }
 
 impl Service for U2F {
