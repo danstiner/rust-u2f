@@ -1,5 +1,10 @@
 [workspace]
 members = ["softu2f-bin", "session-daemon", "systemd-daemon", "softu2f-test-user-presence", "u2fhid-protocol", "uhid-linux-bindings", "uhid-linux-tokio", "uhid-linux-tokio/example", "u2f-core"]
 
+[profile.release]
+lto = true
+panic = 'abort'
+backtrace = false
+
 [patch.crates-io]
 systemd = { git = "https://github.com/danstiner/rust-systemd", branch = "bugfix/log-dependency-bound" }
