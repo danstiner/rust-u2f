@@ -2,9 +2,7 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "softu2f-systemd-daemon"
 version = "0.1.0"
-[[bin]]
-name = "softu2f-systemd-daemon"
-path = "src/main.rs"
+description = "System daemon for U2F device simulated in software"
 
 [build-dependencies]
 protoc-rust = "1.4.2"
@@ -31,6 +29,10 @@ path = "../u2fhid-protocol/"
 
 [dependencies.uhid-linux-tokio]
 path = "../uhid-linux-tokio"
+
+[[bin]]
+name = "softu2f-systemd-daemon"
+path = "src/main.rs"
 
 [lib]
 name = "softu2f_systemd_daemon"
