@@ -1,9 +1,9 @@
-.TH  "softu2f_systemd_daemon_selinux"  "8"  "17-12-23" "softu2f_systemd_daemon" "SELinux Policy softu2f_systemd_daemon"
+.TH  "softu2f_systemd_daemon-selinux"  "8"  "17-12-23" "softu2f_systemd_daemon" "SELinux Policy softu2f_systemd_daemon"
 .SH "NAME"
-softu2f_systemd_daemon_selinux \- Security Enhanced Linux Policy for the softu2f_systemd_daemon processes
+softu2f-systemd-daemon-selinux \- Security Enhanced Linux Policy for the softu2f-systemd-daemon processes
 .SH "DESCRIPTION"
 
-Security-Enhanced Linux secures the softu2f_systemd_daemon processes via flexible mandatory access control.
+Security-Enhanced Linux secures the softu2f-systemd-daemon processes via flexible mandatory access control.
 
 The softu2f_systemd_daemon processes execute with the softu2f_systemd_daemon_t SELinux type. You can check if you have these processes running by executing the \fBps\fP command with the \fB\-Z\fP qualifier.
 
@@ -25,7 +25,7 @@ SELinux defines process types (domains) for each process running on the system
 You can see the context of a process using the \fB\-Z\fP option to \fBps\bP
 .PP
 Policy governs the access confined processes have to files.
-SELinux softu2f_systemd_daemon policy is very flexible allowing users to setup their softu2f_systemd_daemon processes in as secure a method as possible.
+SELinux softu2f_systemd_daemon policy is very flexible allowing users to setup their softu2f-systemd-daemon processes in as secure a method as possible.
 .PP
 The following process types are defined for softu2f_systemd_daemon:
 
@@ -38,7 +38,7 @@ Note:
 can be used to make the process type softu2f_systemd_daemon_t permissive. SELinux does not deny access to permissive process types, but the AVC (SELinux denials) messages are still generated.
 
 .SH BOOLEANS
-SELinux policy is customizable based on least access required.  softu2f_systemd_daemon policy is extremely flexible and has several booleans that allow you to manipulate the policy and run softu2f_systemd_daemon with the tightest access possible.
+SELinux policy is customizable based on least access required.  softu2f-systemd-daemon policy is extremely flexible and has several booleans that allow you to manipulate the policy and run softu2f-systemd-daemon with the tightest access possible.
 
 
 .PP

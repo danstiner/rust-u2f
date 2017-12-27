@@ -1,4 +1,4 @@
-policy_module(softu2f_systemd_daemon, 1.0.0)
+policy_module(softu2f-systemd-daemon, 1.0.0)
 
 require {
 	type kernel_t;
@@ -18,9 +18,12 @@ init_daemon_domain(softu2f_systemd_daemon_t, softu2f_systemd_daemon_exec_t)
 
 permissive softu2f_systemd_daemon_t;
 
+type softu2f_socket_t;
+files_type(softu2f_socket_t);
+
 ########################################
 #
-# softu2f_systemd_daemon local policy
+# softu2f-systemd-daemon local policy
 #
 allow softu2f_systemd_daemon_t self:fifo_file rw_fifo_file_perms;
 allow softu2f_systemd_daemon_t self:unix_stream_socket create_stream_socket_perms;

@@ -1,9 +1,9 @@
 
-## <summary>policy for softu2f_systemd_daemon</summary>
+## <summary>policy for softu2f-systemd-daemon</summary>
 
 ########################################
 ## <summary>
-##	Execute softu2f_systemd_daemon_exec_t in the softu2f_systemd_daemon domain.
+##	Execute softu2f_systemd_daemon_exec_t in the softu2f-systemd-daemon domain.
 ## </summary>
 ## <param name="domain">
 ## <summary>

@@ -1,10 +1,8 @@
 [Unit]
 Description=Software-only U2F Emulation Service
+#Wants=softu2f.socket
 
 [Service]
-ExecStart=/usr/libexec/softu2f-systemd-daemon
-Restart=no
-Environment="RUST_BACKTRACE=1"
-#PrivateTmp=true
-#NonBlocking=true
-#Restart=on-abnormal
+Type=simple
+ExecStart=/usr/libexec/softu2f/systemd-daemon
+PrivateNetwork=yes
