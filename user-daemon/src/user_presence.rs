@@ -3,7 +3,7 @@ use std::io;
 use futures_cpupool::CpuPool;
 use futures::future;
 use futures::prelude::*;
-use notify_rust::{Notification, NotificationUrgency};
+use notify_rust::{Notification, NotificationHint, NotificationUrgency};
 use slog::Logger;
 use time::Duration;
 use tokio_core::reactor::Handle;
@@ -40,11 +40,14 @@ impl NotificationUserPresence {
             let mut res = false;
 
             let handle = Notification::new()
-                .summary("Security Token Request")
+                .summary("Security Key Request")
                 .body(&body)
                 .action("deny", "Deny")
                 .action("approve", "Approve")
                 .icon("security-high-symbolic")
+                .hint(NotificationHint::Category(String::from("device")))
+                .hint(NotificationHint::Transient(true))
+                .hint(NotificationHint::Urgency(NotificationUrgency::Critical))
                 .urgency(NotificationUrgency::Critical)
                 .timeout(NOTIFICATION_TIMEOUT.num_milliseconds() as i32)
                 .show()

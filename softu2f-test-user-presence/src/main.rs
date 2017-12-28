@@ -13,7 +13,7 @@ use std::env;
 use std::io;
 
 use futures::prelude::*; 
-use notify_rust::{Notification, NotificationUrgency};
+use notify_rust::{Notification, NotificationHint, NotificationUrgency};
 use time::Duration;
 use tokio_core::reactor::Core;
 
@@ -30,11 +30,14 @@ fn notify(parameters: UserPresenceTestParameters) -> io::Result<bool> {
     let mut res = false;
 
     let handle = Notification::new()
-        .summary("Security Token Request")
+        .summary("Security Key Request")
         .body(&parameters.message)
         .action("deny", "Deny")
         .action("approve", "Approve")
         .icon("security-high-symbolic")
+        .hint(NotificationHint::Category(String::from("device")))
+        .hint(NotificationHint::Transient(true))
+        .hint(NotificationHint::Urgency(NotificationUrgency::Critical))
         .urgency(NotificationUrgency::Critical)
         .timeout(NOTIFICATION_TIMEOUT.num_milliseconds() as i32)
         .show()
