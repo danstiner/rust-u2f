@@ -1,5 +1,5 @@
 export PWD := $(shell pwd)
-export TARGETDIR := ${PWD}/../../target
+export TARGETDIR := ${PWD}/../../target/fedora
 
 rpm: *
 	@echo "Building and Loading Policy"
