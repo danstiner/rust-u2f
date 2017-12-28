@@ -1,7 +1,13 @@
 Source: softu2f
-Maintainer: Daniel Stiner <daniel.stiner@gmail.com>
+Section: unknown
 Priority: optional
+Maintainer: Daniel Stiner <daniel.stiner@gmail.com>
+Build-Depends: debhelper (>= 9)
+Standards-Version: 3.9.8
+Homepage: https://github.com/danstiner/softu2f-linux
 
 Package: softu2f
-Architecture: any
-Depends: softu2f-system-daemon, softu2f-user-daemon
+Architecture: all
+Depends: softu2f-user-daemon, ${misc:Depends}
+Description: U2F tokens emulated as software
+ <insert long description, indented with spaces>

@@ -1,0 +1,8 @@
+#!/bin/sh
+
+if [ -z $2 ] ; then
+	# Initial installation
+	systemctl --no-reload preset --global softu2f.service >/dev/null 2>&1 || true
+fi
+
+exit 0

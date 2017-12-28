@@ -1,5 +1,5 @@
 Name:           softu2f
-Version:        1.0
+Version:        0.1.0
 Release:        1%{?dist}
 Summary:        U2F tokens emulated as software
 

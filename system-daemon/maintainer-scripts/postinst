@@ -1,0 +1,30 @@
+#!/bin/sh
+set -e
+
+# tmpfiles
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ]; then
+	# In case this system is running systemd, we need to ensure that all
+	# necessary tmpfiles (if any) are created before starting.
+	if [ -d /run/systemd/system ] ; then
+		systemd-tmpfiles --create /usr/lib/tmpfiles.d/softu2f.conf >/dev/null || true
+	fi
+fi
+
+# This will only remove masks created by deb-systemd-helper on package removal.
+deb-systemd-helper unmask softu2f.socket >/dev/null || true
+
+deb-systemd-helper preset softu2f.socket >/dev/null || true
+
+# restart on upgrade, start on initial install
+if [ -d /run/systemd/system ]; then
+	systemctl --system daemon-reload >/dev/null || true
+	if [ -n "$2" ]; then
+		_dh_action=restart
+	else
+		_dh_action=start
+	fi
+	deb-systemd-invoke $_dh_action softu2f.socket >/dev/null || true
+fi
+
+exit 0
+

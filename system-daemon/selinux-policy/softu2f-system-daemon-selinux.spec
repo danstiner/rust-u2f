@@ -7,7 +7,7 @@ restorecon -R /usr/libexec/softu2f-system-daemon; \
 %define selinux_policyver 0.0.0
 
 Name:   softu2f-system-daemon-selinux
-Version:	1.0
+Version:	0.1.0
 Release:	1%{?dist}
 Summary:	SELinux policy module for softu2f-system-daemon
 

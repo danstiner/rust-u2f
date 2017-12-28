@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ -d /run/systemd/system ]; then
+	deb-systemd-invoke stop softu2f.socket >/dev/null || true
+	deb-systemd-invoke stop softu2f.service >/dev/null || true
+fi
+
+exit 0
+
