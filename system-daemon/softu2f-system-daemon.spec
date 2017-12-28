@@ -14,6 +14,7 @@ Source2:        softu2f.preset
 %{?systemd_requires}
 BuildRequires:  systemd
 Requires:       softu2f-system-daemon-selinux
+Requires:       u2f-hidraw-policy
 
 %description
 A systemd daemon that provides a socket interface for unprivileged
