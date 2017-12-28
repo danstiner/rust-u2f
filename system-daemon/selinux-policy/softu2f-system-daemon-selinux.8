@@ -1,44 +1,44 @@
-.TH  "softu2f_systemd_daemon-selinux"  "8"  "17-12-23" "softu2f_systemd_daemon" "SELinux Policy softu2f_systemd_daemon"
+.TH  "softu2f_system_daemon-selinux"  "8"  "17-12-23" "softu2f_system_daemon" "SELinux Policy softu2f_system_daemon"
 .SH "NAME"
-softu2f-systemd-daemon-selinux \- Security Enhanced Linux Policy for the softu2f-systemd-daemon processes
+softu2f-system-daemon-selinux \- Security Enhanced Linux Policy for the softu2f-system-daemon processes
 .SH "DESCRIPTION"
 
-Security-Enhanced Linux secures the softu2f-systemd-daemon processes via flexible mandatory access control.
+Security-Enhanced Linux secures the softu2f-system-daemon processes via flexible mandatory access control.
 
-The softu2f_systemd_daemon processes execute with the softu2f_systemd_daemon_t SELinux type. You can check if you have these processes running by executing the \fBps\fP command with the \fB\-Z\fP qualifier.
+The softu2f_system_daemon processes execute with the softu2f_system_daemon_t SELinux type. You can check if you have these processes running by executing the \fBps\fP command with the \fB\-Z\fP qualifier.
 
 For example:
 
-.B ps -eZ | grep softu2f_systemd_daemon_t
+.B ps -eZ | grep softu2f_system_daemon_t
 
 
 .SH "ENTRYPOINTS"
 
-The softu2f_systemd_daemon_t SELinux type can be entered via the \fBsoftu2f_systemd_daemon_exec_t\fP file type.
+The softu2f_system_daemon_t SELinux type can be entered via the \fBsoftu2f_system_daemon_exec_t\fP file type.
 
-The default entrypoint paths for the softu2f_systemd_daemon_t domain are the following:
+The default entrypoint paths for the softu2f_system_daemon_t domain are the following:
 
-/usr/libexec/softu2f-systemd-daemon
+/usr/libexec/softu2f-system-daemon
 .SH PROCESS TYPES
 SELinux defines process types (domains) for each process running on the system
 .PP
 You can see the context of a process using the \fB\-Z\fP option to \fBps\bP
 .PP
 Policy governs the access confined processes have to files.
-SELinux softu2f_systemd_daemon policy is very flexible allowing users to setup their softu2f-systemd-daemon processes in as secure a method as possible.
+SELinux softu2f_system_daemon policy is very flexible allowing users to setup their softu2f-system-daemon processes in as secure a method as possible.
 .PP
-The following process types are defined for softu2f_systemd_daemon:
+The following process types are defined for softu2f_system_daemon:
 
 .EX
-.B softu2f_systemd_daemon_t
+.B softu2f_system_daemon_t
 .EE
 .PP
 Note:
-.B semanage permissive -a softu2f_systemd_daemon_t
-can be used to make the process type softu2f_systemd_daemon_t permissive. SELinux does not deny access to permissive process types, but the AVC (SELinux denials) messages are still generated.
+.B semanage permissive -a softu2f_system_daemon_t
+can be used to make the process type softu2f_system_daemon_t permissive. SELinux does not deny access to permissive process types, but the AVC (SELinux denials) messages are still generated.
 
 .SH BOOLEANS
-SELinux policy is customizable based on least access required.  softu2f-systemd-daemon policy is extremely flexible and has several booleans that allow you to manipulate the policy and run softu2f-systemd-daemon with the tightest access possible.
+SELinux policy is customizable based on least access required.  softu2f-system-daemon policy is extremely flexible and has several booleans that allow you to manipulate the policy and run softu2f-system-daemon with the tightest access possible.
 
 
 .PP
@@ -51,7 +51,7 @@ If you want to allow all domains to execute in fips_mode, you must turn on the f
 
 .SH "MANAGED FILES"
 
-The SELinux process type softu2f_systemd_daemon_t can manage files labeled with the following file types.  The paths listed are the default paths for these file types.  Note the processes UID still need to have DAC permissions.
+The SELinux process type softu2f_system_daemon_t can manage files labeled with the following file types.  The paths listed are the default paths for these file types.  Note the processes UID still need to have DAC permissions.
 
 .br
 .B cluster_conf_t
@@ -121,18 +121,18 @@ SELinux requires files to have an extended attribute to define the file type.
 You can see the context of a file using the \fB\-Z\fP option to \fBls\bP
 .PP
 Policy governs the access confined processes have to these files.
-SELinux softu2f_systemd_daemon policy is very flexible allowing users to setup their softu2f_systemd_daemon processes in as secure a method as possible.
+SELinux softu2f_system_daemon policy is very flexible allowing users to setup their softu2f_system_daemon processes in as secure a method as possible.
 .PP
 
-.I The following file types are defined for softu2f_systemd_daemon:
+.I The following file types are defined for softu2f_system_daemon:
 
 
 .EX
 .PP
-.B softu2f_systemd_daemon_exec_t
+.B softu2f_system_daemon_exec_t
 .EE
 
-- Set files with the softu2f_systemd_daemon_exec_t type, if you want to transition an executable to the softu2f_systemd_daemon_t domain.
+- Set files with the softu2f_system_daemon_exec_t type, if you want to transition an executable to the softu2f_system_daemon_t domain.
 
 
 .PP
@@ -164,4 +164,4 @@ This manual page was auto-generated using
 .B "sepolicy manpage".
 
 .SH "SEE ALSO"
-selinux(8), softu2f_systemd_daemon(8), semanage(8), restorecon(8), chcon(1), sepolicy(8), setsebool(8)
+selinux(8), softu2f_system_daemon(8), semanage(8), restorecon(8), chcon(1), sepolicy(8), setsebool(8)

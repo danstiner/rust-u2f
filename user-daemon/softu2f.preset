@@ -1,0 +1,3 @@
+# This file is part of softu2f-user-daemon
+
+enable softu2f.service

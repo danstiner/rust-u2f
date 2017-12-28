@@ -7,7 +7,7 @@ extern crate futures;
 extern crate libc;
 extern crate slog_journald;
 extern crate slog_term;
-extern crate softu2f_systemd_daemon;
+extern crate softu2f_system_daemon;
 extern crate systemd;
 extern crate take_mut;
 extern crate tokio_core;
@@ -33,7 +33,7 @@ use tokio_core::reactor::Core;
 use tokio_io::codec::length_delimited;
 use tokio_serde_bincode::{ReadBincode, WriteBincode};
 
-use softu2f_systemd_daemon::*;
+use softu2f_system_daemon::*;
 use device::Device;
 
 fn run(logger: Logger) -> io::Result<()> {

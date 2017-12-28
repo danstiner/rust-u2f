@@ -1,6 +1,6 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
-name = "softu2f-systemd-daemon"
+name = "softu2f-system-daemon"
 version = "0.1.0"
 description = "System daemon for U2F device simulated in software"
 
@@ -31,9 +31,9 @@ path = "../u2fhid-protocol/"
 path = "../uhid-linux-tokio"
 
 [[bin]]
-name = "softu2f-systemd-daemon"
+name = "softu2f-system-daemon"
 path = "src/main.rs"
 
 [lib]
-name = "softu2f_systemd_daemon"
+name = "softu2f_system_daemon"
 path = "src/lib.rs"

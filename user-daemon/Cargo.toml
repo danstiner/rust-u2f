@@ -1,6 +1,6 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
-name = "softu2f-session-daemon"
+name = "softu2f-user-daemon"
 version = "0.1.0"
 [dependencies]
 futures = "0.1.17"
@@ -18,8 +18,8 @@ tokio-io = "0.1.4"
 tokio-serde-bincode = "0.1.1"
 tokio-uds = "0.1.7"
 
-[dependencies.softu2f-systemd-daemon]
-path = "../systemd-daemon"
+[dependencies.softu2f-system-daemon]
+path = "../system-daemon"
 
 [dependencies.u2f-core]
 path = "../u2f-core"

@@ -10,7 +10,7 @@ use tokio_io::AsyncRead;
 use take_mut::take;
 
 use bidirectional_pipe::BidirectionalPipe;
-use softu2f_systemd_daemon::*;
+use softu2f_system_daemon::*;
 use uhid_linux_tokio::{Bus, CreateParams, UHIDDevice, InputEvent, OutputEvent, StreamError};
 
 const INPUT_REPORT_LEN: u8 = 64;

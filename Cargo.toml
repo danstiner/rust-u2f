@@ -1,5 +1,5 @@
 [workspace]
-members = ["softu2f-bin", "session-daemon", "systemd-daemon", "softu2f-test-user-presence", "u2fhid-protocol", "uhid-linux-bindings", "uhid-linux-tokio", "uhid-linux-tokio/example", "u2f-core"]
+members = ["softu2f-bin", "user-daemon", "system-daemon", "softu2f-test-user-presence", "u2fhid-protocol", "uhid-linux-bindings", "uhid-linux-tokio", "uhid-linux-tokio/example", "u2f-core"]
 
 [profile.release]
 lto = true

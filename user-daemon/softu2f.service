@@ -1,0 +1,11 @@
+[Unit]
+Description=Software-only U2F Emulation Service
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/softu2f/user-daemon
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

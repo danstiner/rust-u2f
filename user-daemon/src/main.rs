@@ -10,7 +10,7 @@ extern crate futures;
 extern crate notify_rust;
 extern crate serde_json;
 extern crate slog_term;
-extern crate softu2f_systemd_daemon;
+extern crate softu2f_system_daemon;
 extern crate time;
 extern crate tokio_core;
 extern crate tokio_io;
@@ -28,7 +28,7 @@ use std::io;
 use futures::future;
 use futures::prelude::*;
 use slog::{Drain, Logger};
-use softu2f_systemd_daemon::{CreateDeviceRequest, SocketInput, SocketOutput};
+use softu2f_system_daemon::{CreateDeviceRequest, SocketInput, SocketOutput};
 use tokio_core::reactor::Core;
 use tokio_io::codec::length_delimited;
 use tokio_serde_bincode::{ReadBincode, WriteBincode};
@@ -50,7 +50,7 @@ fn socket_output_to_packet(output_event: SocketOutput) -> Option<Packet> {
 
 fn packet_to_socket_input(packet: Packet) -> Box<Future<Item = SocketInput, Error = io::Error>> {
     Box::new(future::ok(SocketInput::Packet(
-        softu2f_systemd_daemon::Packet::from_bytes(
+        softu2f_system_daemon::Packet::from_bytes(
             &packet.into_bytes(),
         ),
     )))
@@ -66,7 +66,7 @@ fn run(logger: Logger) -> io::Result<()> {
     info!(logger, "Started SoftU2f Session"; "store_path" => store_path.to_str().unwrap());
 
     info!(logger, "Opening socket");
-    let stream = UnixStream::connect(softu2f_systemd_daemon::SOCKET_PATH, &handle)?;
+    let stream = UnixStream::connect(softu2f_system_daemon::SOCKET_PATH, &handle)?;
 
     let _peer_cred = stream.peer_cred()?;
     // TODO assert peer creds are root

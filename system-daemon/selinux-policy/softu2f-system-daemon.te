@@ -1,0 +1,37 @@
+policy_module(softu2f-system-daemon, 1.0.0)
+
+require {
+	type kernel_t;
+	type uhid_device_t;
+	class chr_file { open read write };
+	class system module_request;
+}
+
+########################################
+#
+# Declarations
+#
+
+type softu2f_system_daemon_t;
+type softu2f_system_daemon_exec_t;
+init_daemon_domain(softu2f_system_daemon_t, softu2f_system_daemon_exec_t)
+
+permissive softu2f_system_daemon_t;
+
+type softu2f_socket_t;
+files_type(softu2f_socket_t);
+
+########################################
+#
+# softu2f-system-daemon local policy
+#
+allow softu2f_system_daemon_t self:fifo_file rw_fifo_file_perms;
+allow softu2f_system_daemon_t self:unix_stream_socket create_stream_socket_perms;
+allow softu2f_system_daemon_t kernel_t:system module_request;
+allow softu2f_system_daemon_t uhid_device_t:chr_file { open read write };
+
+domain_use_interactive_fds(softu2f_system_daemon_t)
+
+files_read_etc_files(softu2f_system_daemon_t)
+
+miscfiles_read_localization(softu2f_system_daemon_t)

@@ -1,8 +1,9 @@
 [Unit]
 Description=Software-only U2F Emulation Service
-#Wants=softu2f.socket
+Wants=softu2f.socket
 
 [Service]
 Type=simple
-ExecStart=/usr/libexec/softu2f/systemd-daemon
+ExecStart=/usr/libexec/softu2f/system-daemon
 PrivateNetwork=yes
+PrivateTmp=true
