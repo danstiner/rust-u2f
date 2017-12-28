@@ -44,6 +44,7 @@ fn notify(parameters: UserPresenceTestParameters) -> io::Result<bool> {
             |action| match action {
                 "approve" => res = true,
                 "deny" => res = false,
+                "default" => res = false,
                 NOTIFICATION_CLOSE_ACTION => {
                     println!("the notification was closed");
                     res = false;
