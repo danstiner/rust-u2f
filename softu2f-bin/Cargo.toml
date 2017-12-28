@@ -29,3 +29,12 @@ path = "../u2fhid-protocol"
 
 [dependencies.uhid-linux-tokio]
 path = "../uhid-linux-tokio"
+
+[package.metadata.deb]
+depends = "$auto"
+revision = "3"
+assets = [
+    ["README.md", "usr/share/doc/softu2f/README", "644"],
+    ["../target/release/softu2f", "usr/bin/", "755"],
+    ["../target/release/softu2f-test-user-presence", "usr/libexec/softu2f/", "755"],
+]
