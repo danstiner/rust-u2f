@@ -37,3 +37,17 @@ path = "src/main.rs"
 [lib]
 name = "softu2f_system_daemon"
 path = "src/lib.rs"
+
+[package.metadata.deb]
+copyright = "MIT"
+depends = "$auto, systemd"
+extended-description = """\
+A systemd daemon that provides a socket interface for unprivileged \
+users to create emulated U2F devices."""
+assets = [
+    ["softu2f.service", "usr/lib/systemd/system/", "644"],
+    ["softu2f.socket",  "usr/lib/systemd/system/", "644"],
+    ["softu2f.preset", "usr/lib/systemd/system-preset/95-softu2f.preset", "644"],
+    ["softu2f-tmpfiles.conf", " usr/lib/tmpfiles.d/softu2f.conf", "644"],
+    ["../target/release/softu2f-system-daemon", "usr/libexec/softu2f/system-daemon", "755"]
+]

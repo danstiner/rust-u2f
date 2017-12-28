@@ -26,3 +26,15 @@ path = "../u2f-core"
 
 [dependencies.u2fhid-protocol]
 path = "../u2fhid-protocol"
+
+[package.metadata.deb]
+copyright = "MIT"
+depends = "$auto, systemd"
+extended-description = """\
+A systemd daemon that provides a socket interface for unprivileged \
+users to create emulated U2F devices."""
+assets = [
+    ["softu2f.service", "usr/lib/systemd/user/", "644"],
+    ["softu2f.preset", "usr/lib/systemd/user-preset/95-softu2f.preset", "644"],
+    ["../target/release/softu2f-user-daemon", "usr/libexec/softu2f/user-daemon", "755"]
+]
