@@ -1,4 +1,6 @@
-# softu2f-linux
+# SoftU2F for Linux
+[![Build Status](https://travis-ci.org/danstiner/softu2f-linux.svg?branch=master)](https://travis-ci.org/danstiner/softu2f-linux)
+
 In-progress software-only U2F implementation on linux using Rust and UHID
 
 # Installation
