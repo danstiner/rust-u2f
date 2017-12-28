@@ -1,0 +1,7 @@
+Source: softu2f
+Maintainer: Daniel Stiner <daniel.stiner@gmail.com>
+Priority: optional
+
+Package: softu2f
+Architecture: any
+Depends: softu2f-system-daemon, softu2f-user-daemon
