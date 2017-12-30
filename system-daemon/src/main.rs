@@ -29,7 +29,7 @@ use futures::prelude::*;
 use slog_journald::JournaldDrain;
 use slog::{Drain, Logger};
 use systemd::daemon::{is_socket_unix, SocketType, Listening};
-use tokio_core::reactor::Core;
+use tokio_core::reactor::{Core, Handle};
 use tokio_io::codec::length_delimited;
 use tokio_serde_bincode::{ReadBincode, WriteBincode};
 
@@ -41,43 +41,45 @@ fn run(logger: Logger) -> io::Result<()> {
     let handle = core.handle();
 
     let listen_fds_count = systemd::daemon::listen_fds(true)?;
-    let list_fd_start = systemd::daemon::LISTEN_FDS_START;
-    let list_fd_end = systemd::daemon::LISTEN_FDS_START + listen_fds_count;
-    // TODO Do not assume there is a single socket passed in
-    for fd in list_fd_start..list_fd_end {
-        let is_softu2f_socket = is_socket_unix(
-            fd,
-            Some(SocketType::Stream),
-            Listening::IsListening,
-            Some("/run/softu2f/softu2f.sock"),
-        )?;
-        assert!(is_softu2f_socket);
+    assert_eq!(listen_fds_count, 1, "Expect exactly one socket from systemd");
 
-        let listener = unsafe { UnixListener::from_raw_fd(fd) };
-        let listener = tokio_uds::UnixListener::from_listener(listener, &handle)?;
-        info!(logger, "Listening to incoming connections");
-        core.run(listener.incoming().for_each(|connection| {
-            let (stream, _addr) = connection;
-            let peer_cred = stream.peer_cred().unwrap();
+    let fd = systemd::daemon::LISTEN_FDS_START;
+    assert!(is_socket_unix(
+        fd,
+        Some(SocketType::Stream),
+        Listening::IsListening,
+        Some("/run/softu2f/softu2f.sock"),
+    )?, "Expect the softu2f socket fom systemd");
 
-            info!(logger, "Incoming connection"; "uid" => peer_cred.uid, "gid" => peer_cred.gid);
+    let listener = unsafe { UnixListener::from_raw_fd(fd) };
+    let listener = tokio_uds::UnixListener::from_listener(listener, &handle)?;
+    debug!(logger, "Listening to incoming connections");
+    core.run(listener.incoming().for_each(|connection| {
+        let (stream, _addr) = connection;
+        handle.spawn(accept(stream, &handle, &logger));
+        future::ok(())
+    }))
+}
 
-            let length_delimited = length_delimited::FramedWrite::new(stream);
-            let length_delimited = length_delimited::FramedRead::new(length_delimited);
+fn accept(stream: tokio_uds::UnixStream, handle: &Handle, logger: &Logger) -> Box<Future<Item=(), Error=()>> {
+    let peer_cred = stream.peer_cred().unwrap();
+    let logger = logger.new(o!("uid" => peer_cred.uid));
 
-            let framed = ReadBincode::new(WriteBincode::<_, SocketOutput>::new(length_delimited));
-            let mapped_err = framed.map_err(|err: tokio_serde_bincode::Error| match err {
-                tokio_serde_bincode::Error::Io(io_err) => io_err,
-                other_err => io::Error::new(io::ErrorKind::Other, other_err),
-            });
+    info!(logger, "Incoming connection");
 
-            Device::new(peer_cred, mapped_err, &handle, logger.new(o!("uid" => peer_cred.uid))).or_else(|err| {
-                error!(logger, "Error with SoftU2F device"; "err" => %err);
-                future::ok(())
-            })
-        })).unwrap();
-    }
-    Ok(())
+    let length_delimited = length_delimited::FramedWrite::new(stream);
+    let length_delimited = length_delimited::FramedRead::new(length_delimited);
+
+    let framed = ReadBincode::new(WriteBincode::<_, SocketOutput>::new(length_delimited));
+    let mapped_err = framed.map_err(|err: tokio_serde_bincode::Error| match err {
+        tokio_serde_bincode::Error::Io(io_err) => io_err,
+        other_err => io::Error::new(io::ErrorKind::Other, other_err),
+    });
+
+    Box::new(Device::new(peer_cred, mapped_err, handle, logger.new(o!())).or_else(move |err| {
+        error!(logger, "Error"; "err" => %err);
+        future::ok(())
+    }))
 }
 
 fn main() {

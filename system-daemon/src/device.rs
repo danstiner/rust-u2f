@@ -196,7 +196,7 @@ impl Future for Device {
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        info!(self.logger, "poll");
+        debug!(self.logger, "poll");
 
         let mut res: io::Result<AsyncLoop<()>> = Ok(AsyncLoop::Continue);
         while let Ok(AsyncLoop::Continue) = res {
@@ -205,7 +205,7 @@ impl Future for Device {
             let logger = &self.logger;
             take(state, |state| match state {
                 DeviceState::Uninitialized(mut socket_transport) => {
-                    info!(logger, "state unitialized");
+                    debug!(logger, "state unitialized");
                     let input = socket_transport.poll();
 
                     let input = match input {
@@ -232,7 +232,7 @@ impl Future for Device {
                             let (socket_future, uhid_transport) =
                                 initialize(socket_transport, handle, logger, request);
 
-                            info!(logger, "initialized");
+                            debug!(logger, "initialized");
                             DeviceState::Initialized {
                                 socket_future: socket_future,
                                 uhid_transport: uhid_transport,
@@ -248,11 +248,11 @@ impl Future for Device {
                     mut socket_future,
                     uhid_transport,
                 } => {
-                    info!(logger, "state initialized");
+                    debug!(logger, "state initialized");
                     match socket_future.poll() {
                         Ok(Async::Ready(socket)) => {
                             let mut pipe = run(socket, uhid_transport, logger);
-                            info!(logger, "poll running");
+                            debug!(logger, "poll running");
                             res = pipe.poll().map(|async| async.into());
                             DeviceState::Running(pipe)
                         }
@@ -271,12 +271,12 @@ impl Future for Device {
                     }
                 }
                 DeviceState::Running(mut pipe) => {
-                    info!(logger, "running");
+                    debug!(logger, "running");
                     res = pipe.poll().map(|async| async.into());
                     DeviceState::Running(pipe)
                 }
                 DeviceState::Closed => {
-                    info!(logger, "closed");
+                    debug!(logger, "closed");
                     res = Ok(AsyncLoop::Done(()));
                     DeviceState::Closed
                 }
