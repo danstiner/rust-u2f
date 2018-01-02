@@ -39,7 +39,6 @@ name = "softu2f_system_daemon"
 path = "src/lib.rs"
 
 [package.metadata.deb]
-copyright = "MIT"
 depends = "$auto, systemd, u2f-hidraw-policy"
 extended-description = """\
 A systemd daemon that provides a socket interface for unprivileged \

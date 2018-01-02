@@ -28,7 +28,6 @@ path = "../u2f-core"
 path = "../u2fhid-protocol"
 
 [package.metadata.deb]
-copyright = "MIT"
 depends = "softu2f-system-daemon, systemd, dbus-user-session, $auto"
 extended-description = """\
 A systemd daemon that provides a socket interface for unprivileged \
@@ -39,4 +38,3 @@ assets = [
     ["../target/release/softu2f-user-daemon", "usr/libexec/softu2f/user-daemon", "755"]
 ]
 maintainer-scripts = "maintainer-scripts"
-
