@@ -13,17 +13,18 @@ fi
 # This will only remove masks created by deb-systemd-helper on package removal.
 deb-systemd-helper unmask softu2f.socket >/dev/null || true
 
-deb-systemd-helper preset softu2f.socket >/dev/null || true
-
-# restart on upgrade, start on initial install
 if [ -d /run/systemd/system ]; then
 	systemctl --system daemon-reload >/dev/null || true
 	if [ -n "$2" ]; then
-		_dh_action=restart
+		# Stop service on upgrade, rely on clients to start it up via the socket
+		deb-systemd-invoke stop softu2f.socket >/dev/null || true
+		deb-systemd-invoke stop softu2f.service >/dev/null || true
+		deb-systemd-invoke start softu2f.socket >/dev/null || true
 	else
-		_dh_action=start
+		# Start socket listener on initial install
+		deb-systemd-invoke preset softu2f.socket >/dev/null || true
+		deb-systemd-invoke start softu2f.socket >/dev/null || true
 	fi
-	deb-systemd-invoke $_dh_action softu2f.socket >/dev/null || true
 fi
 
 exit 0
