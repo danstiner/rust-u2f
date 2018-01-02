@@ -20,7 +20,7 @@ impl slog::Value for SocketOutput {
         serializer: &mut slog::Serializer,
     ) -> slog::Result {
         match self {
-            &SocketOutput::CreateDeviceResponse(ref response) => slog::Value::serialize(&format!("{:?}", response), record, key, serializer),
+            &SocketOutput::CreateDeviceResponse(ref response) => slog::Value::serialize(&format!("CreateDeviceResponse({:?})", response), record, key, serializer),
             &SocketOutput::Packet {..} => slog::Value::serialize(&"Packet", record, key, serializer)
         }
     }
