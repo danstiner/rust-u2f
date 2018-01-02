@@ -22,7 +22,7 @@ if [ -d /run/systemd/system ]; then
 		deb-systemd-invoke start softu2f.socket >/dev/null || true
 	else
 		# Start socket listener on initial install
-		deb-systemd-invoke preset softu2f.socket >/dev/null || true
+		systemctl --system preset softu2f.socket >/dev/null || true
 		deb-systemd-invoke start softu2f.socket >/dev/null || true
 	fi
 fi
