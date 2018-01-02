@@ -29,7 +29,7 @@ path = "../u2fhid-protocol"
 
 [package.metadata.deb]
 copyright = "MIT"
-depends = "softu2f-system-daemon, systemd, $auto"
+depends = "softu2f-system-daemon, systemd, dbus-user-session, $auto"
 extended-description = """\
 A systemd daemon that provides a socket interface for unprivileged \
 users to create emulated U2F devices."""
