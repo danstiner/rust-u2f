@@ -12,7 +12,7 @@ extern crate slog;
 extern crate slog_stdlog;
 extern crate tokio_core;
 extern crate tokio_io;
-extern crate uhid_linux_bindings;
+extern crate uhid_linux_sys;
 
 mod character_device_file;
 mod character_device;

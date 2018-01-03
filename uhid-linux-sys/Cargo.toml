@@ -1,5 +1,5 @@
 [package]
-name = "uhid-linux-bindings"
+name = "uhid-linux-sys"
 version = "1.0.0"
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 

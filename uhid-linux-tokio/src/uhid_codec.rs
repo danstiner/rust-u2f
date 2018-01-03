@@ -8,7 +8,7 @@ use bytes::BytesMut;
 use slog;
 
 use character_device::{Encoder, Decoder};
-use uhid_linux_bindings as bindings;
+use uhid_linux_sys as sys;
 
 quick_error! {
     #[derive(Debug)]
@@ -133,8 +133,8 @@ impl slog::Value for OutputEvent {
 pub struct UHIDCodec;
 
 impl InputEvent {
-    fn to_uhid_event(self) -> Result<bindings::uhid_event, StreamError> {
-        let mut event: bindings::uhid_event = unsafe { mem::zeroed() };
+    fn to_uhid_event(self) -> Result<sys::uhid_event, StreamError> {
+        let mut event: sys::uhid_event = unsafe { mem::zeroed() };
 
         match self {
             InputEvent::Create {
@@ -148,7 +148,7 @@ impl InputEvent {
                 country,
                 data,
             } => {
-                event.type_ = bindings::uhid_event_type::UHID_CREATE2 as u32;
+                event.type_ = sys::uhid_event_type::UHID_CREATE2 as u32;
                 unsafe {
                     let payload = event.u.create2.as_mut();
                     copy_as_cstr(name, &mut payload.name)?;
@@ -163,17 +163,17 @@ impl InputEvent {
                 }
             }
             InputEvent::Destroy => {
-                event.type_ = bindings::uhid_event_type::UHID_DESTROY as u32;
+                event.type_ = sys::uhid_event_type::UHID_DESTROY as u32;
             }
             InputEvent::Input { data } => {
-                event.type_ = bindings::uhid_event_type::UHID_INPUT2 as u32;
+                event.type_ = sys::uhid_event_type::UHID_INPUT2 as u32;
                 unsafe {
                     let payload = event.u.input2.as_mut();
                     payload.size = copy_bytes_sized(data, &mut payload.data)? as u16;
                 }
             }
             InputEvent::GetReportReply { err, data, .. } => {
-                event.type_ = bindings::uhid_event_type::UHID_GET_REPORT_REPLY as u32;
+                event.type_ = sys::uhid_event_type::UHID_GET_REPORT_REPLY as u32;
                 unsafe {
                     let payload = event.u.get_report_reply.as_mut();
                     payload.err = err;
@@ -181,7 +181,7 @@ impl InputEvent {
                 }
             }
             InputEvent::SetReportReply { err, .. } => {
-                event.type_ = bindings::uhid_event_type::UHID_SET_REPORT_REPLY as u32;
+                event.type_ = sys::uhid_event_type::UHID_SET_REPORT_REPLY as u32;
                 unsafe {
                     let payload = event.u.set_report_reply.as_mut();
                     payload.err = err;
@@ -221,21 +221,21 @@ fn copy_as_cstr(string: String, dst: &mut [u8]) -> Result<(), StreamError> {
     Ok(())
 }
 
-fn decode_event(event: bindings::uhid_event) -> Result<OutputEvent, StreamError> {
+fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
     if let Some(event_type) = to_uhid_event_type(event.type_) {
         match event_type {
-            bindings::uhid_event_type::UHID_START => Ok(unsafe {
+            sys::uhid_event_type::UHID_START => Ok(unsafe {
                 let payload = event.u.start.as_ref();
                 OutputEvent::Start { dev_flags: mem::transmute(payload.dev_flags) }
             }),
-            bindings::uhid_event_type::UHID_STOP => Ok(OutputEvent::Stop),
-            bindings::uhid_event_type::UHID_OPEN => Ok(OutputEvent::Open),
-            bindings::uhid_event_type::UHID_CLOSE => Ok(OutputEvent::Close),
-            bindings::uhid_event_type::UHID_OUTPUT => Ok(unsafe {
+            sys::uhid_event_type::UHID_STOP => Ok(OutputEvent::Stop),
+            sys::uhid_event_type::UHID_OPEN => Ok(OutputEvent::Open),
+            sys::uhid_event_type::UHID_CLOSE => Ok(OutputEvent::Close),
+            sys::uhid_event_type::UHID_OUTPUT => Ok(unsafe {
                 let payload = event.u.output.as_ref();
                 assert_eq!(
                     payload.rtype,
-                    bindings::uhid_report_type::UHID_OUTPUT_REPORT as u8
+                    sys::uhid_report_type::UHID_OUTPUT_REPORT as u8
                 );
                 OutputEvent::Output {
                     data: slice::from_raw_parts(
@@ -244,7 +244,7 @@ fn decode_event(event: bindings::uhid_event) -> Result<OutputEvent, StreamError>
                     ).to_vec(),
                 }
             }),
-            bindings::uhid_event_type::UHID_GET_REPORT => Ok(unsafe {
+            sys::uhid_event_type::UHID_GET_REPORT => Ok(unsafe {
                 let payload = event.u.get_report.as_ref();
                 OutputEvent::GetReport {
                     id: payload.id,
@@ -252,7 +252,7 @@ fn decode_event(event: bindings::uhid_event) -> Result<OutputEvent, StreamError>
                     report_type: mem::transmute(payload.rtype),
                 }
             }),
-            bindings::uhid_event_type::UHID_SET_REPORT => Ok(unsafe {
+            sys::uhid_event_type::UHID_SET_REPORT => Ok(unsafe {
                 let payload = event.u.set_report.as_ref();
                 OutputEvent::SetReport {
                     id: payload.id,
@@ -271,8 +271,8 @@ fn decode_event(event: bindings::uhid_event) -> Result<OutputEvent, StreamError>
     }
 }
 
-fn to_uhid_event_type(value: u32) -> Option<bindings::uhid_event_type> {
-    let last_valid_value = bindings::uhid_event_type::UHID_SET_REPORT_REPLY as u32;
+fn to_uhid_event_type(value: u32) -> Option<sys::uhid_event_type> {
+    let last_valid_value = sys::uhid_event_type::UHID_SET_REPORT_REPLY as u32;
     if value <= last_valid_value {
         Some(unsafe { mem::transmute(value) })
     } else {
@@ -280,20 +280,20 @@ fn to_uhid_event_type(value: u32) -> Option<bindings::uhid_event_type> {
     }
 }
 
-fn read_event(src: &mut BytesMut) -> Option<bindings::uhid_event> {
-    let uhid_event_size = mem::size_of::<bindings::uhid_event>();
+fn read_event(src: &mut BytesMut) -> Option<sys::uhid_event> {
+    let uhid_event_size = mem::size_of::<sys::uhid_event>();
     if src.len() >= uhid_event_size {
         let bytes = src.split_to(uhid_event_size);
         let ptr = bytes.as_ptr();
         Some(unsafe {
-            *mem::transmute::<*const u8, &bindings::uhid_event>(ptr)
+            *mem::transmute::<*const u8, &sys::uhid_event>(ptr)
         })
     } else {
         None
     }
 }
 
-fn encode_event(event: &bindings::uhid_event) -> &[u8] {
+fn encode_event(event: &sys::uhid_event) -> &[u8] {
     unsafe { as_u8_slice(event) }
 }
 
@@ -314,7 +314,7 @@ impl Decoder for UHIDCodec {
     }
 
     fn read_len(&self) -> usize {
-        mem::size_of::<bindings::uhid_event>()
+        mem::size_of::<sys::uhid_event>()
     }
 }
 
@@ -435,7 +435,7 @@ mod tests {
 
     #[test]
     fn encode_create_request() {
-        let mut expected = vec![0; mem::size_of::<bindings::uhid_event>()];
+        let mut expected = vec![0; mem::size_of::<sys::uhid_event>()];
         expected[0] = 0x0b;
         expected[4] = 0x74;
         expected[5] = 0x65;
@@ -565,7 +565,7 @@ mod tests {
 
     #[test]
     fn encode_destroy_request() {
-        let mut expected = vec![0; mem::size_of::<bindings::uhid_event>()];
+        let mut expected = vec![0; mem::size_of::<sys::uhid_event>()];
         expected[0] = 0x01;
         let mut result = BytesMut::new();
 
