@@ -5,7 +5,7 @@ In-progress software-only U2F implementation on Linux using Rust
 
 ## Usage
 
-After installing, open Google Chrome or Firefox and use your new virtual U2F device on a site supported it such as: https://demo.yubico.com/u2f
+After installing, open Google Chrome or Firefox and use your new virtual U2F device on a site supporting it such as: https://demo.yubico.com/u2f
 
 More information on U2F: https://www.yubico.com/solutions/fido-u2f/
 
