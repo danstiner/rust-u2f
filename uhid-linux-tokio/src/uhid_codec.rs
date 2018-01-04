@@ -161,9 +161,9 @@ impl InputEvent {
                 country,
                 data,
             } => {
-                event.type_ = sys::uhid_event_type::UHID_CREATE2 as u32;
+                event.type_ = sys::uhid_event_type_UHID_CREATE2 as u32;
                 unsafe {
-                    let payload = event.u.create2.as_mut();
+                    let payload = &mut event.u.create2;
                     copy_as_cstr(name, &mut payload.name)?;
                     copy_as_cstr(phys, &mut payload.phys)?;
                     copy_as_cstr(uniq, &mut payload.uniq)?;
@@ -176,27 +176,27 @@ impl InputEvent {
                 }
             }
             InputEvent::Destroy => {
-                event.type_ = sys::uhid_event_type::UHID_DESTROY as u32;
+                event.type_ = sys::uhid_event_type_UHID_DESTROY as u32;
             }
             InputEvent::Input { data } => {
-                event.type_ = sys::uhid_event_type::UHID_INPUT2 as u32;
+                event.type_ = sys::uhid_event_type_UHID_INPUT2 as u32;
                 unsafe {
-                    let payload = event.u.input2.as_mut();
+                    let payload = &mut event.u.input2;
                     payload.size = copy_bytes_sized(data, &mut payload.data)? as u16;
                 }
             }
             InputEvent::GetReportReply { err, data, .. } => {
-                event.type_ = sys::uhid_event_type::UHID_GET_REPORT_REPLY as u32;
+                event.type_ = sys::uhid_event_type_UHID_GET_REPORT_REPLY as u32;
                 unsafe {
-                    let payload = event.u.get_report_reply.as_mut();
+                    let payload = &mut event.u.get_report_reply;
                     payload.err = err;
                     payload.size = copy_bytes_sized(data, &mut payload.data)? as u16;
                 }
             }
             InputEvent::SetReportReply { err, .. } => {
-                event.type_ = sys::uhid_event_type::UHID_SET_REPORT_REPLY as u32;
+                event.type_ = sys::uhid_event_type_UHID_SET_REPORT_REPLY as u32;
                 unsafe {
-                    let payload = event.u.set_report_reply.as_mut();
+                    let payload = &mut event.u.set_report_reply;
                     payload.err = err;
                 }
             }
@@ -237,20 +237,20 @@ fn copy_as_cstr(string: String, dst: &mut [u8]) -> Result<(), StreamError> {
 fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
     if let Some(event_type) = to_uhid_event_type(event.type_) {
         match event_type {
-            sys::uhid_event_type::UHID_START => Ok(unsafe {
-                let payload = event.u.start.as_ref();
+            sys::uhid_event_type_UHID_START => Ok(unsafe {
+                let payload = &event.u.start;
                 OutputEvent::Start {
                     dev_flags: mem::transmute(payload.dev_flags),
                 }
             }),
-            sys::uhid_event_type::UHID_STOP => Ok(OutputEvent::Stop),
-            sys::uhid_event_type::UHID_OPEN => Ok(OutputEvent::Open),
-            sys::uhid_event_type::UHID_CLOSE => Ok(OutputEvent::Close),
-            sys::uhid_event_type::UHID_OUTPUT => Ok(unsafe {
-                let payload = event.u.output.as_ref();
+            sys::uhid_event_type_UHID_STOP => Ok(OutputEvent::Stop),
+            sys::uhid_event_type_UHID_OPEN => Ok(OutputEvent::Open),
+            sys::uhid_event_type_UHID_CLOSE => Ok(OutputEvent::Close),
+            sys::uhid_event_type_UHID_OUTPUT => Ok(unsafe {
+                let payload = &event.u.output;
                 assert_eq!(
                     payload.rtype,
-                    sys::uhid_report_type::UHID_OUTPUT_REPORT as u8
+                    sys::uhid_report_type_UHID_OUTPUT_REPORT as u8
                 );
                 OutputEvent::Output {
                     data: slice::from_raw_parts(
@@ -259,16 +259,16 @@ fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
                     ).to_vec(),
                 }
             }),
-            sys::uhid_event_type::UHID_GET_REPORT => Ok(unsafe {
-                let payload = event.u.get_report.as_ref();
+            sys::uhid_event_type_UHID_GET_REPORT => Ok(unsafe {
+                let payload = &event.u.get_report;
                 OutputEvent::GetReport {
                     id: payload.id,
                     report_number: payload.rnum,
                     report_type: mem::transmute(payload.rtype),
                 }
             }),
-            sys::uhid_event_type::UHID_SET_REPORT => Ok(unsafe {
-                let payload = event.u.set_report.as_ref();
+            sys::uhid_event_type_UHID_SET_REPORT => Ok(unsafe {
+                let payload = &event.u.set_report;
                 OutputEvent::SetReport {
                     id: payload.id,
                     report_number: payload.rnum,
@@ -287,7 +287,7 @@ fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
 }
 
 fn to_uhid_event_type(value: u32) -> Option<sys::uhid_event_type> {
-    let last_valid_value = sys::uhid_event_type::UHID_SET_REPORT_REPLY as u32;
+    let last_valid_value = sys::uhid_event_type_UHID_SET_REPORT_REPLY as u32;
     if value <= last_valid_value {
         Some(unsafe { mem::transmute(value) })
     } else {
