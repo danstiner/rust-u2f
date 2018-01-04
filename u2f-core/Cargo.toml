@@ -14,7 +14,7 @@ rand = "0.3.17"
 rust-crypto = "0.2.36"
 serde = "1.0.17"
 serde_derive = "1.0.17"
-slog = "2.0.12"
+slog = { version = "2.0.12", features = ["max_level_trace"] }
 slog-stdlog = "3.0.2"
 subtle = "0.3.0"
 tokio-service = "0.1.0"

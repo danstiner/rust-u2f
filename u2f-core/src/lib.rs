@@ -146,25 +146,23 @@ impl Request {
         let parameter1 = reader.read_u8().unwrap();
         let parameter2 = reader.read_u8().unwrap();
 
-        // Lc: The length of the request-data.
-        // If there are no request data bytes, Lc is omitted.
+        // Extended Length Encoding
+        // Always begins with a byte of value 0
+        let zero_byte = reader.read_u8().unwrap();
+        assert_eq!(zero_byte, 0);
+
+        // Nc: Length of the request-data, range 0..65 535
+        // Lc: Encoding of Nc as two bytes
+        // If Nc is 0, Lc is omitted (Caveat: Not all implementations respect this)
         let remaining_len = data.len() - reader.position() as usize;
         let request_data_len = match remaining_len {
-            3 => {
-                // Lc is omitted because there are no request data bytes
+            2 => {
+                // Lc was omitted, there is no request data
                 0
             }
             _ => {
-                let zero_byte = reader.read_u8().unwrap();
-                assert_eq!(zero_byte, 0);
+                // Lc in big-endian order
                 let mut value = reader.read_u16::<BigEndian>().unwrap() as usize;
-                if value == 0 {
-                    // Maximum length of request-data is 65 535 bytes.
-                    // The MSB is lost when encoding to two bytes, but
-                    // since Lc is omitted when there are no request data
-                    // bytes, we can unambigously assume 0 to mean 65 535
-                    value = 65535;
-                }
                 value
             }
         };
@@ -173,38 +171,22 @@ impl Request {
         let mut request_data = vec![0u8; request_data_len];
         reader.read_exact(&mut request_data[..]).unwrap();
 
-        // Le: The maximum expected length of the response data.
+        // Ne: Maximum length of the response data, range 0..65 536
+        // Le: Encoding of Ne as two bytes
         // If no response data are expected, Le may be omitted.
         let remaining_len = data.len() - reader.position() as usize;
         let max_response_data_len = match remaining_len {
             0 => {
-                // Instruction is not expected to yield any response bytes, Le omitted
+                // Lc was omitted, instruction is not expected to yield any response bytes
                 0
             }
             2 => {
-                // When Lc is present, i.e. Nc > 0, Le is encoded as: Le1 Le2
-                // When N e = 65 536, let Le1 = 0 and Le2 = 0.
+                // Encoded as: Le1 Le2
                 let mut value = reader.read_u16::<BigEndian>().unwrap() as usize;
+                // When Ne = 65 536, let Le1 = 0 and Le2 = 0.
                 if value == 0 {
-                    // Maximum length of request-data is 65 535 bytes.
                     // The MSB is lost when encoding to two bytes, but
-                    // since Lc is omitted when there are no request data
-                    // bytes, we can unambigously assume 0 to mean 65 535
-                    value = 65535;
-                }
-                value
-            }
-            3 => {
-                // When L c is absent, i.e. if Nc = 0,
-                // Le is encoded as: 0 Le1 Le2
-                // In other words, Le has a single-byte prefix of 0 when Lc is absent.
-                let zero_byte = reader.read_u8().unwrap();
-                assert_eq!(zero_byte, 0);
-                let mut value = reader.read_u16::<BigEndian>().unwrap() as usize;
-                if value == 0 {
-                    // Maximum length of request-data is 65 535 bytes.
-                    // The MSB is lost when encoding to two bytes, but
-                    // since Lc is omitted when there are no request data
+                    // since Le can be omitted when there are no request data
                     // bytes, we can unambigously assume 0 to mean 65 535
                     value = 65535;
                 }
@@ -327,7 +309,7 @@ impl Response {
                 let signature_bytes = signature.as_ref().as_ref();
                 bytes.extend_from_slice(signature_bytes);
 
-                // Status word: The command completed successfully without error.
+                // Status word [2 bytes]
                 StatusCode::NoError.write(&mut bytes);
             }
             Response::Authentication {
@@ -346,7 +328,7 @@ impl Response {
                 // A signature [variable length, 71-73 bytes]
                 bytes.extend_from_slice(signature.as_ref().as_ref());
 
-                // Status word: The command completed successfully without error.
+                // Status word [2 bytes]
                 StatusCode::NoError.write(&mut bytes);
             }
             Response::Version { version_string } => {
@@ -355,23 +337,23 @@ impl Response {
                 // (without quotes, and without any NUL terminator).
                 bytes.extend_from_slice(version_string.as_bytes());
 
-                // Status word: The command completed successfully without error.
+                // Status word [2 bytes]
                 StatusCode::NoError.write(&mut bytes);
             }
             Response::DidWink => {
-                // Status word: The command completed successfully without error.
+                // Status word [2 bytes]
                 StatusCode::NoError.write(&mut bytes);
             }
             Response::TestOfUserPresenceNotSatisfied => {
-                // Status word: The command completed successfully without error.
+                // Status word [2 bytes]
                 StatusCode::TestOfUserPresenceNotSatisfied.write(&mut bytes);
             }
             Response::InvalidKeyHandle => {
-                // Status word: The command completed successfully without error.
+                // Status word [2 bytes]
                 StatusCode::InvalidKeyHandle.write(&mut bytes);
             }
             Response::UnknownError => {
-                // Status word: The command completed successfully without error.
+                // Status word [2 bytes]
                 StatusCode::UnknownError.write(&mut bytes);
             }
         }
@@ -1048,7 +1030,7 @@ impl Service for U2F {
                         })
                         .or_else(move |err| match err {
                             RegisterError::ApprovalRequired => {
-                                debug!(logger_clone, "Request::Register => ApprovalRequired");
+                                debug!(logger_clone, "Request::Register => TestOfUserPresenceNotSatisfied");
                                 Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
                             RegisterError::Io(err) => {
@@ -1068,21 +1050,25 @@ impl Service for U2F {
                 application,
                 key_handle,
             } => {
-                debug!(self.0.logger, "Request::Authenticate"; "app_id" => application);
+                let logger = self.0.logger.new(o!("request" => "authenticate", "app_id" => application));
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
+                        trace!(logger, "ControlCode::CheckOnly");
                         Box::new(self.is_valid_key_handle(&key_handle, &application).map(
-                            |is_valid| match is_valid {
-                                true => Response::TestOfUserPresenceNotSatisfied,
-                                false => Response::InvalidKeyHandle,
+                            move |is_valid| {
+                                info!(logger, "ControlCode::CheckOnly"; "is_valid_key_handle" => is_valid);
+                                match is_valid {
+                                    true => Response::TestOfUserPresenceNotSatisfied,
+                                    false => Response::InvalidKeyHandle,
+                                }
                             },
                         ))
                     }
                     AuthenticateControlCode::EnforceUserPresenceAndSign => {
-                        let logger_map = self.0.logger.clone();
-                        let logger_map_err = self.0.logger.clone();
+                        trace!(logger, "ControlCode::EnforceUserPresenceAndSign");
+                        let logger_clone = logger.clone();
                         Box::new(self.authenticate(application, challenge, key_handle).map(move |authentication| {
-                            info!(logger_map, "authenticated"; "counter" => &authentication.counter, "user_present" => &authentication.user_present);
+                            info!(logger, "authenticated"; "counter" => &authentication.counter, "user_present" => &authentication.user_present);
                             Response::Authentication {
                                 counter: authentication.counter,
                                 signature: authentication.signature,
@@ -1090,24 +1076,26 @@ impl Service for U2F {
                             }
                         }).or_else(move |err| match err {
                             AuthenticateError::ApprovalRequired => {
-                                info!(logger_map_err, "TestOfUserPresenceNotSatisfied");
+                                info!(logger_clone, "TestOfUserPresenceNotSatisfied");
                                 Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
                             AuthenticateError::InvalidKeyHandle => {
-                                info!(logger_map_err, "InvalidKeyHandle");
+                                info!(logger_clone, "InvalidKeyHandle");
                                 Ok(Response::InvalidKeyHandle)
                             }
                             AuthenticateError::Io(err) => {
-                                info!(logger_map_err, "I/O error"; "error" => format!("{:?}", err));
+                                info!(logger_clone, "I/O error"; "error" => ?err);
                                 Ok(Response::UnknownError)
                             }
                             AuthenticateError::Signing(err) => {
-                                info!(logger_map_err, "Signing error"; "error" => format!("{:?}", err));
+                                info!(logger_clone, "Signing error"; "error" => ?err);
                                 Ok(Response::UnknownError)
                             }
                         }))
                     }
                     AuthenticateControlCode::DontEnforceUserPresenceAndSign => {
+                        trace!(logger, "Request::Authenticate::DontEnforceUserPresenceAndSign");
+                        info!(logger, "Request::Authenticate::DontEnforceUserPresenceAndSign => TestOfUserPresenceNotSatisfied (Not implemented)");
                         // TODO Implement
                         Box::new(futures::finished(Response::TestOfUserPresenceNotSatisfied))
                     }

@@ -8,6 +8,7 @@ extern crate serde_derive;
 extern crate slog;
 
 extern crate byteorder;
+extern crate itertools;
 extern crate slog_stdlog;
 extern crate tokio_core;
 extern crate u2f_core;

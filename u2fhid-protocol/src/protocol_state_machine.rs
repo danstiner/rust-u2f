@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use futures::{Async, Future};
 use futures::future;
+use itertools::Itertools;
 use slog::Logger;
 use tokio_core::reactor::Handle;
 use tokio_core::reactor::Timeout;
@@ -359,10 +360,11 @@ where
         let transition = match self.state.take() {
             State::Receive(receive) => {
                 if receive.buffer.len() >= receive.payload_len {
-                    debug!(self.logger, "Received entire payload"; "payload_len" => receive.payload_len);
+                    let bytes = &receive.buffer[0..receive.payload_len];
+                    debug!(self.logger, "Received payload"; "len" => receive.payload_len, "bytes" => format!("0x{:02x}", bytes.iter().format("")));
                     let message = RequestMessage::decode(
                         &receive.command,
-                        &receive.buffer[0..receive.payload_len],
+                        bytes,
                     ).unwrap();
                     let response_future = self.handle_request(Request {
                         channel_id: receive.channel_id,

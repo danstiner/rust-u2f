@@ -35,6 +35,7 @@ impl NotificationUserPresence {
         info!(self.logger, "test_user_presence"; "message" => message);
 
         let body = message.to_owned();
+        let logger_clone = self.logger.clone();
 
         Box::new(self.executor.spawn_fn(move || {
             let mut res = false;
@@ -53,18 +54,19 @@ impl NotificationUserPresence {
                 .show()
                 .unwrap();
 
-            handle.wait_for_action({
-                |action| match action {
+            let logger_clone_close = logger_clone.clone();
+            handle.wait_for_action(|action| match action {
                     "approve" => res = true,
                     "deny" => res = false,
                     "default" => res = false,
                     NOTIFICATION_CLOSE_ACTION => {
-                        println!("the notification was closed");
+                        info!(logger_clone_close, "The notification was closed");
                         res = false;
                     }
                     _ => unreachable!("Unknown action taken on notification"),
-                }
-            });
+                });
+
+            info!(logger_clone, "test_user_presence"; "result" => res);
 
             future::ok(res)
         }))
