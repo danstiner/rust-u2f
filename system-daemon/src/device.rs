@@ -11,48 +11,54 @@ use take_mut::take;
 
 use bidirectional_pipe::BidirectionalPipe;
 use softu2f_system_daemon::*;
-use uhid_linux_tokio::{Bus, CreateParams, UHIDDevice, InputEvent, OutputEvent, StreamError};
+use uhid_linux_tokio::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UHIDDevice};
 
 const INPUT_REPORT_LEN: u8 = 64;
 const OUTPUT_REPORT_LEN: u8 = 64;
 
 // HID Report Descriptor from http://www.usb.org/developers/hidpage/HUTRR48.pdf
 const REPORT_DESCRIPTOR: [u8; 34] = [
-        0x06, 0xd0, 0xf1,             // USAGE_PAGE (FIDO Alliance)
-        0x09, 0x01,                   // USAGE (Keyboard)
-        0xa1, 0x01,                   // COLLECTION (Application)
-        0x09, 0x20,                   //   USAGE (Input Report Data)
-        0x15, 0x00,                   //   LOGICAL_MINIMUM (0)
-        0x26, 0xff, 0x00,             //   LOGICAL_MAXIMUM (255)
-        0x75, 0x08,                   //   REPORT_SIZE (8)
-        0x95, INPUT_REPORT_LEN,       //   REPORT_COUNT (64)
-        0x81, 0x02,                   //   INPUT (Data,Var,Abs)
-        0x09, 0x21,                   //   USAGE(Output Report Data)
-        0x15, 0x00,                   //   LOGICAL_MINIMUM (0)
-        0x26, 0xff, 0x00,             //   LOGICAL_MAXIMUM (255)
-        0x75, 0x08,                   //   REPORT_SIZE (8)
-        0x95, OUTPUT_REPORT_LEN,      //   REPORT_COUNT (64)
-        0x91, 0x02,                   //   OUTPUT (Data,Var,Abs)
-        0xc0,                         // END_COLLECTION
+    0x06,
+    0xd0,
+    0xf1, // USAGE_PAGE (FIDO Alliance)
+    0x09,
+    0x01, // USAGE (Keyboard)
+    0xa1,
+    0x01, // COLLECTION (Application)
+    0x09,
+    0x20, //   USAGE (Input Report Data)
+    0x15,
+    0x00, //   LOGICAL_MINIMUM (0)
+    0x26,
+    0xff,
+    0x00, //   LOGICAL_MAXIMUM (255)
+    0x75,
+    0x08, //   REPORT_SIZE (8)
+    0x95,
+    INPUT_REPORT_LEN, //   REPORT_COUNT (64)
+    0x81,
+    0x02, //   INPUT (Data,Var,Abs)
+    0x09,
+    0x21, //   USAGE(Output Report Data)
+    0x15,
+    0x00, //   LOGICAL_MINIMUM (0)
+    0x26,
+    0xff,
+    0x00, //   LOGICAL_MAXIMUM (255)
+    0x75,
+    0x08, //   REPORT_SIZE (8)
+    0x95,
+    OUTPUT_REPORT_LEN, //   REPORT_COUNT (64)
+    0x91,
+    0x02, //   OUTPUT (Data,Var,Abs)
+    0xc0, // END_COLLECTION
 ];
 
-
-type PacketPipe = Box<
-    Pipe<
-        Item = Packet,
-        Error = io::Error,
-        SinkItem = Packet,
-        SinkError = io::Error,
-    >,
->;
+type PacketPipe =
+    Box<Pipe<Item = Packet, Error = io::Error, SinkItem = Packet, SinkError = io::Error>>;
 
 type SocketPipe = Box<
-    Pipe<
-        Item = SocketInput,
-        Error = io::Error,
-        SinkItem = SocketOutput,
-        SinkError = io::Error,
-    >,
+    Pipe<Item = SocketInput, Error = io::Error, SinkItem = SocketOutput, SinkError = io::Error>,
 >;
 
 trait Pipe: Stream + Sink {}
@@ -101,7 +107,10 @@ fn initialize(
     handle: &Handle,
     logger: &Logger,
     _request: CreateDeviceRequest,
-) -> (Box<Future<Item = SocketPipe, Error = io::Error>>, PacketPipe) {
+) -> (
+    Box<Future<Item = SocketPipe, Error = io::Error>>,
+    PacketPipe,
+) {
     info!(logger, "initialize");
     let create_params = CreateParams {
         name: String::from("SoftU2F-Linux"),
@@ -138,9 +147,7 @@ fn run(
                 SocketInput::CreateDeviceRequest(_create_request) => None,
                 SocketInput::Packet(packet) => Some(packet),
             })
-            .with(|packet: Packet| {
-                Box::new(future::ok(SocketOutput::Packet(packet)))
-            }),
+            .with(|packet: Packet| Box::new(future::ok(SocketOutput::Packet(packet)))),
     );
 
     BidirectionalPipe::new(mapped_socket_transport, uhid_transport)
@@ -168,7 +175,9 @@ fn into_transport<T: AsyncRead + Write + 'static>(device: UHIDDevice<T>) -> Pack
                 _ => None,
             })
             .with(|packet: Packet| {
-                Box::new(future::ok(InputEvent::Input { data: packet.into_bytes() }))
+                Box::new(future::ok(InputEvent::Input {
+                    data: packet.into_bytes(),
+                }))
             })
             .map_err(stream_error_to_io_error)
             .sink_map_err(stream_error_to_io_error),
@@ -281,7 +290,7 @@ impl Future for Device {
                     DeviceState::Closed
                 }
             });
-        };
+        }
         match res {
             Ok(AsyncLoop::Done(x)) => Ok(Async::Ready(x)),
             Ok(AsyncLoop::NotReady) => Ok(Async::NotReady),

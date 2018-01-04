@@ -59,7 +59,9 @@ struct Channels {
 
 impl Channels {
     fn new() -> Channels {
-        Channels { next_allocation: MIN_CHANNEL_ID }
+        Channels {
+            next_allocation: MIN_CHANNEL_ID,
+        }
     }
 
     fn allocate(&mut self) -> Result<ChannelId, ()> {
@@ -74,8 +76,8 @@ impl Channels {
 
     fn is_valid(&self, channel_id: ChannelId) -> bool {
         let is_broadcast = channel_id == BROADCAST_CHANNEL_ID;
-        let is_in_allocated_range = channel_id >= MIN_CHANNEL_ID &&
-            channel_id < self.next_allocation;
+        let is_in_allocated_range =
+            channel_id >= MIN_CHANNEL_ID && channel_id < self.next_allocation;
         is_broadcast || is_in_allocated_range
     }
 }
@@ -109,12 +111,12 @@ impl LockState {
     fn tick(&mut self) -> Result<(), io::Error> {
         // Check lock timeout
         let timed_out = match self {
-            &mut LockState::Locked { ref mut timeout, .. } => {
-                match timeout.poll()? {
-                    Async::Ready(()) => true,
-                    Async::NotReady => false,
-                }
-            }
+            &mut LockState::Locked {
+                ref mut timeout, ..
+            } => match timeout.poll()? {
+                Async::Ready(()) => true,
+                Async::NotReady => false,
+            },
             _ => false,
         };
 
@@ -227,9 +229,10 @@ where
         let channel_id = packet.channel_id();
         if !self.channels.is_valid(channel_id) {
             debug!(self.logger, "Invalid channel"; "id" => channel_id);
-            Ok(Some(
-                Self::error_output(ErrorCode::InvalidChannel, channel_id),
-            ))
+            Ok(Some(Self::error_output(
+                ErrorCode::InvalidChannel,
+                channel_id,
+            )))
         } else {
             Ok(None)
         }
@@ -254,13 +257,15 @@ where
 
     fn step_with_packet(&mut self, packet: Packet) -> Result<Option<Response>, io::Error> {
         let transition = match (self.state.take(), packet) {
-            (State::Idle,
-             Packet::Initialization {
-                 channel_id,
-                 data,
-                 payload_len,
-                 command,
-             }) => {
+            (
+                State::Idle,
+                Packet::Initialization {
+                    channel_id,
+                    data,
+                    payload_len,
+                    command,
+                },
+            ) => {
                 debug!(self.logger, "Begin transaction"; "channel_id" => &channel_id, "command" => &command, "payload_len" => payload_len);
                 StateTransition {
                     new_state: State::Receive(ReceiveState {
@@ -303,23 +308,29 @@ where
                         new_state: State::Receive(receive),
                         output: Some(Response {
                             channel_id: channel_id,
-                            message: ResponseMessage::Error { code: ErrorCode::ChannelBusy },
+                            message: ResponseMessage::Error {
+                                code: ErrorCode::ChannelBusy,
+                            },
                         }),
                     }
                 }
             }
-            (State::Receive(mut receive),
-             Packet::Continuation {
-                 channel_id,
-                 sequence_number,
-                 data,
-             }) => {
+            (
+                State::Receive(mut receive),
+                Packet::Continuation {
+                    channel_id,
+                    sequence_number,
+                    data,
+                },
+            ) => {
                 if channel_id != receive.channel_id {
                     StateTransition {
                         new_state: State::Receive(receive),
                         output: Some(Response {
                             channel_id: channel_id,
-                            message: ResponseMessage::Error { code: ErrorCode::ChannelBusy },
+                            message: ResponseMessage::Error {
+                                code: ErrorCode::ChannelBusy,
+                            },
                         }),
                     }
                 } else if sequence_number != receive.next_sequence_number {
@@ -362,10 +373,7 @@ where
                 if receive.buffer.len() >= receive.payload_len {
                     let bytes = &receive.buffer[0..receive.payload_len];
                     debug!(self.logger, "Received payload"; "len" => receive.payload_len, "bytes" => format!("0x{:02x}", bytes.iter().format("")));
-                    let message = RequestMessage::decode(
-                        &receive.command,
-                        bytes,
-                    ).unwrap();
+                    let message = RequestMessage::decode(&receive.command, bytes).unwrap();
                     let response_future = self.handle_request(Request {
                         channel_id: receive.channel_id,
                         message: message,
@@ -399,25 +407,19 @@ where
 
     fn try_complete_dispatch(&mut self) -> Result<Option<Response>, io::Error> {
         let transition = match self.state.take() {
-            State::Dispatch(mut dispatch) => {
-                match dispatch.future.poll()? {
-                    Async::Ready(response) => {
-                        StateTransition {
-                            new_state: State::Idle,
-                            output: Some(Response {
-                                channel_id: dispatch.channel_id,
-                                message: response.into(),
-                            }),
-                        }
-                    }
-                    Async::NotReady => {
-                        StateTransition {
-                            new_state: State::Dispatch(dispatch),
-                            output: None,
-                        }
-                    }
-                }
-            }
+            State::Dispatch(mut dispatch) => match dispatch.future.poll()? {
+                Async::Ready(response) => StateTransition {
+                    new_state: State::Idle,
+                    output: Some(Response {
+                        channel_id: dispatch.channel_id,
+                        message: response.into(),
+                    }),
+                },
+                Async::NotReady => StateTransition {
+                    new_state: State::Dispatch(dispatch),
+                    output: None,
+                },
+            },
             state => StateTransition {
                 new_state: state,
                 output: None,
@@ -450,9 +452,9 @@ where
             RequestMessage::Init { nonce } => {
                 // TODO Check what channnel message came in on
                 // TODO check unwrap
-                let new_channel_id = self.channels.allocate().expect(
-                    "Failed to allocate new channel",
-                );
+                let new_channel_id = self.channels
+                    .allocate()
+                    .expect("Failed to allocate new channel");
                 debug!(self.logger, "RequestMessage::Init"; "new_channel_id" => new_channel_id);
                 Ok(Box::new(future::ok(ResponseMessage::Init {
                     nonce,
@@ -561,13 +563,14 @@ mod tests {
 
         match res {
             Some(Response {
-                     channel_id: response_channel_id,
-                     message: ResponseMessage::Init {
-                         new_channel_id,
-                         nonce,
-                         ..
-                     },
-                 }) => {
+                channel_id: response_channel_id,
+                message:
+                    ResponseMessage::Init {
+                        new_channel_id,
+                        nonce,
+                        ..
+                    },
+            }) => {
                 assert_eq!(response_channel_id, BROADCAST_CHANNEL_ID);
                 assert_eq!(request_nonce, nonce);
                 assert!(state_machine.channels.is_valid(new_channel_id));
@@ -600,9 +603,12 @@ mod tests {
 
         match res {
             Some(Response {
-                     channel_id: response_channel_id,
-                     message: ResponseMessage::Pong { data: response_data },
-                 }) => {
+                channel_id: response_channel_id,
+                message:
+                    ResponseMessage::Pong {
+                        data: response_data,
+                    },
+            }) => {
                 assert_eq!(response_channel_id, channel_id);
                 assert_eq!(response_data[..], ping_data);
             }

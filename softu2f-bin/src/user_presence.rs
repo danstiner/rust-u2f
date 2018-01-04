@@ -9,9 +9,9 @@ use futures::future;
 use serde_json;
 use tokio_core::reactor::Handle;
 
-use super::{DBUS_SESSION_BUS_ADDRESS_VAR, PreSudoEnvironment};
-use u2f_core::{ApplicationParameter, UserPresence, try_reverse_application_id};
-use softu2f_test_user_presence::{CHANNEL_ENV_VAR, UserPresenceTestParameters};
+use super::{PreSudoEnvironment, DBUS_SESSION_BUS_ADDRESS_VAR};
+use u2f_core::{try_reverse_application_id, ApplicationParameter, UserPresence};
+use softu2f_test_user_presence::{UserPresenceTestParameters, CHANNEL_ENV_VAR};
 
 pub struct NotificationUserPresence {
     handle: Handle,
@@ -65,10 +65,11 @@ impl NotificationUserPresence {
                         .into_future()
                         .map(|(response_option, _)| response_option.unwrap_or(false))
                         .map_err(|(err, _)| err)
-                }).then(move |res| {
+                })
+                .then(move |res| {
                     child.kill().ok(); // TODO Only allow certain failures
                     res
-                })
+                }),
         )
     }
 }

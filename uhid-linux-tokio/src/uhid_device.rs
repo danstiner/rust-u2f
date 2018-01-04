@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::os::unix::io::FromRawFd;
 use std::path::Path;
 
-use futures::{Async, AsyncSink, Stream, Sink, Poll, StartSend};
+use futures::{Async, AsyncSink, Poll, Sink, StartSend, Stream};
 use nix;
 use nix::fcntl;
 use slog_stdlog;
@@ -14,7 +14,7 @@ use tokio_io::AsyncRead;
 
 use poll_evented_read_wrapper::PollEventedRead;
 use character_device_file::CharacterDeviceFile;
-use character_device::{Encoder, Decoder, CharacterDevice, SyncSink};
+use character_device::{CharacterDevice, Decoder, Encoder, SyncSink};
 use uhid_codec::*;
 
 pub struct UHIDDevice<T> {
@@ -54,8 +54,8 @@ impl UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>> {
         let fd = fcntl::open(
             path,
             fcntl::O_RDWR | fcntl::O_CLOEXEC | fcntl::O_NONBLOCK,
-            nix::sys::stat::S_IRUSR | nix::sys::stat::S_IWUSR | nix::sys::stat::S_IRGRP |
-                nix::sys::stat::S_IWGRP,
+            nix::sys::stat::S_IRUSR | nix::sys::stat::S_IWUSR | nix::sys::stat::S_IRGRP
+                | nix::sys::stat::S_IWGRP,
         ).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
@@ -81,10 +81,9 @@ where
         params: CreateParams,
         logger: L,
     ) -> UHIDDevice<T> {
-        let logger = logger.into().unwrap_or(slog::Logger::root(
-            slog_stdlog::StdLog.fuse(),
-            o!(),
-        ));
+        let logger = logger
+            .into()
+            .unwrap_or(slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
         let mut device = UHIDDevice {
             inner: CharacterDevice::new(inner, UHIDCodec, UHIDCodec, logger.new(o!())),
             logger: logger,
@@ -110,7 +109,9 @@ where
 
     pub fn send_input(&mut self, data: &[u8]) -> Result<(), <UHIDCodec as Encoder>::Error> {
         trace!(self.logger, "Send input event");
-        self.inner.send(InputEvent::Input { data: data.to_vec() })
+        self.inner.send(InputEvent::Input {
+            data: data.to_vec(),
+        })
     }
 
     pub fn destory(mut self) -> Result<(), <UHIDCodec as Encoder>::Error> {

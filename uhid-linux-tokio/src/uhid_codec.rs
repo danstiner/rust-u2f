@@ -7,7 +7,7 @@ use std::slice;
 use bytes::BytesMut;
 use slog;
 
-use character_device::{Encoder, Decoder};
+use character_device::{Decoder, Encoder};
 use uhid_linux_sys as sys;
 
 quick_error! {
@@ -86,17 +86,30 @@ pub enum InputEvent {
         data: Vec<u8>,
     },
     Destroy,
-    Input { data: Vec<u8> },
-    GetReportReply { id: u32, err: u16, data: Vec<u8> },
-    SetReportReply { id: u32, err: u16 },
+    Input {
+        data: Vec<u8>,
+    },
+    GetReportReply {
+        id: u32,
+        err: u16,
+        data: Vec<u8>,
+    },
+    SetReportReply {
+        id: u32,
+        err: u16,
+    },
 }
 
 pub enum OutputEvent {
-    Start { dev_flags: DevFlags },
+    Start {
+        dev_flags: DevFlags,
+    },
     Stop,
     Open,
     Close,
-    Output { data: Vec<u8> },
+    Output {
+        data: Vec<u8>,
+    },
     GetReport {
         id: u32,
         report_number: u8,
@@ -201,9 +214,9 @@ fn copy_bytes_sized(src: Vec<u8>, dst: &mut [u8]) -> Result<usize, StreamError> 
         return Err(StreamError::BufferOverflow(src_size, dst_size));
     }
 
-    dst.get_mut(0..src_size).unwrap().copy_from_slice(
-        src.as_slice(),
-    );
+    dst.get_mut(0..src_size)
+        .unwrap()
+        .copy_from_slice(src.as_slice());
     Ok(src_size)
 }
 
@@ -226,7 +239,9 @@ fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
         match event_type {
             sys::uhid_event_type::UHID_START => Ok(unsafe {
                 let payload = event.u.start.as_ref();
-                OutputEvent::Start { dev_flags: mem::transmute(payload.dev_flags) }
+                OutputEvent::Start {
+                    dev_flags: mem::transmute(payload.dev_flags),
+                }
             }),
             sys::uhid_event_type::UHID_STOP => Ok(OutputEvent::Stop),
             sys::uhid_event_type::UHID_OPEN => Ok(OutputEvent::Open),
@@ -285,9 +300,7 @@ fn read_event(src: &mut BytesMut) -> Option<sys::uhid_event> {
     if src.len() >= uhid_event_size {
         let bytes = src.split_to(uhid_event_size);
         let ptr = bytes.as_ptr();
-        Some(unsafe {
-            *mem::transmute::<*const u8, &sys::uhid_event>(ptr)
-        })
+        Some(unsafe { *mem::transmute::<*const u8, &sys::uhid_event>(ptr) })
     } else {
         None
     }

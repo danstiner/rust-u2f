@@ -190,9 +190,9 @@ impl Packet {
                 U2FHID_WINK => Command::Wink,
                 U2FHID_LOCK => Command::Lock,
                 U2FHID_SYNC => Command::Sync,
-                id if id >= U2FHID_VENDOR_FIRST && id <= U2FHID_VENDOR_LAST => Command::Vendor {
-                    identifier: id,
-                },
+                id if id >= U2FHID_VENDOR_FIRST && id <= U2FHID_VENDOR_LAST => {
+                    Command::Vendor { identifier: id }
+                }
                 _ => return Err(()),
             };
             let payload_len = reader.read_u16::<BigEndian>().unwrap();
@@ -296,8 +296,12 @@ pub enum RequestMessage {
 impl RequestMessage {
     pub fn decode(command: &Command, data: &[u8]) -> Result<RequestMessage, ()> {
         match command {
-            &Command::Msg => Ok(RequestMessage::EncapsulatedRequest { data: data.to_vec() }),
-            &Command::Ping => Ok(RequestMessage::Ping { data: data.to_vec() }),
+            &Command::Msg => Ok(RequestMessage::EncapsulatedRequest {
+                data: data.to_vec(),
+            }),
+            &Command::Ping => Ok(RequestMessage::Ping {
+                data: data.to_vec(),
+            }),
             &Command::Init => {
                 if data.len() != 8 {
                     Err(())
@@ -373,7 +377,9 @@ impl Response {
 
 #[derive(Debug)]
 pub enum ResponseMessage {
-    EncapsulatedResponse { data: Vec<u8> },
+    EncapsulatedResponse {
+        data: Vec<u8>,
+    },
     Init {
         nonce: [u8; 8],
         new_channel_id: ChannelId,
@@ -383,8 +389,12 @@ pub enum ResponseMessage {
         build_device_version_number: u8,
         capabilities: CapabilityFlags,
     },
-    Pong { data: Vec<u8> },
-    Error { code: ErrorCode },
+    Pong {
+        data: Vec<u8>,
+    },
+    Error {
+        code: ErrorCode,
+    },
     Wink,
     Lock,
 }
@@ -409,7 +419,9 @@ impl slog::Value for ResponseMessage {
 
 impl From<u2f_core::Response> for ResponseMessage {
     fn from(response: u2f_core::Response) -> ResponseMessage {
-        ResponseMessage::EncapsulatedResponse { data: response.into_bytes() }
+        ResponseMessage::EncapsulatedResponse {
+            data: response.into_bytes(),
+        }
     }
 }
 

@@ -1,5 +1,5 @@
-use futures::{Poll, Async};
-use futures::{StartSend, AsyncSink};
+use futures::{Async, Poll};
+use futures::{AsyncSink, StartSend};
 use futures::sink::Sink;
 use futures::stream::Stream;
 use futures::task::{self, Task};

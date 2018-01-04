@@ -3,10 +3,10 @@ extern crate bitflags;
 extern crate bytes;
 #[macro_use]
 extern crate futures;
-#[macro_use]
-extern crate quick_error;
 extern crate mio;
 extern crate nix;
+#[macro_use]
+extern crate quick_error;
 #[macro_use]
 extern crate slog;
 extern crate slog_stdlog;

@@ -131,9 +131,7 @@ where
             }
             Ok(n) => {
                 if n != read_len {
-                    return Err(
-                        io::Error::new(io::ErrorKind::InvalidData, "short read").into(),
-                    );
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "short read").into());
                 }
                 let frame = self.decoder.decode(&mut BytesMut::from_buf(buffer))?;
                 trace!(self.logger, "poll => Ok"; "frame" => &frame);
@@ -165,19 +163,15 @@ where
         let bytes = buffer.take();
 
         match self.inner.write(&bytes) {
-            Ok(0) => Err(
-                io::Error::new(
-                    io::ErrorKind::WriteZero,
-                    "failed to write item to transport",
-                ).into(),
-            ),
+            Ok(0) => Err(io::Error::new(
+                io::ErrorKind::WriteZero,
+                "failed to write item to transport",
+            ).into()),
             Ok(n) if n == bytes.len() => Ok(()),
-            Ok(_) => Err(
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "failed to write entire item to transport",
-                ).into(),
-            ),
+            Ok(_) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "failed to write entire item to transport",
+            ).into()),
             Err(e) => Err(e.into()),
         }
     }

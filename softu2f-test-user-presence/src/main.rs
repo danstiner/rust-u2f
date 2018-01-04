@@ -12,12 +12,12 @@ extern crate tokio_core;
 use std::env;
 use std::io;
 
-use futures::prelude::*; 
+use futures::prelude::*;
 use notify_rust::{Notification, NotificationHint, NotificationUrgency};
 use time::Duration;
 use tokio_core::reactor::Core;
 
-use softu2f_test_user_presence::{CHANNEL_ENV_VAR, UserPresenceTestParameters};
+use softu2f_test_user_presence::{UserPresenceTestParameters, CHANNEL_ENV_VAR};
 
 // TODO this hardcoded keyword should be in the notifcation library
 const NOTIFICATION_CLOSE_ACTION: &str = "__closed";
@@ -44,17 +44,17 @@ fn notify(parameters: UserPresenceTestParameters) -> io::Result<bool> {
         .unwrap();
 
     handle.wait_for_action({
-            |action| match action {
-                "approve" => res = true,
-                "deny" => res = false,
-                "default" => res = false,
-                NOTIFICATION_CLOSE_ACTION => {
-                    println!("the notification was closed");
-                    res = false;
-                }
-                _ => unreachable!("Unknown action taken on notification"),
+        |action| match action {
+            "approve" => res = true,
+            "deny" => res = false,
+            "default" => res = false,
+            NOTIFICATION_CLOSE_ACTION => {
+                println!("the notification was closed");
+                res = false;
             }
-        });
+            _ => unreachable!("Unknown action taken on notification"),
+        }
+    });
 
     Ok(res)
 }
@@ -63,8 +63,8 @@ fn main() {
     let mut core = Core::new().unwrap();
     let handle = core.handle();
 
-    let channel: ipc::ChildMessageChannel = json::from_str(&env::var(CHANNEL_ENV_VAR).unwrap())
-        .unwrap();
+    let channel: ipc::ChildMessageChannel =
+        json::from_str(&env::var(CHANNEL_ENV_VAR).unwrap()).unwrap();
     let channel = channel
         .into_channel::<bool, UserPresenceTestParameters>(&handle)
         .unwrap();

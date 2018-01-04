@@ -3,11 +3,11 @@ extern crate assert_matches;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
+extern crate quick_error;
+#[macro_use]
 extern crate serde_derive;
 #[macro_use]
 extern crate slog;
-#[macro_use]
-extern crate quick_error;
 
 extern crate base64;
 extern crate byteorder;
@@ -38,7 +38,7 @@ use futures::Future;
 use futures::future;
 use openssl::bn::BigNumContext;
 use openssl::bn::BigNumContextRef;
-use openssl::ec::{self, EcGroup, EcKey, EcPoint, EcGroupRef, EcPointRef};
+use openssl::ec::{self, EcGroup, EcGroupRef, EcKey, EcPoint, EcPointRef};
 use openssl::hash::MessageDigest;
 use openssl::nid;
 use openssl::pkey::PKey;
@@ -47,11 +47,11 @@ use openssl::x509::X509;
 use rand::OsRng;
 use rand::Rand;
 use rand::Rng;
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use slog::Drain;
 
-use self_signed_attestation::{SELF_SIGNED_ATTESTATION_KEY_PEM,
-                              SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM};
+use self_signed_attestation::{SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM,
+                              SELF_SIGNED_ATTESTATION_KEY_PEM};
 
 const REGISTER_COMMAND_CODE: u8 = 0x01;
 const AUTHENTICATE_COMMAND_CODE: u8 = 0x02;
@@ -272,7 +272,9 @@ pub enum Response {
         signature: Box<Signature>,
         user_present: bool,
     },
-    Version { version_string: String },
+    Version {
+        version_string: String,
+    },
     DidWink,
     TestOfUserPresenceNotSatisfied,
     InvalidKeyHandle,
@@ -438,9 +440,8 @@ where
     D: Deserializer<'de>,
 {
     use serde::de::Error;
-    String::deserialize(deserializer).and_then(|string| {
-        base64::decode(&string).map_err(|err| Error::custom(err.to_string()))
-    })
+    String::deserialize(deserializer)
+        .and_then(|string| base64::decode(&string).map_err(|err| Error::custom(err.to_string())))
 }
 
 impl slog::Value for ApplicationParameter {
@@ -612,9 +613,10 @@ impl PublicKey {
     /// uncompressed point compression method.
     fn from_bytes(bytes: &[u8], ctx: &mut BigNumContext) -> Result<PublicKey, String> {
         if bytes.len() != 65 {
-            return Err(String::from(
-                format!("Expected 65 bytes, found {}", bytes.len()),
-            ));
+            return Err(String::from(format!(
+                "Expected 65 bytes, found {}",
+                bytes.len()
+            )));
         }
         if bytes[0] != EC_POINT_FORMAT_UNCOMPRESSED {
             return Err(String::from("Expected uncompressed point"));
@@ -772,10 +774,9 @@ impl U2F {
         storage: Box<SecretStore>,
         logger: L,
     ) -> io::Result<Self> {
-        let logger = logger.into().unwrap_or(slog::Logger::root(
-            slog_stdlog::StdLog.fuse(),
-            o!(),
-        ));
+        let logger = logger
+            .into()
+            .unwrap_or(slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
         let inner = U2FInner {
             approval: approval,
             logger: logger,
@@ -808,16 +809,16 @@ impl U2F {
                 .from_err()
         };
 
-        Box::new(application_key_future.and_then(
-            move |application_key_option| {
+        Box::new(
+            application_key_future.and_then(move |application_key_option| {
                 match application_key_option {
                     Some(application_key) => {
                         Self::_authenticate_step2(self_rc, application, challenge, application_key)
                     }
                     None => Box::new(future::err(AuthenticateError::InvalidKeyHandle)),
                 }
-            },
-        ))
+            }),
+        )
     }
 
     fn _authenticate_step2(
@@ -965,9 +966,7 @@ impl U2F {
                 .storage
                 .add_application_key(&application_key)
                 .from_err()
-                .and_then(move |_| {
-                    Self::_register_step3(self_rc, challenge, application_key)
-                }),
+                .and_then(move |_| Self::_register_step3(self_rc, challenge, application_key)),
         )
     }
 
@@ -1030,7 +1029,10 @@ impl Service for U2F {
                         })
                         .or_else(move |err| match err {
                             RegisterError::ApprovalRequired => {
-                                debug!(logger_clone, "Request::Register => TestOfUserPresenceNotSatisfied");
+                                debug!(
+                                    logger_clone,
+                                    "Request::Register => TestOfUserPresenceNotSatisfied"
+                                );
                                 Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
                             RegisterError::Io(err) => {
@@ -1050,7 +1052,9 @@ impl Service for U2F {
                 application,
                 key_handle,
             } => {
-                let logger = self.0.logger.new(o!("request" => "authenticate", "app_id" => application));
+                let logger = self.0
+                    .logger
+                    .new(o!("request" => "authenticate", "app_id" => application));
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
                         trace!(logger, "ControlCode::CheckOnly");
@@ -1067,34 +1071,41 @@ impl Service for U2F {
                     AuthenticateControlCode::EnforceUserPresenceAndSign => {
                         trace!(logger, "ControlCode::EnforceUserPresenceAndSign");
                         let logger_clone = logger.clone();
-                        Box::new(self.authenticate(application, challenge, key_handle).map(move |authentication| {
-                            info!(logger, "authenticated"; "counter" => &authentication.counter, "user_present" => &authentication.user_present);
-                            Response::Authentication {
-                                counter: authentication.counter,
-                                signature: authentication.signature,
-                                user_present: authentication.user_present,
-                            }
-                        }).or_else(move |err| match err {
-                            AuthenticateError::ApprovalRequired => {
-                                info!(logger_clone, "TestOfUserPresenceNotSatisfied");
-                                Ok(Response::TestOfUserPresenceNotSatisfied)
-                            }
-                            AuthenticateError::InvalidKeyHandle => {
-                                info!(logger_clone, "InvalidKeyHandle");
-                                Ok(Response::InvalidKeyHandle)
-                            }
-                            AuthenticateError::Io(err) => {
-                                info!(logger_clone, "I/O error"; "error" => ?err);
-                                Ok(Response::UnknownError)
-                            }
-                            AuthenticateError::Signing(err) => {
-                                info!(logger_clone, "Signing error"; "error" => ?err);
-                                Ok(Response::UnknownError)
-                            }
-                        }))
+                        Box::new(
+                            self.authenticate(application, challenge, key_handle)
+                                .map(move |authentication| {
+                                    info!(logger, "authenticated"; "counter" => &authentication.counter, "user_present" => &authentication.user_present);
+                                    Response::Authentication {
+                                        counter: authentication.counter,
+                                        signature: authentication.signature,
+                                        user_present: authentication.user_present,
+                                    }
+                                })
+                                .or_else(move |err| match err {
+                                    AuthenticateError::ApprovalRequired => {
+                                        info!(logger_clone, "TestOfUserPresenceNotSatisfied");
+                                        Ok(Response::TestOfUserPresenceNotSatisfied)
+                                    }
+                                    AuthenticateError::InvalidKeyHandle => {
+                                        info!(logger_clone, "InvalidKeyHandle");
+                                        Ok(Response::InvalidKeyHandle)
+                                    }
+                                    AuthenticateError::Io(err) => {
+                                        info!(logger_clone, "I/O error"; "error" => ?err);
+                                        Ok(Response::UnknownError)
+                                    }
+                                    AuthenticateError::Signing(err) => {
+                                        info!(logger_clone, "Signing error"; "error" => ?err);
+                                        Ok(Response::UnknownError)
+                                    }
+                                }),
+                        )
                     }
                     AuthenticateControlCode::DontEnforceUserPresenceAndSign => {
-                        trace!(logger, "Request::Authenticate::DontEnforceUserPresenceAndSign");
+                        trace!(
+                            logger,
+                            "Request::Authenticate::DontEnforceUserPresenceAndSign"
+                        );
                         info!(logger, "Request::Authenticate::DontEnforceUserPresenceAndSign => TestOfUserPresenceNotSatisfied (Not implemented)");
                         // TODO Implement
                         Box::new(futures::finished(Response::TestOfUserPresenceNotSatisfied))
@@ -1103,15 +1114,15 @@ impl Service for U2F {
             }
             Request::GetVersion => {
                 trace!(logger, "Request::GetVersion");
-                let response = Response::Version { version_string: self.get_version_string() };
+                let response = Response::Version {
+                    version_string: self.get_version_string(),
+                };
                 Box::new(future::ok(response))
             }
-            Request::Wink => {
-                Box::new(self.wink().map(|_| Response::DidWink).or_else(move |err| {
-                    info!(logger, "I/O error"; "error" => format!("{:?}", err));
-                    Ok(Response::UnknownError)
-                }))
-            }
+            Request::Wink => Box::new(self.wink().map(|_| Response::DidWink).or_else(move |err| {
+                info!(logger, "I/O error"; "error" => format!("{:?}", err));
+                Ok(Response::UnknownError)
+            })),
         }
     }
 }
@@ -1183,7 +1194,9 @@ pub struct SecureCryptoOperations {
 
 impl SecureCryptoOperations {
     pub fn new(attestation: Attestation) -> SecureCryptoOperations {
-        SecureCryptoOperations { attestation: attestation }
+        SecureCryptoOperations {
+            attestation: attestation,
+        }
     }
 
     fn generate_key() -> Key {
@@ -1313,10 +1326,10 @@ mod tests {
             &self,
             key: &ApplicationKey,
         ) -> Box<Future<Item = (), Error = io::Error>> {
-            self.0.borrow_mut().application_keys.insert(
-                key.application,
-                key.clone(),
-            );
+            self.0
+                .borrow_mut()
+                .application_keys
+                .insert(key.application, key.clone());
             Box::new(future::ok(()))
         }
 
@@ -1519,8 +1532,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
             .unwrap();
 
         let user_presence_byte = user_presence_byte(true);
-        let user_public_key = PublicKey::from_bytes(&registration.user_public_key, &mut ctx)
-            .unwrap();
+        let user_public_key =
+            PublicKey::from_bytes(&registration.user_public_key, &mut ctx).unwrap();
         let user_pkey = PKey::from_ec_key(user_public_key.to_ec_key()).unwrap();
         let signed_data = message_to_sign_for_authenticate(
             &application,

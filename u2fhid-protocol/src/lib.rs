@@ -50,8 +50,7 @@ pub struct U2FHID<T: Sink + Stream, S> {
 
 impl<T> U2FHID<T, U2F>
 where
-    T: Sink<SinkItem = Packet, SinkError = io::Error>
-        + Stream<Item = Packet, Error = io::Error>,
+    T: Sink<SinkItem = Packet, SinkError = io::Error> + Stream<Item = Packet, Error = io::Error>,
 {
     pub fn bind_service<L: Into<Option<slog::Logger>>>(
         handle: &Handle,
@@ -59,10 +58,9 @@ where
         service: U2F,
         logger: L,
     ) -> U2FHID<T, U2F> {
-        let logger = logger.into().unwrap_or(slog::Logger::root(
-            slog_stdlog::StdLog.fuse(),
-            o!(),
-        ));
+        let logger = logger
+            .into()
+            .unwrap_or(slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
         let state_machine_logger = logger.new(o!());
         U2FHID {
             logger: logger,
@@ -74,18 +72,12 @@ where
 
 impl<T, S> Future for U2FHID<T, S>
 where
-    T: Sink<SinkItem = Packet, SinkError = io::Error>
-        + Stream<Item = Packet, Error = io::Error>,
+    T: Sink<SinkItem = Packet, SinkError = io::Error> + Stream<Item = Packet, Error = io::Error>,
     S: Service<
         Request = u2f_core::Request,
         Response = u2f_core::Response,
         Error = io::Error,
-        Future = Box<
-            Future<
-                Item = u2f_core::Response,
-                Error = io::Error,
-            >,
-        >,
+        Future = Box<Future<Item = u2f_core::Response, Error = io::Error>>,
     >,
 {
     type Item = ();
@@ -132,11 +124,9 @@ where
 fn assert_send<S: Sink>(s: &mut S, item: S::SinkItem) -> Result<(), S::SinkError> {
     match try!(s.start_send(item)) {
         AsyncSink::Ready => Ok(()),
-        AsyncSink::NotReady(_) => {
-            panic!(
-                "sink reported itself as ready after `poll_ready` but was \
-                    then unable to accept a message"
-            )
-        }
+        AsyncSink::NotReady(_) => panic!(
+            "sink reported itself as ready after `poll_ready` but was \
+             then unable to accept a message"
+        ),
     }
 }

@@ -20,8 +20,15 @@ impl slog::Value for SocketOutput {
         serializer: &mut slog::Serializer,
     ) -> slog::Result {
         match self {
-            &SocketOutput::CreateDeviceResponse(ref response) => slog::Value::serialize(&format!("CreateDeviceResponse({:?})", response), record, key, serializer),
-            &SocketOutput::Packet {..} => slog::Value::serialize(&"Packet", record, key, serializer)
+            &SocketOutput::CreateDeviceResponse(ref response) => slog::Value::serialize(
+                &format!("CreateDeviceResponse({:?})", response),
+                record,
+                key,
+                serializer,
+            ),
+            &SocketOutput::Packet { .. } => {
+                slog::Value::serialize(&"Packet", record, key, serializer)
+            }
         }
     }
 }
@@ -55,7 +62,9 @@ pub struct Packet {
 
 impl Packet {
     pub fn from_bytes(bytes: &[u8]) -> Packet {
-        Packet { bytes: bytes.to_vec() }
+        Packet {
+            bytes: bytes.to_vec(),
+        }
     }
     pub fn into_bytes(self) -> Vec<u8> {
         self.bytes

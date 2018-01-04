@@ -28,7 +28,7 @@ use futures::future;
 use futures::prelude::*;
 use slog_journald::JournaldDrain;
 use slog::{Drain, Logger};
-use systemd::daemon::{is_socket_unix, SocketType, Listening};
+use systemd::daemon::{is_socket_unix, Listening, SocketType};
 use tokio_core::reactor::{Core, Handle};
 use tokio_io::codec::length_delimited;
 use tokio_serde_bincode::{ReadBincode, WriteBincode};
@@ -41,15 +41,22 @@ fn run(logger: Logger) -> io::Result<()> {
     let handle = core.handle();
 
     let listen_fds_count = systemd::daemon::listen_fds(true)?;
-    assert_eq!(listen_fds_count, 1, "Expect exactly one socket from systemd");
+    assert_eq!(
+        listen_fds_count,
+        1,
+        "Expect exactly one socket from systemd"
+    );
 
     let fd = systemd::daemon::LISTEN_FDS_START;
-    assert!(is_socket_unix(
-        fd,
-        Some(SocketType::Stream),
-        Listening::IsListening,
-        Some("/run/softu2f/softu2f.sock"),
-    )?, "Expect the softu2f socket fom systemd");
+    assert!(
+        is_socket_unix(
+            fd,
+            Some(SocketType::Stream),
+            Listening::IsListening,
+            Some("/run/softu2f/softu2f.sock"),
+        )?,
+        "Expect the softu2f socket fom systemd"
+    );
 
     let listener = unsafe { UnixListener::from_raw_fd(fd) };
     let listener = tokio_uds::UnixListener::from_listener(listener, &handle)?;
@@ -61,7 +68,11 @@ fn run(logger: Logger) -> io::Result<()> {
     }))
 }
 
-fn accept(stream: tokio_uds::UnixStream, handle: &Handle, logger: &Logger) -> Box<Future<Item=(), Error=()>> {
+fn accept(
+    stream: tokio_uds::UnixStream,
+    handle: &Handle,
+    logger: &Logger,
+) -> Box<Future<Item = (), Error = ()>> {
     let peer_cred = stream.peer_cred().unwrap();
     let logger = logger.new(o!("uid" => peer_cred.uid));
 
@@ -76,10 +87,12 @@ fn accept(stream: tokio_uds::UnixStream, handle: &Handle, logger: &Logger) -> Bo
         other_err => io::Error::new(io::ErrorKind::Other, other_err),
     });
 
-    Box::new(Device::new(peer_cred, mapped_err, handle, logger.new(o!())).or_else(move |err| {
-        error!(logger, "Error"; "err" => %err);
-        future::ok(())
-    }))
+    Box::new(
+        Device::new(peer_cred, mapped_err, handle, logger.new(o!())).or_else(move |err| {
+            error!(logger, "Error"; "err" => %err);
+            future::ok(())
+        }),
+    )
 }
 
 fn main() {

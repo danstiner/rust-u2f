@@ -30,7 +30,11 @@ pub struct UserFileStorage {
 }
 
 impl UserFileStorage {
-    pub fn new(path: PathBuf, security_ids: SecurityIds, logger: Logger) -> io::Result<UserFileStorage> {
+    pub fn new(
+        path: PathBuf,
+        security_ids: SecurityIds,
+        logger: Logger,
+    ) -> io::Result<UserFileStorage> {
         let store = Self::load_store(&path, security_ids)?;
         Ok(UserFileStorage {
             logger: logger,
@@ -70,10 +74,10 @@ impl SecretStore for UserFileStorage {
         &self,
         key: &ApplicationKey,
     ) -> Box<Future<Item = (), Error = io::Error>> {
-        self.store.borrow_mut().application_keys.insert(
-            key.application,
-            key.clone(),
-        );
+        self.store
+            .borrow_mut()
+            .application_keys
+            .insert(key.application, key.clone());
 
         Box::new(self.save().into_future())
     }
@@ -136,9 +140,10 @@ where
     trace!(logger, "overwrite_file_atomic"; "path" => path.to_str().unwrap(), "tmp_path" => tmp_path.as_path().to_str().unwrap());
 
     {
-        let file = OpenOptions::new().write(true).create_new(true).open(
-            &tmp_path,
-        )?;
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)?;
         writer_fn(Box::new(file.try_clone()?))?;
         file.sync_all()?;
     }

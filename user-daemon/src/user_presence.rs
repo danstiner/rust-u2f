@@ -7,7 +7,7 @@ use notify_rust::{Notification, NotificationHint, NotificationUrgency};
 use slog::Logger;
 use time::Duration;
 use tokio_core::reactor::Handle;
-use u2f_core::{ApplicationParameter, UserPresence, try_reverse_application_id};
+use u2f_core::{try_reverse_application_id, ApplicationParameter, UserPresence};
 
 // TODO this hardcoded keyword should be in the notifcation library
 const NOTIFICATION_CLOSE_ACTION: &str = "__closed";
@@ -56,15 +56,15 @@ impl NotificationUserPresence {
 
             let logger_clone_close = logger_clone.clone();
             handle.wait_for_action(|action| match action {
-                    "approve" => res = true,
-                    "deny" => res = false,
-                    "default" => res = false,
-                    NOTIFICATION_CLOSE_ACTION => {
-                        info!(logger_clone_close, "The notification was closed");
-                        res = false;
-                    }
-                    _ => unreachable!("Unknown action taken on notification"),
-                });
+                "approve" => res = true,
+                "deny" => res = false,
+                "default" => res = false,
+                NOTIFICATION_CLOSE_ACTION => {
+                    info!(logger_clone_close, "The notification was closed");
+                    res = false;
+                }
+                _ => unreachable!("Unknown action taken on notification"),
+            });
 
             info!(logger_clone, "test_user_presence"; "result" => res);
 

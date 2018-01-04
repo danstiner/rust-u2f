@@ -71,14 +71,14 @@ where
             // Send any buffered items, piped to opposing side
             if let Some(item) = self.buffer_a.take() {
                 match self.side_b.start_send(item) {
-                    Ok(AsyncSink::Ready) => { made_progress = true}
+                    Ok(AsyncSink::Ready) => made_progress = true,
                     Ok(AsyncSink::NotReady(rejected_item)) => self.buffer_a = Some(rejected_item),
                     Err(err) => return Err(err.into()),
                 };
             }
             if let Some(item) = self.buffer_b.take() {
                 match self.side_a.start_send(item) {
-                    Ok(AsyncSink::Ready) => {made_progress = true}
+                    Ok(AsyncSink::Ready) => made_progress = true,
                     Ok(AsyncSink::NotReady(rejected_item)) => self.buffer_b = Some(rejected_item),
                     Err(err) => return Err(err.into()),
                 };
@@ -101,10 +101,10 @@ where
 
             // Exit loop if complete or no progress was made
             if streams_finished && sinks_flushed && no_items_buffered {
-                return Ok(Async::Ready(()))
+                return Ok(Async::Ready(()));
             }
             if !made_progress {
-                return Ok(Async::NotReady)
+                return Ok(Async::NotReady);
             }
         }
     }

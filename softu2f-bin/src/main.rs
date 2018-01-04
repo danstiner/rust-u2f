@@ -7,8 +7,8 @@ extern crate futures;
 extern crate libc;
 extern crate rprompt;
 extern crate sandbox_ipc;
-extern crate serde_json;
 extern crate serde;
+extern crate serde_json;
 extern crate slog_term;
 extern crate softu2f_test_user_presence;
 extern crate tokio_core;
@@ -25,14 +25,14 @@ use std::env;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use futures::{future, Future, Stream, Sink};
+use futures::{future, Future, Sink, Stream};
 use slog::{Drain, Logger};
 use tokio_core::reactor::Core;
 use libc::{gid_t, uid_t};
 
 use u2f_core::{SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
-use uhid_linux_tokio::{Bus, CreateParams, UHIDDevice, InputEvent, OutputEvent, StreamError};
+use uhid_linux_tokio::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UHIDDevice};
 use user_file_storage::UserFileStorage;
 use user_presence::NotificationUserPresence;
 
@@ -83,7 +83,9 @@ fn output_to_packet(output_event: OutputEvent) -> Option<Packet> {
 }
 
 fn packet_to_input(packet: Packet) -> Box<Future<Item = InputEvent, Error = StreamError>> {
-    Box::new(future::ok(InputEvent::Input { data: packet.into_bytes() }))
+    Box::new(future::ok(InputEvent::Input {
+        data: packet.into_bytes(),
+    }))
 }
 
 fn stream_error_to_io_error(err: StreamError) -> io::Error {
@@ -125,10 +127,7 @@ fn pre_sudo_env() -> Option<PreSudoEnvironment> {
         Ok(PreSudoEnvironment {
             dbus_session_bus_address: dbus_session_bus_address,
             home: home,
-            security_ids: SecurityIds {
-                gid: gid,
-                uid: uid,
-            }
+            security_ids: SecurityIds { gid: gid, uid: uid },
         })
     }
 
@@ -137,7 +136,7 @@ fn pre_sudo_env() -> Option<PreSudoEnvironment> {
         Err(_) => {
             eprintln!("Usage: sudo --preserve-env {}", program_name());
             None
-        },
+        }
     }
 }
 
@@ -155,7 +154,9 @@ fn run(logger: slog::Logger, pre_sudo_env: PreSudoEnvironment) -> io::Result<()>
     };
 
     let security_ids = pre_sudo_env.security_ids;
-    let store_path = [&pre_sudo_env.home, Path::new(".softu2f-secrets.json")].iter().collect();
+    let store_path = [&pre_sudo_env.home, Path::new(".softu2f-secrets.json")]
+        .iter()
+        .collect();
 
     let mut core = Core::new()?;
     let handle = core.handle();
@@ -170,7 +171,11 @@ fn run(logger: slog::Logger, pre_sudo_env: PreSudoEnvironment) -> io::Result<()>
     let attestation = u2f_core::self_signed_attestation();
     let user_presence = Box::new(NotificationUserPresence::new(core.handle(), pre_sudo_env));
     let operations = Box::new(SecureCryptoOperations::new(attestation));
-    let storage = Box::new(UserFileStorage::new(store_path, security_ids, logger.new(o!()))?);
+    let storage = Box::new(UserFileStorage::new(
+        store_path,
+        security_ids,
+        logger.new(o!()),
+    )?);
 
     let service = U2F::new(user_presence, operations, storage, logger.new(o!()))?;
     let bind = U2FHID::bind_service(&handle, transport, service, logger.new(o!()));

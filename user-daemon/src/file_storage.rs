@@ -57,10 +57,10 @@ impl SecretStore for FileStorage {
         &self,
         key: &ApplicationKey,
     ) -> Box<Future<Item = (), Error = io::Error>> {
-        self.store.borrow_mut().application_keys.insert(
-            key.application,
-            key.clone(),
-        );
+        self.store
+            .borrow_mut()
+            .application_keys
+            .insert(key.application, key.clone());
 
         Box::new(self.save().into_future())
     }
@@ -121,9 +121,10 @@ where
     tmp_path.set_extension(new_ext);
 
     {
-        let file = OpenOptions::new().write(true).create_new(true).open(
-            &tmp_path,
-        )?;
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)?;
         writer_fn(Box::new(file.try_clone()?))?;
         file.sync_all()?;
     }

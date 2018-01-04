@@ -5,8 +5,8 @@ extern crate serde_derive;
 #[macro_use]
 extern crate slog;
 
-extern crate futures_cpupool;
 extern crate futures;
+extern crate futures_cpupool;
 extern crate notify_rust;
 extern crate serde_json;
 extern crate slog_term;
@@ -41,18 +41,16 @@ use user_presence::NotificationUserPresence;
 
 fn socket_output_to_packet(output_event: SocketOutput) -> Option<Packet> {
     match output_event {
-        SocketOutput::Packet(raw_packet) => Some(
-            Packet::from_bytes(&raw_packet.into_bytes()).unwrap(),
-        ),
+        SocketOutput::Packet(raw_packet) => {
+            Some(Packet::from_bytes(&raw_packet.into_bytes()).unwrap())
+        }
         _ => None,
     }
 }
 
 fn packet_to_socket_input(packet: Packet) -> Box<Future<Item = SocketInput, Error = io::Error>> {
     Box::new(future::ok(SocketInput::Packet(
-        softu2f_system_daemon::Packet::from_bytes(
-            &packet.into_bytes(),
-        ),
+        softu2f_system_daemon::Packet::from_bytes(&packet.into_bytes()),
     )))
 }
 
@@ -87,52 +85,49 @@ fn run(logger: Logger) -> io::Result<()> {
             .send(SocketInput::CreateDeviceRequest(create_device_request))
             .and_then(|socket| {
                 info!(logger, "Sent create device request");
-                socket.into_future().then(|res| -> Box<
-                    Future<
-                        Item = (),
-                        Error = io::Error,
-                    >,
-                > {
-                    let (response, socket) = match res {
-                        Ok((response, socket)) => (response, socket),
-                        Err((err, _socket)) => {
-                            // TODO close socket and any clean up
-                            return Box::new(future::err(err));
-                        }
-                    };
+                socket
+                    .into_future()
+                    .then(|res| -> Box<Future<Item = (), Error = io::Error>> {
+                        let (response, socket) = match res {
+                            Ok((response, socket)) => (response, socket),
+                            Err((err, _socket)) => {
+                                // TODO close socket and any clean up
+                                return Box::new(future::err(err));
+                            }
+                        };
 
-                    info!(logger, "Got response"; "response" => &response);
-                    match response {
-                        Some(SocketOutput::CreateDeviceResponse(create_response)) => {
-                            create_response
-                        }
-                        _ => {
-                            return Box::new(future::err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "Expected create device response",
-                            )))
-                        }
-                    };
+                        info!(logger, "Got response"; "response" => &response);
+                        match response {
+                            Some(SocketOutput::CreateDeviceResponse(create_response)) => {
+                                create_response
+                            }
+                            _ => {
+                                return Box::new(future::err(io::Error::new(
+                                    io::ErrorKind::Other,
+                                    "Expected create device response",
+                                )))
+                            }
+                        };
 
-                    let transport = socket.filter_map(socket_output_to_packet).with(
-                        packet_to_socket_input,
-                    );
+                        let transport = socket
+                            .filter_map(socket_output_to_packet)
+                            .with(packet_to_socket_input);
 
-                    let attestation = u2f_core::self_signed_attestation();
-                    let user_presence =
-                        Box::new(NotificationUserPresence::new(&handle, logger.new(o!())));
-                    let operations = Box::new(SecureCryptoOperations::new(attestation));
-                    let storage = Box::new(FileStorage::new(store_path).unwrap());
+                        let attestation = u2f_core::self_signed_attestation();
+                        let user_presence =
+                            Box::new(NotificationUserPresence::new(&handle, logger.new(o!())));
+                        let operations = Box::new(SecureCryptoOperations::new(attestation));
+                        let storage = Box::new(FileStorage::new(store_path).unwrap());
 
-                    let service = U2F::new(user_presence, operations, storage, logger.new(o!()))
-                        .unwrap();
-                    Box::new(U2FHID::bind_service(
-                        &handle,
-                        transport,
-                        service,
-                        logger.new(o!()),
-                    ))
-                })
+                        let service =
+                            U2F::new(user_presence, operations, storage, logger.new(o!())).unwrap();
+                        Box::new(U2FHID::bind_service(
+                            &handle,
+                            transport,
+                            service,
+                            logger.new(o!()),
+                        ))
+                    })
             }),
     )?;
 
