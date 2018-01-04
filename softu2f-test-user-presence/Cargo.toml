@@ -17,6 +17,7 @@ tokio-core = "0.1.9"
 [[bin]]
 name = "softu2f-test-user-presence"
 path = "src/main.rs"
+doc = false
 
 [lib]
 name = "softu2f_test_user_presence"

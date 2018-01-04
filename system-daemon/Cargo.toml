@@ -33,6 +33,7 @@ path = "../uhid-linux-tokio"
 [[bin]]
 name = "softu2f-system-daemon"
 path = "src/main.rs"
+doc = false
 
 [lib]
 name = "softu2f_system_daemon"
