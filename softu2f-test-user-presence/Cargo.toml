@@ -5,13 +5,13 @@ version = "0.1.0"
 
 [dependencies]
 futures = "0.1.16"
-lazy_static = "0.2.9"
+lazy_static = "1.0.0"
 notify-rust = "3.4.2"
 sandbox-ipc = "0.2.0"
-serde = "1.0.17"
-serde_derive = "1.0.17"
-serde_json = "1.0.5"
-time = "0.1.38"
+serde = "1.0.27"
+serde_derive = "1.0.27"
+serde_json = "1.0.9"
+time = "0.1.39"
 tokio-core = "0.1.9"
 
 [[bin]]

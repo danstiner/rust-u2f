@@ -2,13 +2,14 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "u2fhid-protocol"
 version = "0.1.0"
+
 [dependencies]
 bitflags = "1.0.0"
 byteorder = "1.1.0"
 futures = "0.1.16"
 itertools = "0.7.4"
-serde = "1.0.23"
-serde_derive = "1.0.23"
+serde = "1.0.27"
+serde_derive = "1.0.27"
 slog = "2.0.12"
 slog-stdlog = "3.0.2"
 tokio-core = "0.1.9"
@@ -17,4 +18,4 @@ tokio-core = "0.1.9"
 path = "../u2f-core"
 
 [dev-dependencies]
-rand = "0.3.17"
+rand = "0.4.1"
