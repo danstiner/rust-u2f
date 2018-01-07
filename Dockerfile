@@ -7,6 +7,3 @@ COPY . .
 
 RUN cargo build
 
-RUN cd ./softu2f-bin && cargo install
-
-CMD ["softu2f-bin"]
