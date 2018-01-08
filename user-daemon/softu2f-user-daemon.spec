@@ -1,7 +1,7 @@
 # vim: sw=4:ts=4:et
 
 Name:           softu2f-user-daemon
-Version:        0.1.0
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        User daemon for SoftU2F
 
