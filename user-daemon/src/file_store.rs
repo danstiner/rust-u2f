@@ -138,3 +138,30 @@ fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
 
     Ok(tmp_path)
 }
+
+#[cfg(test)]
+mod tests {
+    extern crate tempdir;
+
+    use super::*;
+    use self::tempdir::TempDir;
+
+    fn fake_application() -> ApplicationParameter {
+        ApplicationParameter::from_bytes(&vec![0u8; 32])
+    }
+
+    fn fake_key_handle() -> KeyHandle {
+        KeyHandle::from(&Vec::new())
+    }
+
+    #[test]
+    fn retrieve_nonexistent_key_is_none() {
+        let dir = TempDir::new("file_store_tests").unwrap();
+        let path = dir.path().join("store");
+        let store = FileStore::new(path).unwrap();
+
+        let key = store.retrieve_application_key(&fake_application(), &fake_key_handle()).wait().unwrap();
+
+        assert!(key.is_none());
+    }
+}
