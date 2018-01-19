@@ -162,8 +162,7 @@ impl Request {
             }
             _ => {
                 // Lc in big-endian order
-                let mut value = reader.read_u16::<BigEndian>().unwrap() as usize;
-                value
+                reader.read_u16::<BigEndian>().unwrap() as usize
             }
         };
 
