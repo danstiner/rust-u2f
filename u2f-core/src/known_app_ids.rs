@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use crypto::digest::Digest;
+use crypto::sha2::Sha256;
 
 use super::AppId;
 
@@ -10,16 +12,25 @@ pub fn try_reverse_app_id(app_id: &AppId) -> Option<String> {
 lazy_static! {
     static ref KNOWN_APP_IDS: HashMap<AppId, &'static str> = {
         let mut map = HashMap::new();
-        map.insert(AppId::from_url("https://github.com/u2f/trusted_facets"), "https://github.com");
-        map.insert(AppId::from_url("https://demo.yubico.com"), "https://demo.yubico.com");
-        map.insert(AppId::from_url("https://www.dropbox.com/u2f-app-id.json"), "https://dropbox.com");
-        map.insert(AppId::from_url("https://www.gstatic.com/securitykey/origins.json"), "https://google.com");
-        map.insert(AppId::from_url("https://vault.bitwarden.com/app-id.json"), "https://vault.bitwarden.com");
-        map.insert(AppId::from_url("https://keepersecurity.com"), "https://keepersecurity.com");
-        map.insert(AppId::from_url("https://api-9dcf9b83.duosecurity.com"), "https://api-9dcf9b83.duosecurity.com");
-        map.insert(AppId::from_url("https://dashboard.stripe.com"), "https://dashboard.stripe.com");
-        map.insert(AppId::from_url("https://id.fedoraproject.org/u2f-origins.json"), "https://id.fedoraproject.org");
-        map.insert(AppId::from_url("https://gitlab.com"), "https://gitlab.com");
+        map.insert(from_url("https://github.com/u2f/trusted_facets"), "https://github.com");
+        map.insert(from_url("https://demo.yubico.com"), "https://demo.yubico.com");
+        map.insert(from_url("https://www.dropbox.com/u2f-app-id.json"), "https://dropbox.com");
+        map.insert(from_url("https://www.gstatic.com/securitykey/origins.json"), "https://google.com");
+        map.insert(from_url("https://vault.bitwarden.com/app-id.json"), "https://vault.bitwarden.com");
+        map.insert(from_url("https://keepersecurity.com"), "https://keepersecurity.com");
+        map.insert(from_url("https://api-9dcf9b83.duosecurity.com"), "https://api-9dcf9b83.duosecurity.com");
+        map.insert(from_url("https://dashboard.stripe.com"), "https://dashboard.stripe.com");
+        map.insert(from_url("https://id.fedoraproject.org/u2f-origins.json"), "https://id.fedoraproject.org");
+        map.insert(from_url("https://gitlab.com"), "https://gitlab.com");
         map
     };
+}
+
+fn from_url(url: &str) -> AppId {
+    let mut hasher = Sha256::new();
+    hasher.input_str(url);
+    let mut bytes = [0u8; 32];
+    assert_eq!(hasher.output_bytes(), bytes.len());
+    hasher.result(&mut bytes);
+    AppId::from_bytes(&bytes)
 }

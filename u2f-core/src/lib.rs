@@ -32,8 +32,6 @@ use std::rc::Rc;
 use std::result::Result;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use crypto::digest::Digest;
-use crypto::sha2::Sha256;
 use futures::Future;
 use futures::future;
 use openssl::bn::BigNumContext;
@@ -393,15 +391,6 @@ impl AppId {
     pub fn from_bytes(slice: &[u8]) -> AppId {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(slice);
-        AppId(bytes)
-    }
-
-    fn from_url(input: &str) -> AppId {
-        let mut hasher = Sha256::new();
-        hasher.input_str(input);
-        let mut bytes = [0u8; 32];
-        assert_eq!(hasher.output_bytes(), bytes.len());
-        hasher.result(&mut bytes);
         AppId(bytes)
     }
 }
