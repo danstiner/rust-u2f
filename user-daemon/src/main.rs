@@ -19,7 +19,7 @@ extern crate tokio_uds;
 extern crate u2f_core;
 extern crate u2fhid_protocol;
 
-mod file_storage;
+mod file_store;
 mod user_presence;
 
 use std::env;
@@ -36,7 +36,7 @@ use tokio_uds::UnixStream;
 use u2f_core::{SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
 
-use file_storage::FileStorage;
+use file_store::FileStore;
 use user_presence::NotificationUserPresence;
 
 fn socket_output_to_packet(output_event: SocketOutput) -> Option<Packet> {
@@ -117,7 +117,7 @@ fn run(logger: Logger) -> io::Result<()> {
                         let user_presence =
                             Box::new(NotificationUserPresence::new(&handle, logger.new(o!())));
                         let operations = Box::new(SecureCryptoOperations::new(attestation));
-                        let storage = Box::new(FileStorage::new(store_path).unwrap());
+                        let storage = Box::new(FileStore::new(store_path).unwrap());
 
                         let service =
                             U2F::new(user_presence, operations, storage, logger.new(o!())).unwrap();

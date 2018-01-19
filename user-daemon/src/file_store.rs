@@ -14,36 +14,36 @@ use serde_json;
 use u2f_core::{ApplicationKey, ApplicationParameter, Counter, KeyHandle, SecretStore};
 
 #[derive(Serialize, Deserialize)]
-struct Store {
+struct Data {
     application_keys: HashMap<ApplicationParameter, ApplicationKey>,
     counters: HashMap<ApplicationParameter, Counter>,
 }
 
-pub struct FileStorage {
+pub struct FileStore {
     path: PathBuf,
-    store: RefCell<Store>,
+    data: RefCell<Data>,
 }
 
-impl FileStorage {
-    pub fn new(path: PathBuf) -> io::Result<FileStorage> {
-        let store = Self::load_store(&path)?;
-        Ok(FileStorage {
+impl FileStore {
+    pub fn new(path: PathBuf) -> io::Result<FileStore> {
+        let data = Self::load(&path)?;
+        Ok(FileStore {
             path: path,
-            store: RefCell::new(store),
+            data: RefCell::new(data),
         })
     }
 
     fn save(&self) -> io::Result<()> {
         overwrite_file_atomic(&self.path, |writer| {
-            serde_json::to_writer_pretty(writer, &*self.store.borrow()).unwrap();
+            serde_json::to_writer_pretty(writer, &*self.data.borrow()).unwrap();
             Ok(())
         })
     }
 
-    fn load_store(path: &Path) -> io::Result<Store> {
+    fn load(path: &Path) -> io::Result<Data> {
         match File::open(path) {
             Ok(file) => Ok(serde_json::from_reader(file).unwrap()),
-            Err(ref err) if err.kind() == io::ErrorKind::NotFound => Ok(Store {
+            Err(ref err) if err.kind() == io::ErrorKind::NotFound => Ok(Data {
                 application_keys: HashMap::new(),
                 counters: HashMap::new(),
             }),
@@ -52,12 +52,12 @@ impl FileStorage {
     }
 }
 
-impl SecretStore for FileStorage {
+impl SecretStore for FileStore {
     fn add_application_key(
         &self,
         key: &ApplicationKey,
     ) -> Box<Future<Item = (), Error = io::Error>> {
-        self.store
+        self.data
             .borrow_mut()
             .application_keys
             .insert(key.application, key.clone());
@@ -70,13 +70,13 @@ impl SecretStore for FileStorage {
         application: &ApplicationParameter,
     ) -> Box<Future<Item = Counter, Error = io::Error>> {
         let value = {
-            let mut store = self.store.borrow_mut();
+            let mut data = self.data.borrow_mut();
 
-            if !store.counters.contains_key(application) {
-                store.counters.insert(*application, 0);
+            if !data.counters.contains_key(application) {
+                data.counters.insert(*application, 0);
             }
 
-            match store.counters.get_mut(application) {
+            match data.counters.get_mut(application) {
                 Some(counter) => {
                     let value = *counter;
                     *counter = value + 1;
@@ -94,7 +94,7 @@ impl SecretStore for FileStorage {
         application: &ApplicationParameter,
         handle: &KeyHandle,
     ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>> {
-        let res = match self.store.borrow().application_keys.get(application) {
+        let res = match self.data.borrow().application_keys.get(application) {
             Some(key) => {
                 if key.handle.eq_consttime(handle) {
                     Some(key.clone())
@@ -112,13 +112,7 @@ fn overwrite_file_atomic<W>(path: &Path, writer_fn: W) -> io::Result<()>
 where
     W: FnOnce(Box<Write>) -> io::Result<()>,
 {
-    let mut tmp_path = PathBuf::from(path);
-    let mut new_ext = match tmp_path.extension() {
-        Some(ext) => ext.to_os_string(),
-        None => return Err(io::Error::new(io::ErrorKind::Other, "Invalid file path")),
-    };
-    new_ext.push(".tmp");
-    tmp_path.set_extension(new_ext);
+    let tmp_path = make_tmp_path(path)?;
 
     {
         let file = OpenOptions::new()
@@ -131,4 +125,16 @@ where
 
     fs::rename(&tmp_path, path)?;
     Ok(())
+}
+
+fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
+    let mut tmp_path = PathBuf::from(path);
+    let mut new_ext = match tmp_path.extension() {
+        Some(ext) => ext.to_os_string(),
+        None => return Err(io::Error::new(io::ErrorKind::Other, "Invalid file path")),
+    };
+    new_ext.push(".tmp");
+    tmp_path.set_extension(new_ext);
+
+    Ok(tmp_path)
 }
