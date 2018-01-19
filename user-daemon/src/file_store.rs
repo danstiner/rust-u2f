@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 use serde_json;
 
-use u2f_core::{ApplicationKey, AppId, Counter, KeyHandle, SecretStore};
+use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
 #[derive(Serialize, Deserialize)]
 struct Data {
@@ -131,7 +131,12 @@ fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
     let mut tmp_path = PathBuf::from(path);
     let mut new_ext = match tmp_path.extension() {
         Some(ext) => ext.to_os_string(),
-        None => return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid file path")),
+        None => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Invalid file path",
+            ))
+        }
     };
     new_ext.push(".tmp");
     tmp_path.set_extension(new_ext);
@@ -160,7 +165,10 @@ mod tests {
         let path = dir.path().join("store");
         let store = FileStore::new(path).unwrap();
 
-        let key = store.retrieve_application_key(&fake_app_id(), &fake_key_handle()).wait().unwrap();
+        let key = store
+            .retrieve_application_key(&fake_app_id(), &fake_key_handle())
+            .wait()
+            .unwrap();
 
         assert!(key.is_none());
     }

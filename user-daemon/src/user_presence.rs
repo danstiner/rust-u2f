@@ -66,7 +66,7 @@ impl NotificationUserPresence {
 
             let mut action = String::from("");
             notify_handle.wait_for_action(|a| action = a.to_owned());
-            
+
             let user_present = match action.as_str() {
                 "approve" => true,
                 "deny" => false,

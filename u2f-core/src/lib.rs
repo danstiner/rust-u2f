@@ -697,10 +697,7 @@ pub trait UserPresence {
 
 pub trait CryptoOperations {
     fn attest(&self, data: &[u8]) -> Result<Box<Signature>, SignError>;
-    fn generate_application_key(
-        &self,
-        application: &AppId,
-    ) -> io::Result<ApplicationKey>;
+    fn generate_application_key(&self, application: &AppId) -> io::Result<ApplicationKey>;
     fn get_attestation_certificate(&self) -> AttestationCertificate;
     fn sign(&self, key: &Key, data: &[u8]) -> Result<Box<Signature>, SignError>;
 }
@@ -1220,10 +1217,7 @@ impl CryptoOperations for SecureCryptoOperations {
         self.sign(&self.attestation.key, data)
     }
 
-    fn generate_application_key(
-        &self,
-        application: &AppId,
-    ) -> io::Result<ApplicationKey> {
+    fn generate_application_key(&self, application: &AppId) -> io::Result<ApplicationKey> {
         let key = Self::generate_key();
         let handle = Self::generate_key_handle()?;
         Ok(ApplicationKey {
