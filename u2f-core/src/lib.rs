@@ -11,10 +11,10 @@ extern crate slog;
 
 extern crate base64;
 extern crate byteorder;
-extern crate crypto;
 extern crate futures;
 extern crate openssl;
 extern crate rand;
+extern crate ring;
 extern crate serde;
 extern crate slog_stdlog;
 extern crate subtle;

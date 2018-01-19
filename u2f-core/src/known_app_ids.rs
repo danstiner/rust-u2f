@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use crypto::digest::Digest;
-use crypto::sha2::Sha256;
+use ring::digest;
 
 use super::AppId;
 
@@ -27,10 +26,5 @@ lazy_static! {
 }
 
 fn from_url(url: &str) -> AppId {
-    let mut hasher = Sha256::new();
-    hasher.input_str(url);
-    let mut bytes = [0u8; 32];
-    assert_eq!(hasher.output_bytes(), bytes.len());
-    hasher.result(&mut bytes);
-    AppId::from_bytes(&bytes)
+    AppId::from_bytes(digest::digest(&digest::SHA256, url.as_bytes()).as_ref())
 }
