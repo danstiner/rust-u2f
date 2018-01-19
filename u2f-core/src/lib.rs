@@ -117,11 +117,11 @@ pub enum AuthenticateControlCode {
 pub enum Request {
     Register {
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
     },
     Authenticate {
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
         control_code: AuthenticateControlCode,
         key_handle: KeyHandle,
     },
@@ -209,7 +209,7 @@ impl Request {
                 assert_eq!(reader.position() as usize, request_data_len);
                 Request::Register {
                     application: ApplicationParameter(application_parameter),
-                    challenge: ChallengeParameter(challenge_parameter),
+                    challenge: Challenge(challenge_parameter),
                 }
             }
             AUTHENTICATE_COMMAND_CODE => {
@@ -242,7 +242,7 @@ impl Request {
 
                 Request::Authenticate {
                     application: ApplicationParameter(application_parameter),
-                    challenge: ChallengeParameter(challenge_parameter),
+                    challenge: Challenge(challenge_parameter),
                     control_code: control_code,
                     key_handle: KeyHandle::from(&key_handle_bytes),
                 }
@@ -461,9 +461,9 @@ impl slog::Value for ApplicationParameter {
 }
 
 #[derive(Clone, Debug)]
-pub struct ChallengeParameter(SHA256Hash);
+pub struct Challenge(SHA256Hash);
 
-impl AsRef<[u8]> for ChallengeParameter {
+impl AsRef<[u8]> for Challenge {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
@@ -794,7 +794,7 @@ impl U2F {
     pub fn authenticate(
         &self,
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
         key_handle: KeyHandle,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
         trace!(self.0.logger, "authenticate");
@@ -804,7 +804,7 @@ impl U2F {
     fn _authenticate_step1(
         self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
         key_handle: KeyHandle,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
         let application_key_future = {
@@ -829,7 +829,7 @@ impl U2F {
     fn _authenticate_step2(
         self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
         application_key: ApplicationKey,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
         Box::new(
@@ -852,7 +852,7 @@ impl U2F {
     fn _authenticate_step3(
         self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
@@ -881,7 +881,7 @@ impl U2F {
     fn _authenticate_step4(
         self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
         counter: Counter,
@@ -929,7 +929,7 @@ impl U2F {
     pub fn register(
         &self,
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
     ) -> Box<Future<Item = Registration, Error = RegisterError>> {
         trace!(self.0.logger, "register");
         Self::_register_step1(self.0.clone(), application, challenge)
@@ -938,7 +938,7 @@ impl U2F {
     fn _register_step1(
         self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
     ) -> Box<Future<Item = Registration, Error = RegisterError>> {
         Box::new(
             self_rc
@@ -954,7 +954,7 @@ impl U2F {
     fn _register_step2(
         self_rc: Rc<U2FInner>,
         application: ApplicationParameter,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
         user_present: bool,
     ) -> Box<Future<Item = Registration, Error = RegisterError>> {
         if !user_present {
@@ -977,7 +977,7 @@ impl U2F {
 
     fn _register_step3(
         self_rc: Rc<U2FInner>,
-        challenge: ChallengeParameter,
+        challenge: Challenge,
         application_key: ApplicationKey,
     ) -> Result<Registration, RegisterError> {
         let mut ctx = BigNumContext::new().unwrap();
@@ -1146,7 +1146,7 @@ fn user_presence_byte(user_present: bool) -> u8 {
 
 fn message_to_sign_for_authenticate(
     application: &ApplicationParameter,
-    challenge: &ChallengeParameter,
+    challenge: &Challenge,
     user_presence: u8,
     counter: Counter,
 ) -> Vec<u8> {
@@ -1169,7 +1169,7 @@ fn message_to_sign_for_authenticate(
 
 fn message_to_sign_for_register(
     application: &ApplicationParameter,
-    challenge: &ChallengeParameter,
+    challenge: &Challenge,
     key_bytes: &[u8],
     key_handle: &KeyHandle,
 ) -> Vec<u8> {
@@ -1277,8 +1277,8 @@ mod tests {
         ApplicationParameter([0u8; 32])
     }
 
-    fn fake_challenge() -> ChallengeParameter {
-        ChallengeParameter([0u8; 32])
+    fn fake_challenge() -> Challenge {
+        Challenge([0u8; 32])
     }
 
     fn fake_key_handle() -> KeyHandle {
@@ -1528,14 +1528,14 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let mut os_rng = OsRng::new().unwrap();
         let application = ApplicationParameter(os_rng.gen());
-        let register_challenge = ChallengeParameter(os_rng.gen());
+        let register_challenge = Challenge(os_rng.gen());
         let mut ctx = BigNumContext::new().unwrap();
 
         let registration = u2f.register(application.clone(), register_challenge.clone())
             .wait()
             .unwrap();
 
-        let authentication_challenge = ChallengeParameter(os_rng.gen());
+        let authentication_challenge = Challenge(os_rng.gen());
         let authentication = u2f.authenticate(
             application.clone(),
             authentication_challenge.clone(),
@@ -1569,7 +1569,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let mut os_rng = OsRng::new().unwrap();
         let application = ApplicationParameter(os_rng.gen());
-        let challenge = ChallengeParameter(os_rng.gen());
+        let challenge = Challenge(os_rng.gen());
         let mut ctx = BigNumContext::new().unwrap();
 
         let registration = u2f.register(application.clone(), challenge.clone())
