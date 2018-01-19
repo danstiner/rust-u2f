@@ -1273,8 +1273,15 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
-    const ALL_ZERO_HASH: [u8; 32] = [0u8; 32];
-    fn all_zero_key_handle() -> KeyHandle {
+    fn fake_application() -> ApplicationParameter {
+        ApplicationParameter([0u8; 32])
+    }
+
+    fn fake_challenge() -> ChallengeParameter {
+        ChallengeParameter([0u8; 32])
+    }
+
+    fn fake_key_handle() -> KeyHandle {
         KeyHandle(vec![0u8; 128])
     }
 
@@ -1408,8 +1415,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = ApplicationParameter(ALL_ZERO_HASH);
-        let key_handle = all_zero_key_handle();
+        let application = fake_application();
+        let key_handle = fake_key_handle();
 
         assert_matches!(
             u2f.is_valid_key_handle(&key_handle, &application).wait(),
@@ -1424,8 +1431,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = ApplicationParameter(ALL_ZERO_HASH);
-        let challenge = ChallengeParameter(ALL_ZERO_HASH);
+        let application = fake_application();
+        let challenge = fake_challenge();
         let registration = u2f.register(application.clone(), challenge).wait().unwrap();
 
         assert_matches!(
@@ -1442,9 +1449,9 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = ApplicationParameter(ALL_ZERO_HASH);
-        let challenge = ChallengeParameter(ALL_ZERO_HASH);
-        let key_handle = all_zero_key_handle();
+        let application = fake_application();
+        let challenge = fake_challenge();
+        let key_handle = fake_key_handle();
 
         assert_matches!(
             u2f.authenticate(application, challenge, key_handle).wait(),
@@ -1459,8 +1466,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = ApplicationParameter(ALL_ZERO_HASH);
-        let challenge = ChallengeParameter(ALL_ZERO_HASH);
+        let application = fake_application();
+        let challenge = fake_challenge();
         let registration = u2f.register(application.clone(), challenge.clone())
             .wait()
             .unwrap();
@@ -1480,8 +1487,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = ApplicationParameter(ALL_ZERO_HASH);
-        let challenge = ChallengeParameter(ALL_ZERO_HASH);
+        let application = fake_application();
+        let challenge = fake_challenge();
         let registration = u2f.register(application.clone(), challenge.clone())
             .wait()
             .unwrap();
@@ -1503,8 +1510,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = ApplicationParameter(ALL_ZERO_HASH);
-        let challenge = ChallengeParameter(ALL_ZERO_HASH);
+        let application = fake_application();
+        let challenge = fake_challenge();
 
         assert_matches!(
             u2f.register(application, challenge).wait(),
