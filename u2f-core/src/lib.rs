@@ -390,6 +390,12 @@ type SHA256Hash = [u8; 32];
 pub struct ApplicationParameter(SHA256Hash);
 
 impl ApplicationParameter {
+    pub fn from_bytes(slice: &[u8]) -> ApplicationParameter {
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(slice);
+        ApplicationParameter(bytes)
+    }
+
     fn from_str(input: &str) -> ApplicationParameter {
         let mut hasher = Sha256::new();
         hasher.input_str(input);
@@ -467,7 +473,7 @@ impl AsRef<[u8]> for ChallengeParameter {
 pub struct KeyHandle(Vec<u8>);
 
 impl KeyHandle {
-    fn from(bytes: &[u8]) -> KeyHandle {
+    pub fn from(bytes: &[u8]) -> KeyHandle {
         assert!(bytes.len() <= MAX_KEY_HANDLE_LEN);
         KeyHandle(bytes.to_vec())
     }
