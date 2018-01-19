@@ -131,7 +131,7 @@ fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
     let mut tmp_path = PathBuf::from(path);
     let mut new_ext = match tmp_path.extension() {
         Some(ext) => ext.to_os_string(),
-        None => return Err(io::Error::new(io::ErrorKind::Other, "Invalid file path")),
+        None => return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid file path")),
     };
     new_ext.push(".tmp");
     tmp_path.set_extension(new_ext);
