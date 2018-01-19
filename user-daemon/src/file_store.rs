@@ -11,12 +11,12 @@ use std::path::PathBuf;
 
 use serde_json;
 
-use u2f_core::{ApplicationKey, ApplicationParameter, Counter, KeyHandle, SecretStore};
+use u2f_core::{ApplicationKey, AppId, Counter, KeyHandle, SecretStore};
 
 #[derive(Serialize, Deserialize)]
 struct Data {
-    application_keys: HashMap<ApplicationParameter, ApplicationKey>,
-    counters: HashMap<ApplicationParameter, Counter>,
+    application_keys: HashMap<AppId, ApplicationKey>,
+    counters: HashMap<AppId, Counter>,
 }
 
 pub struct FileStore {
@@ -67,7 +67,7 @@ impl SecretStore for FileStore {
 
     fn get_and_increment_counter(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
     ) -> Box<Future<Item = Counter, Error = io::Error>> {
         let value = {
             let mut data = self.data.borrow_mut();
@@ -91,7 +91,7 @@ impl SecretStore for FileStore {
 
     fn retrieve_application_key(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
         handle: &KeyHandle,
     ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>> {
         let res = match self.data.borrow().application_keys.get(application) {
@@ -146,8 +146,8 @@ mod tests {
     use super::*;
     use self::tempdir::TempDir;
 
-    fn fake_application() -> ApplicationParameter {
-        ApplicationParameter::from_bytes(&vec![0u8; 32])
+    fn fake_app_id() -> AppId {
+        AppId::from_bytes(&vec![0u8; 32])
     }
 
     fn fake_key_handle() -> KeyHandle {
@@ -160,7 +160,7 @@ mod tests {
         let path = dir.path().join("store");
         let store = FileStore::new(path).unwrap();
 
-        let key = store.retrieve_application_key(&fake_application(), &fake_key_handle()).wait().unwrap();
+        let key = store.retrieve_application_key(&fake_app_id(), &fake_key_handle()).wait().unwrap();
 
         assert!(key.is_none());
     }

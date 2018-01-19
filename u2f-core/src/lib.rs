@@ -20,7 +20,7 @@ extern crate slog_stdlog;
 extern crate subtle;
 extern crate tokio_service;
 
-mod known_facets;
+mod known_app_ids;
 mod self_signed_attestation;
 
 pub use tokio_service::Service;
@@ -78,7 +78,7 @@ const MAX_KEY_HANDLE_LEN: usize = 128;
 
 const EC_POINT_FORMAT_UNCOMPRESSED: u8 = 0x04;
 
-pub use known_facets::try_reverse_application_id;
+pub use known_app_ids::try_reverse_app_id;
 
 #[derive(Debug)]
 pub enum StatusCode {
@@ -116,11 +116,11 @@ pub enum AuthenticateControlCode {
 #[derive(Debug)]
 pub enum Request {
     Register {
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
     },
     Authenticate {
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
         control_code: AuthenticateControlCode,
         key_handle: KeyHandle,
@@ -208,7 +208,7 @@ impl Request {
 
                 assert_eq!(reader.position() as usize, request_data_len);
                 Request::Register {
-                    application: ApplicationParameter(application_parameter),
+                    application: AppId(application_parameter),
                     challenge: Challenge(challenge_parameter),
                 }
             }
@@ -241,7 +241,7 @@ impl Request {
                 reader.read_exact(&mut key_handle_bytes[..]).unwrap();
 
                 Request::Authenticate {
-                    application: ApplicationParameter(application_parameter),
+                    application: AppId(application_parameter),
                     challenge: Challenge(challenge_parameter),
                     control_code: control_code,
                     key_handle: KeyHandle::from(&key_handle_bytes),
@@ -387,32 +387,32 @@ pub type Counter = u32;
 type SHA256Hash = [u8; 32];
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct ApplicationParameter(SHA256Hash);
+pub struct AppId(SHA256Hash);
 
-impl ApplicationParameter {
-    pub fn from_bytes(slice: &[u8]) -> ApplicationParameter {
+impl AppId {
+    pub fn from_bytes(slice: &[u8]) -> AppId {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(slice);
-        ApplicationParameter(bytes)
+        AppId(bytes)
     }
 
-    fn from_str(input: &str) -> ApplicationParameter {
+    fn from_url(input: &str) -> AppId {
         let mut hasher = Sha256::new();
         hasher.input_str(input);
         let mut bytes = [0u8; 32];
         assert_eq!(hasher.output_bytes(), bytes.len());
         hasher.result(&mut bytes);
-        ApplicationParameter(bytes)
+        AppId(bytes)
     }
 }
 
-impl AsRef<[u8]> for ApplicationParameter {
+impl AsRef<[u8]> for AppId {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl Serialize for ApplicationParameter {
+impl Serialize for AppId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -421,14 +421,14 @@ impl Serialize for ApplicationParameter {
     }
 }
 
-impl<'de> Deserialize<'de> for ApplicationParameter {
-    fn deserialize<D>(deserializer: D) -> Result<ApplicationParameter, D::Error>
+impl<'de> Deserialize<'de> for AppId {
+    fn deserialize<D>(deserializer: D) -> Result<AppId, D::Error>
     where
         D: Deserializer<'de>,
     {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&from_base64(deserializer)?);
-        Ok(ApplicationParameter(bytes))
+        Ok(AppId(bytes))
     }
 }
 
@@ -449,7 +449,7 @@ where
         .and_then(|string| base64::decode(&string).map_err(|err| Error::custom(err.to_string())))
 }
 
-impl slog::Value for ApplicationParameter {
+impl slog::Value for AppId {
     fn serialize(
         &self,
         record: &slog::Record,
@@ -651,7 +651,7 @@ pub trait Signature: AsRef<[u8]> + Debug + Send {}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ApplicationKey {
-    pub application: ApplicationParameter,
+    pub application: AppId,
     pub handle: KeyHandle,
     key: Key,
 }
@@ -686,11 +686,11 @@ pub enum SignError {}
 pub trait UserPresence {
     fn approve_registration(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
     ) -> Box<Future<Item = bool, Error = io::Error>>;
     fn approve_authentication(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
     ) -> Box<Future<Item = bool, Error = io::Error>>;
     fn wink(&self) -> Box<Future<Item = (), Error = io::Error>>;
 }
@@ -699,7 +699,7 @@ pub trait CryptoOperations {
     fn attest(&self, data: &[u8]) -> Result<Box<Signature>, SignError>;
     fn generate_application_key(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
     ) -> io::Result<ApplicationKey>;
     fn get_attestation_certificate(&self) -> AttestationCertificate;
     fn sign(&self, key: &Key, data: &[u8]) -> Result<Box<Signature>, SignError>;
@@ -712,11 +712,11 @@ pub trait SecretStore {
     ) -> Box<Future<Item = (), Error = io::Error>>;
     fn get_and_increment_counter(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
     ) -> Box<Future<Item = Counter, Error = io::Error>>;
     fn retrieve_application_key(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
         handle: &KeyHandle,
     ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>>;
 }
@@ -793,7 +793,7 @@ impl U2F {
 
     pub fn authenticate(
         &self,
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
@@ -803,7 +803,7 @@ impl U2F {
 
     fn _authenticate_step1(
         self_rc: Rc<U2FInner>,
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
@@ -828,7 +828,7 @@ impl U2F {
 
     fn _authenticate_step2(
         self_rc: Rc<U2FInner>,
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
         application_key: ApplicationKey,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
@@ -851,7 +851,7 @@ impl U2F {
 
     fn _authenticate_step3(
         self_rc: Rc<U2FInner>,
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
@@ -880,7 +880,7 @@ impl U2F {
 
     fn _authenticate_step4(
         self_rc: Rc<U2FInner>,
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
@@ -912,7 +912,7 @@ impl U2F {
     pub fn is_valid_key_handle(
         &self,
         key_handle: &KeyHandle,
-        application: &ApplicationParameter,
+        application: &AppId,
     ) -> Box<Future<Item = bool, Error = io::Error>> {
         trace!(self.0.logger, "is_valid_key_handle");
         Box::new(
@@ -928,7 +928,7 @@ impl U2F {
 
     pub fn register(
         &self,
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
     ) -> Box<Future<Item = Registration, Error = RegisterError>> {
         trace!(self.0.logger, "register");
@@ -937,7 +937,7 @@ impl U2F {
 
     fn _register_step1(
         self_rc: Rc<U2FInner>,
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
     ) -> Box<Future<Item = Registration, Error = RegisterError>> {
         Box::new(
@@ -953,7 +953,7 @@ impl U2F {
 
     fn _register_step2(
         self_rc: Rc<U2FInner>,
-        application: ApplicationParameter,
+        application: AppId,
         challenge: Challenge,
         user_present: bool,
     ) -> Box<Future<Item = Registration, Error = RegisterError>> {
@@ -1145,7 +1145,7 @@ fn user_presence_byte(user_present: bool) -> u8 {
 }
 
 fn message_to_sign_for_authenticate(
-    application: &ApplicationParameter,
+    application: &AppId,
     challenge: &Challenge,
     user_presence: u8,
     counter: Counter,
@@ -1168,7 +1168,7 @@ fn message_to_sign_for_authenticate(
 }
 
 fn message_to_sign_for_register(
-    application: &ApplicationParameter,
+    application: &AppId,
     challenge: &Challenge,
     key_bytes: &[u8],
     key_handle: &KeyHandle,
@@ -1222,7 +1222,7 @@ impl CryptoOperations for SecureCryptoOperations {
 
     fn generate_application_key(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
     ) -> io::Result<ApplicationKey> {
         let key = Self::generate_key();
         let handle = Self::generate_key_handle()?;
@@ -1273,8 +1273,8 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
-    fn fake_application() -> ApplicationParameter {
-        ApplicationParameter([0u8; 32])
+    fn fake_app_id() -> AppId {
+        AppId([0u8; 32])
     }
 
     fn fake_challenge() -> Challenge {
@@ -1302,13 +1302,13 @@ mod tests {
     impl UserPresence for FakeUserPresence {
         fn approve_authentication(
             &self,
-            _: &ApplicationParameter,
+            _: &AppId,
         ) -> Box<Future<Item = bool, Error = io::Error>> {
             Box::new(future::ok(self.should_approve_authentication))
         }
         fn approve_registration(
             &self,
-            _: &ApplicationParameter,
+            _: &AppId,
         ) -> Box<Future<Item = bool, Error = io::Error>> {
             Box::new(future::ok(self.should_approve_registration))
         }
@@ -1320,8 +1320,8 @@ mod tests {
     struct InMemoryStorage(RefCell<InMemoryStorageInner>);
 
     struct InMemoryStorageInner {
-        application_keys: HashMap<ApplicationParameter, ApplicationKey>,
-        counters: HashMap<ApplicationParameter, Counter>,
+        application_keys: HashMap<AppId, ApplicationKey>,
+        counters: HashMap<AppId, Counter>,
     }
 
     impl InMemoryStorage {
@@ -1347,7 +1347,7 @@ mod tests {
 
         fn get_and_increment_counter(
             &self,
-            application: &ApplicationParameter,
+            application: &AppId,
         ) -> Box<Future<Item = Counter, Error = io::Error>> {
             let mut borrow = self.0.borrow_mut();
             if let Some(counter) = borrow.counters.get_mut(application) {
@@ -1363,7 +1363,7 @@ mod tests {
 
         fn retrieve_application_key(
             &self,
-            application: &ApplicationParameter,
+            application: &AppId,
             handle: &KeyHandle,
         ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>> {
             Box::new(future::ok(
@@ -1415,7 +1415,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = fake_application();
+        let application = fake_app_id();
         let key_handle = fake_key_handle();
 
         assert_matches!(
@@ -1431,7 +1431,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = fake_application();
+        let application = fake_app_id();
         let challenge = fake_challenge();
         let registration = u2f.register(application.clone(), challenge).wait().unwrap();
 
@@ -1449,7 +1449,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = fake_application();
+        let application = fake_app_id();
         let challenge = fake_challenge();
         let key_handle = fake_key_handle();
 
@@ -1466,7 +1466,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = fake_application();
+        let application = fake_app_id();
         let challenge = fake_challenge();
         let registration = u2f.register(application.clone(), challenge.clone())
             .wait()
@@ -1487,7 +1487,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = fake_application();
+        let application = fake_app_id();
         let challenge = fake_challenge();
         let registration = u2f.register(application.clone(), challenge.clone())
             .wait()
@@ -1510,7 +1510,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut storage = Box::new(InMemoryStorage::new());
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
-        let application = fake_application();
+        let application = fake_app_id();
         let challenge = fake_challenge();
 
         assert_matches!(
@@ -1527,7 +1527,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let mut os_rng = OsRng::new().unwrap();
-        let application = ApplicationParameter(os_rng.gen());
+        let application = AppId(os_rng.gen());
         let register_challenge = Challenge(os_rng.gen());
         let mut ctx = BigNumContext::new().unwrap();
 
@@ -1568,7 +1568,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut u2f = U2F::new(approval, operations, storage, None).unwrap();
 
         let mut os_rng = OsRng::new().unwrap();
-        let application = ApplicationParameter(os_rng.gen());
+        let application = AppId(os_rng.gen());
         let challenge = Challenge(os_rng.gen());
         let mut ctx = BigNumContext::new().unwrap();
 
