@@ -1,5 +1,6 @@
 use futures::{Future, IntoFuture};
 use futures::future;
+use serde_json;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
@@ -8,8 +9,6 @@ use std::io;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-
-use serde_json;
 
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
