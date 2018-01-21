@@ -82,7 +82,7 @@ enum DeviceState {
 pub struct Device {
     handle: Handle,
     state: DeviceState,
-    user: UCred,
+    _user: UCred,
     logger: Logger,
 }
 
@@ -97,7 +97,7 @@ impl Device {
             handle: handle.clone(),
             logger: logger,
             state: DeviceState::Uninitialized(Box::new(socket_transport)),
-            user: user,
+            _user: user,
         }
     }
 }

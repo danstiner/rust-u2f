@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use ring::digest;
+use std::collections::HashMap;
 
-use super::AppId;
+use app_id::AppId;
 
 pub fn try_reverse_app_id(app_id: &AppId) -> Option<String> {
     KNOWN_APP_IDS.get(app_id).map(|s| String::from(*s))
