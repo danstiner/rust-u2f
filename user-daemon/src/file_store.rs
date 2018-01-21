@@ -128,18 +128,12 @@ where
 
 fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
     let mut tmp_path = PathBuf::from(path);
-    let mut new_ext = match tmp_path.extension() {
-        Some(ext) => ext.to_os_string(),
-        None => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Invalid file path",
-            ))
-        }
-    };
-    new_ext.push(".tmp");
-    tmp_path.set_extension(new_ext);
-
+    let mut file_name = tmp_path.file_name().ok_or(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid file path, does not end in a file name",
+        ))?.to_owned();
+    file_name.push(".tmp");
+    tmp_path.set_file_name(file_name);
     Ok(tmp_path)
 }
 
@@ -196,7 +190,7 @@ i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
         store.add_application_key(&app_key).wait().unwrap();
 
         let retrieved_app_key = store
-            .retrieve_application_key(&app_id, &handle)
+            .retrieve_application_key(&app_key.application, &app_key.handle)
             .wait()
             .unwrap()
             .unwrap();
