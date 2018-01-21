@@ -121,7 +121,7 @@ impl Request {
                 let control_code = match parameter1 {
                     AUTH_CHECK_ONLY => AuthenticateControlCode::CheckOnly,
                     AUTH_ENFORCE => AuthenticateControlCode::EnforceUserPresenceAndSign,
-                    AUTH_ENFORCE | AUTH_FLAG_TUP => {
+                    AUTH_DONT_ENFORCE => {
                         AuthenticateControlCode::DontEnforceUserPresenceAndSign
                     }
                     _ => panic!("Unknown control code"),

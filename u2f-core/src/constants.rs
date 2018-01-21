@@ -15,7 +15,7 @@ pub(crate) const SW_UNKNOWN: u16 = 0x6F00; // Response status : No precise diagn
 
 pub(crate) const AUTH_ENFORCE: u8 = 0x03; // Enforce user presence and sign
 pub(crate) const AUTH_CHECK_ONLY: u8 = 0x07; // Check only
-pub(crate) const AUTH_FLAG_TUP: u8 = 0x01; // Test of user presence set
+pub(crate) const AUTH_DONT_ENFORCE: u8 = 0x08; // Don't enforce user presence and sign
 
 /// Spec says 255 is max length, but the provided .C header says 128
 /// Chose the smaller, it is still sufficient entropy to avoid collisions
