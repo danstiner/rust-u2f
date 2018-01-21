@@ -22,6 +22,7 @@ extern crate subtle;
 extern crate tokio_service;
 
 mod app_id;
+mod application_key;
 mod attestation;
 mod constants;
 mod key_handle;
@@ -42,10 +43,10 @@ use std::result::Result;
 use byteorder::{BigEndian, WriteBytesExt};
 use futures::Future;
 use futures::future;
-use openssl::bn::BigNumContext;
 use slog::Drain;
 
 pub use app_id::AppId;
+pub use application_key::ApplicationKey;
 pub use key_handle::KeyHandle;
 pub use known_app_ids::try_reverse_app_id;
 pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
@@ -100,13 +101,6 @@ impl AsRef<[u8]> for Challenge {
 }
 
 pub trait Signature: AsRef<[u8]> + Debug + Send {}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct ApplicationKey {
-    pub application: AppId,
-    pub handle: KeyHandle,
-    key: Key,
-}
 
 pub trait UserPresence {
     fn approve_registration(
@@ -311,7 +305,7 @@ impl U2F {
         let user_presence_byte = user_presence_byte(user_present);
 
         let signature = self_rc.operations.sign(
-            &application_key.key,
+            application_key.key(),
             &message_to_sign_for_authenticate(
                 &application,
                 &challenge,
@@ -402,9 +396,8 @@ impl U2F {
         challenge: Challenge,
         application_key: ApplicationKey,
     ) -> Result<Registration, RegisterError> {
-        let mut ctx = BigNumContext::new().unwrap();
-        let public_key = PublicKey::from_key(&application_key.key, &mut ctx);
-        let public_key_bytes: Vec<u8> = public_key.to_raw(&mut ctx);
+        let public_key = PublicKey::from_key(application_key.key());
+        let public_key_bytes: Vec<u8> = public_key.to_raw();
         let signature = self_rc.operations.attest(&message_to_sign_for_register(
             &application_key.application,
             &challenge,
@@ -879,7 +872,6 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let mut rng = OsRng::new().unwrap();
         let application = AppId(rng.gen());
         let register_challenge = Challenge(rng.gen());
-        let mut ctx = BigNumContext::new().unwrap();
 
         let registration = u2f.register(application.clone(), register_challenge.clone())
             .wait()
@@ -895,7 +887,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let user_presence_byte = user_presence_byte(true);
         let user_public_key =
-            PublicKey::from_bytes(&registration.user_public_key, &mut ctx).unwrap();
+            PublicKey::from_bytes(&registration.user_public_key).unwrap();
         let user_pkey = PKey::from_ec_key(user_public_key.to_ec_key()).unwrap();
         let signed_data = message_to_sign_for_authenticate(
             &application,

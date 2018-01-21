@@ -8,10 +8,10 @@ use rand::os::OsRng;
 use rand::Rng;
 
 use app_id::AppId;
+use application_key::ApplicationKey;
 use attestation::{Attestation, AttestationCertificate};
 use key_handle::KeyHandle;
 use key::Key;
-use super::ApplicationKey;
 use super::CryptoOperations;
 use super::Signature;
 use super::SignError;
@@ -46,11 +46,7 @@ impl CryptoOperations for OpenSSLCryptoOperations {
     fn generate_application_key(&self, application: &AppId) -> io::Result<ApplicationKey> {
         let key = Self::generate_key();
         let handle = Self::generate_key_handle()?;
-        Ok(ApplicationKey {
-            application: *application,
-            handle: handle,
-            key: key,
-        })
+        Ok(ApplicationKey::new(*application, handle, key))
     }
 
     fn get_attestation_certificate(&self) -> AttestationCertificate {
