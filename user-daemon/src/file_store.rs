@@ -10,7 +10,7 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
+use u2f_core::{AppId, ApplicationKey, Counter, Key, KeyHandle, SecretStore};
 
 #[derive(Serialize, Deserialize)]
 struct Data {
@@ -154,8 +154,55 @@ mod tests {
         AppId::from_bytes(&vec![0u8; 32])
     }
 
+    fn fake_key() -> Key {
+        Key::from_pem("-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEICm1nBaPoI3Q3+RJ143W8eCBAdkxrq5YUoNQ9joO0CdroAoGCCqGSM49
+AwEHoUQDQgAE4CiwgIh5tZgW85DKWRajIeTv7Z11C0nmida+m53yVySriU2YK/8O
+i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
+-----END EC PRIVATE KEY-----")
+    }
+
     fn fake_key_handle() -> KeyHandle {
         KeyHandle::from(&Vec::new())
+    }
+
+    #[test]
+    fn get_and_increment_counter() {
+        let dir = TempDir::new("file_store_tests").unwrap();
+        let path = dir.path().join("store");
+        let store = FileStore::new(path).unwrap();
+        let app_id = fake_app_id();
+        let handle = fake_key_handle();
+        let key = fake_key();
+        let app_key = ApplicationKey::new(app_id, handle, key);
+        store.add_application_key(&app_key).wait().unwrap();
+
+        let counter0 = store.get_and_increment_counter(&app_id).wait().unwrap();
+        let counter1 = store.get_and_increment_counter(&app_id).wait().unwrap();
+
+        assert_eq!(counter0+1, counter1);
+    }
+
+    #[test]
+    fn retrieve_application_key() {
+        let dir = TempDir::new("file_store_tests").unwrap();
+        let path = dir.path().join("store");
+        let store = FileStore::new(path).unwrap();
+        let app_id = fake_app_id();
+        let handle = fake_key_handle();
+        let key = fake_key();
+        let app_key = ApplicationKey::new(app_id, handle), key);
+        store.add_application_key(&app_key).wait().unwrap();
+
+        let retrieved_app_key = store
+            .retrieve_application_key(&app_id, &handle)
+            .wait()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved_app_key.application, app_key.application);
+        assert_eq!(retrieved_app_key.handle, app_key.handle);
+        // Skip key field, it is not easily comparable
     }
 
     #[test]

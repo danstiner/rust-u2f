@@ -8,7 +8,7 @@ use serde_base64::{to_base64, from_base64};
 pub struct Key(pub(crate) EcKey);
 
 impl Key {
-    pub(crate) fn from_pem(pem: &str) -> Key {
+    pub fn from_pem(pem: &str) -> Key {
         Key(EcKey::private_key_from_pem(pem.as_bytes()).unwrap())
     }
 }

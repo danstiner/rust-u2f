@@ -8,7 +8,7 @@ use subtle;
 use serde_base64::{to_base64, from_base64};
 use constants::MAX_KEY_HANDLE_LEN;
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct KeyHandle(Vec<u8>);
 
 impl KeyHandle {

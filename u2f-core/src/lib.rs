@@ -48,6 +48,7 @@ use slog::Drain;
 pub use app_id::AppId;
 pub use application_key::ApplicationKey;
 pub use key_handle::KeyHandle;
+pub use key::Key;
 pub use known_app_ids::try_reverse_app_id;
 pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
 pub use request::{AuthenticateControlCode, Request};
@@ -57,7 +58,6 @@ pub use tokio_service::Service;
 
 use attestation::AttestationCertificate;
 use constants::*;
-use key::Key;
 use public_key::PublicKey;
 
 #[derive(Debug)]
@@ -610,7 +610,6 @@ fn message_to_sign_for_register(
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use super::attestation::Attestation;
 
@@ -737,16 +736,14 @@ KfCIKULVtb4WZnAEMB8GA1UdIwQYMBaAFHjWu2kQGzvnKfCIKULVtb4WZnAEMA8G
 A1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDRwAwRAIgaiIS0Rb+Hw8WSO9fcsln
 ERLGHDWaV+MS0kr5HgmvAjQCIEU0qjr86VDcpLvuGnTkt2djzapR9iO9PPZ5aErv
 3GCT
------END CERTIFICATE-----
-",
+-----END CERTIFICATE-----",
             ),
             key: Key::from_pem(
                 "-----BEGIN EC PRIVATE KEY-----
 MHcCAQEEIEijhKU+RGVbusHs9jNSUs9ZycXRSvtz0wrBJKozKuh1oAoGCCqGSM49
 AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSg==
------END EC PRIVATE KEY-----
-",
+-----END EC PRIVATE KEY-----",
             ),
         }
     }
