@@ -10,7 +10,7 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use u2f_core::{AppId, ApplicationKey, Counter, Key, KeyHandle, SecretStore};
+use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
 #[derive(Serialize, Deserialize)]
 struct Data {
@@ -147,8 +147,9 @@ fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
 mod tests {
     extern crate tempdir;
 
-    use super::*;
     use self::tempdir::TempDir;
+    use super::*;
+    use u2f_core::Key;
 
     fn fake_app_id() -> AppId {
         AppId::from_bytes(&vec![0u8; 32])
@@ -191,7 +192,7 @@ i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
         let app_id = fake_app_id();
         let handle = fake_key_handle();
         let key = fake_key();
-        let app_key = ApplicationKey::new(app_id, handle), key);
+        let app_key = ApplicationKey::new(app_id, handle, key);
         store.add_application_key(&app_key).wait().unwrap();
 
         let retrieved_app_key = store
