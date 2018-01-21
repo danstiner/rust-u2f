@@ -7,4 +7,4 @@ panic = 'abort'
 backtrace = false
 
 [patch.crates-io]
-systemd = { git = "https://github.com/danstiner/rust-systemd", branch = "bugfix/log-dependency-bound" }
+systemd = { git = "https://github.com/jmesmon/rust-systemd", branch = "master" }
