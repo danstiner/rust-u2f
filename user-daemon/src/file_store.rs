@@ -109,21 +109,32 @@ impl SecretStore for FileStore {
 
 fn overwrite_file_atomic<W>(path: &Path, writer_fn: W) -> io::Result<()>
 where
-    W: FnOnce(Box<Write>) -> io::Result<()>,
+    W: FnOnce(Box<&mut Write>) -> io::Result<()>,
 {
+    let directory = path.parent().ok_or(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid file path, does not have a parent directory",
+        ))?;
     let tmp_path = make_tmp_path(path)?;
 
     {
-        let file = OpenOptions::new()
+        let mut tmp_file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&tmp_path)?;
-        writer_fn(Box::new(file.try_clone()?))?;
-        file.sync_all()?;
+        writer_fn(Box::new(&mut tmp_file))?;
+        tmp_file.flush()?;
+        tmp_file.sync_all()?;
     }
 
     fs::rename(&tmp_path, path)?;
+    fsync_dir(directory)?;
     Ok(())
+}
+
+fn fsync_dir(dir: &Path) -> io::Result<()> {
+    let f = File::open(dir)?;
+    f.sync_all()
 }
 
 fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
