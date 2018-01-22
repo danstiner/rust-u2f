@@ -1,10 +1,10 @@
 extern crate futures;
+extern crate linux_uhid_tokio;
 extern crate tokio_core;
-extern crate uhid_linux_tokio;
 
 use std::io;
 
-use uhid_linux_tokio::{Bus, CreateParams, UHIDDevice};
+use linux_uhid_tokio::{Bus, CreateParams, UHIDDevice};
 
 const RDESC: [u8; 85] = [
     0x05, 0x01,	/* USAGE_PAGE (Generic Desktop) */

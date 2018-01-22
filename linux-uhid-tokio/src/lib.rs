@@ -7,12 +7,12 @@ extern crate quick_error;
 
 extern crate bytes;
 extern crate futures;
+extern crate linux_uhid_sys;
 extern crate mio;
 extern crate nix;
 extern crate slog_stdlog;
 extern crate tokio_core;
 extern crate tokio_io;
-extern crate uhid_linux_sys;
 
 mod character_device_file;
 mod character_device;

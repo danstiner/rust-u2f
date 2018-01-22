@@ -1,5 +1,5 @@
 [package]
-name = "uhid-linux-sys"
+name = "linux-uhid-sys"
 version = "1.0.0"
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 

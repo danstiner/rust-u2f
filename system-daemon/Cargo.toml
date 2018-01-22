@@ -27,8 +27,8 @@ tokio-uds = "0.1.7"
 [dependencies.u2fhid-protocol]
 path = "../u2fhid-protocol/"
 
-[dependencies.uhid-linux-tokio]
-path = "../uhid-linux-tokio"
+[dependencies.linux-uhid-tokio]
+path = "../linux-uhid-tokio"
 
 [[bin]]
 name = "softu2f-system-daemon"
