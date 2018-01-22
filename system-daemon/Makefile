@@ -7,13 +7,22 @@ rpm: selinux-policy
 selinux-policy:
 	@$(MAKE) -C $@
 
-install: ../target/release/softu2f-system-daemon
+install:
 	install -m 755 ../target/release/softu2f-system-daemon /usr/libexec/softu2f/system-daemon
 	install -m 644 softu2f.service /etc/systemd/system/softu2f.service
 	install -m 644 softu2f.socket /etc/systemd/system/softu2f.socket
 	install -m 644 softu2f-tmpfiles.conf /etc/tmpfiles.d/softu2f.conf
-	sudo selinux-policy/softu2f-system-daemon.sh
-	sudo systemctl enable softu2f.socket
-	sudo systemctl start softu2f.socket
+	selinux-policy/softu2f-system-daemon.sh
+	systemctl --system enable softu2f.socket
+	systemctl --system start softu2f.socket
 
-.PHONY: install selinux-policy rpm
+uninstall:
+	systemctl --system disable softu2f.socket
+	systemctl --system stop softu2f.service
+	rm /usr/libexec/softu2f/system-daemon
+	rm /etc/systemd/system/softu2f.service
+	rm /etc/systemd/system/softu2f.socket
+	rm /etc/tmpfiles.d/softu2f.conf
+	# TODO uninstall selinux-policy/softu2f-system-daemon
+
+.PHONY: install uninstall selinux-policy rpm
