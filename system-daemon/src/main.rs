@@ -1,6 +1,4 @@
 #[macro_use]
-extern crate serde_derive;
-#[macro_use]
 extern crate slog;
 
 extern crate futures;
@@ -26,7 +24,6 @@ use std::os::unix::net::UnixListener;
 
 use futures::future;
 use futures::prelude::*;
-use slog_journald::JournaldDrain;
 use slog::{Drain, Logger};
 use systemd::daemon::{is_socket_unix, Listening, SocketType};
 use tokio_core::reactor::{Core, Handle};
@@ -99,6 +96,5 @@ fn main() {
     let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
 
-    // let logger = Logger::root(JournaldDrain.ignore_res(), o!());
     run(logger).unwrap();
 }

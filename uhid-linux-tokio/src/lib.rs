@@ -1,14 +1,14 @@
 #[macro_use]
 extern crate bitflags;
-extern crate bytes;
 #[macro_use]
+extern crate slog;
+#[macro_use]
+extern crate quick_error;
+
+extern crate bytes;
 extern crate futures;
 extern crate mio;
 extern crate nix;
-#[macro_use]
-extern crate quick_error;
-#[macro_use]
-extern crate slog;
 extern crate slog_stdlog;
 extern crate tokio_core;
 extern crate tokio_io;

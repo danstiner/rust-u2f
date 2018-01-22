@@ -7,7 +7,7 @@ use notify_rust::{self, Notification, NotificationHint, NotificationUrgency};
 use slog::Logger;
 use time::Duration;
 use tokio_core::reactor::Handle;
-use u2f_core::{try_reverse_application_id, ApplicationParameter, UserPresence};
+use u2f_core::{try_reverse_app_id, AppId, UserPresence};
 
 // TODO this hardcoded keyword should be in the notifcation library
 const NOTIFICATION_CLOSE_ACTION: &str = "__closed";
@@ -66,7 +66,7 @@ impl NotificationUserPresence {
 
             let mut action = String::from("");
             notify_handle.wait_for_action(|a| action = a.to_owned());
-            
+
             let user_present = match action.as_str() {
                 "approve" => true,
                 "deny" => false,
@@ -85,18 +85,18 @@ impl NotificationUserPresence {
 impl UserPresence for NotificationUserPresence {
     fn approve_registration(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
     ) -> Box<Future<Item = bool, Error = io::Error>> {
-        let site_name = try_reverse_application_id(application).unwrap_or(String::from("site"));
+        let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
         let message = format!("Register with {}", site_name);
         self.test_user_presence(&message)
     }
 
     fn approve_authentication(
         &self,
-        application: &ApplicationParameter,
+        application: &AppId,
     ) -> Box<Future<Item = bool, Error = io::Error>> {
-        let site_name = try_reverse_application_id(application).unwrap_or(String::from("site"));
+        let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
         let message = format!("Authenticate with {}", site_name);
         self.test_user_presence(&message)
     }
