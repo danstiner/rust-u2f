@@ -2,6 +2,7 @@
 extern crate slog;
 
 extern crate futures;
+extern crate hostname;
 extern crate libc;
 extern crate linux_uhid_tokio;
 extern crate slog_journald;
@@ -14,6 +15,7 @@ extern crate tokio_io;
 extern crate tokio_serde_bincode;
 extern crate tokio_uds;
 extern crate u2fhid_protocol;
+extern crate users;
 
 mod bidirectional_pipe;
 mod device;

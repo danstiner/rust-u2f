@@ -1,13 +1,14 @@
-use std::io;
-use std::io::Write;
-
 use futures::future;
 use futures::prelude::*;
+use hostname::get_hostname;
 use slog::Logger;
-use tokio_core::reactor::Handle;
-use tokio_uds::UCred;
-use tokio_io::AsyncRead;
+use std::io;
+use std::io::Write;
 use take_mut::take;
+use tokio_core::reactor::Handle;
+use tokio_io::AsyncRead;
+use tokio_uds::UCred;
+use users::get_user_by_uid;
 
 use bidirectional_pipe::BidirectionalPipe;
 use softu2f_system_daemon::*;
@@ -82,7 +83,7 @@ enum DeviceState {
 pub struct Device {
     handle: Handle,
     state: DeviceState,
-    _user: UCred,
+    user: UCred,
     logger: Logger,
 }
 
@@ -97,7 +98,7 @@ impl Device {
             handle: handle.clone(),
             logger: logger,
             state: DeviceState::Uninitialized(Box::new(socket_transport)),
-            _user: user,
+            user: user,
         }
     }
 }
@@ -107,13 +108,15 @@ fn initialize(
     handle: &Handle,
     logger: &Logger,
     _request: CreateDeviceRequest,
+    user: &UCred,
 ) -> (
     Box<Future<Item = SocketPipe, Error = io::Error>>,
     PacketPipe,
 ) {
     info!(logger, "initialize");
+
     let create_params = CreateParams {
-        name: String::from("SoftU2F-Linux"),
+        name: get_device_name(user),
         phys: String::from(""),
         uniq: String::from(""),
         bus: Bus::USB,
@@ -133,6 +136,18 @@ fn initialize(
     ));
 
     (Box::new(socket_future), uhid_transport)
+}
+
+fn get_device_name(ucred: &UCred) -> String {
+    if let Some(hostname) = get_hostname() {
+        if let Some(user) = get_user_by_uid(ucred.uid) {
+            format!("SoftU2F Linux ({}@{})", user.name(), hostname)
+        } else {
+            format!("SoftU2F Linux ({})", hostname)
+        }
+    } else {
+        format!("SoftU2F Linux")
+    }
 }
 
 fn run(
@@ -209,9 +224,10 @@ impl Future for Device {
 
         let mut res: io::Result<AsyncLoop<()>> = Ok(AsyncLoop::Continue);
         while let Ok(AsyncLoop::Continue) = res {
-            let state = &mut self.state;
             let handle = &self.handle;
             let logger = &self.logger;
+            let state = &mut self.state;
+            let user = &self.user;
             take(state, |state| match state {
                 DeviceState::Uninitialized(mut socket_transport) => {
                     debug!(logger, "state unitialized");
@@ -239,7 +255,7 @@ impl Future for Device {
                         SocketInput::CreateDeviceRequest(request) => {
                             res = Ok(AsyncLoop::Continue);
                             let (socket_future, uhid_transport) =
-                                initialize(socket_transport, handle, logger, request);
+                                initialize(socket_transport, handle, logger, request, user);
 
                             debug!(logger, "initialized");
                             DeviceState::Initialized {
