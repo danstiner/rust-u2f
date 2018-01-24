@@ -9,6 +9,10 @@ After installing, open Google Chrome or Firefox and use your new virtual U2F dev
 
 More information on U2F: https://www.yubico.com/solutions/fido-u2f/
 
+<p align="center">
+  <img alt="SoftU2F demo video" src="https://user-images.githubusercontent.com/52513/35321008-a8ec44f6-009a-11e8-8595-1132190f29ed.gif">
+</p>
+
 ### Fedora Installation
 ```bash
 $ curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.rpm.sh | sudo bash
