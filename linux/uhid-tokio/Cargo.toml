@@ -16,4 +16,4 @@ tokio-io = "0.1.3"
 tokio-proto = "0.1.1"
 
 [dependencies.linux-uhid-sys]
-path = "../linux-uhid-sys"
+path = "../uhid-sys"
