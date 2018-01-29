@@ -1,5 +1,5 @@
 [workspace]
-members = ["u2f-core", "u2fhid-protocol", "linux-uhid-sys", "linux-uhid-tokio", "linux-uhid-tokio/example", "user-daemon", "system-daemon"]
+members = ["uhid-sys", "uhid-tokio", "uhid-tokio/example", "user-daemon", "system-daemon"]
 
 [profile.release]
 lto = true
