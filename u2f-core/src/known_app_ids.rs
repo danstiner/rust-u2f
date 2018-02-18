@@ -21,6 +21,7 @@ lazy_static! {
         map.insert(from_url("https://dashboard.stripe.com"), "https://dashboard.stripe.com");
         map.insert(from_url("https://id.fedoraproject.org/u2f-origins.json"), "https://id.fedoraproject.org");
         map.insert(from_url("https://gitlab.com"), "https://gitlab.com");
+        map.insert(from_url("https://www.fastmail.com"), "https://www.fastmail.com");
         map
     };
 }
