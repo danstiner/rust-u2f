@@ -1,5 +1,5 @@
-# SoftU2F for Linux
-[![Build Status](https://travis-ci.org/danstiner/softu2f-linux.svg?branch=master)](https://travis-ci.org/danstiner/softu2f-linux)
+# Rust U2F
+[![Build Status](https://travis-ci.org/danstiner/rust-u2f.svg?branch=master)](https://travis-ci.org/danstiner/rust-u2f)
 
 In-progress software-only U2F implementation on Linux using Rust
 
