@@ -9,13 +9,16 @@ use time::Duration;
 use tokio_core::reactor::Handle;
 use u2f_core::{try_reverse_app_id, AppId, UserPresence};
 
-// TODO this hardcoded keyword should be in the notifcation library
-const NOTIFICATION_CLOSE_ACTION: &str = "__closed";
-
+const APPNAME: &str = "SoftU2F";
+const HINT_CATEGORY: &str = "device";
+const ICON: &str = "security-high-symbolic";
 const MAX_CONCURRENT_NOTIFICATIONS: usize = 1;
+const NOTIFICATION_CLOSE_ACTION: &str = "__closed";
+const SUMMARY: &str = "Security Key Request";
+const URGENCY: NotificationUrgency = NotificationUrgency::Critical;
 
 lazy_static! {
-    static ref NOTIFICATION_TIMEOUT: Duration = Duration::seconds(10);
+    static ref PRESENCE_TIMEOUT: Duration = Duration::seconds(10);
 }
 
 pub struct NotificationUserPresence {
@@ -40,15 +43,15 @@ impl NotificationUserPresence {
         Box::new(self.executor.spawn_fn(move || {
             let mut notification = Notification::new();
             notification
-                .appname("SoftU2F")
-                .summary("Security Key Request")
+                .appname(APPNAME)
+                .summary(SUMMARY)
                 .body(&body)
-                .icon("security-high-symbolic")
-                .hint(NotificationHint::Category(String::from("device")))
+                .icon(ICON)
+                .hint(NotificationHint::Category(String::from(HINT_CATEGORY)))
                 .hint(NotificationHint::Transient(true))
-                .hint(NotificationHint::Urgency(NotificationUrgency::Critical))
-                .urgency(NotificationUrgency::Critical)
-                .timeout(NOTIFICATION_TIMEOUT.num_milliseconds() as i32);
+                .hint(NotificationHint::Urgency(URGENCY))
+                .urgency(URGENCY)
+                .timeout(PRESENCE_TIMEOUT.num_milliseconds() as i32);
 
             let mut default_means_user_present = false;
             let server_info = notify_rust::get_server_information().unwrap();
