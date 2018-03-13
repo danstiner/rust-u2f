@@ -18,7 +18,7 @@ const SUMMARY: &str = "Security Key Request";
 const URGENCY: NotificationUrgency = NotificationUrgency::Critical;
 
 lazy_static! {
-    static ref PRESENCE_TIMEOUT: Duration = Duration::seconds(10);
+    static ref TIMEOUT: Duration = Duration::seconds(10);
 }
 
 pub struct NotificationUserPresence {
@@ -51,7 +51,7 @@ impl NotificationUserPresence {
                 .hint(NotificationHint::Transient(true))
                 .hint(NotificationHint::Urgency(URGENCY))
                 .urgency(URGENCY)
-                .timeout(PRESENCE_TIMEOUT.num_milliseconds() as i32);
+                .timeout(TIMEOUT.num_milliseconds() as i32);
 
             let mut default_means_user_present = false;
             let server_info = notify_rust::get_server_information().unwrap();
@@ -105,7 +105,17 @@ impl UserPresence for NotificationUserPresence {
     }
 
     fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
-        println!(";)");
+        let message = String::from("Ready to authenticate");
+        Notification::new()
+            .appname(APPNAME)
+            .summary(SUMMARY)
+            .body(&message)
+            .icon(ICON)
+            .hint(NotificationHint::Category(String::from(HINT_CATEGORY)))
+            .hint(NotificationHint::Transient(true))
+            .hint(NotificationHint::Urgency(URGENCY))
+            .urgency(URGENCY)
+            .timeout(TIMEOUT.num_milliseconds() as i32);
         Box::new(future::ok(()))
     }
 }
