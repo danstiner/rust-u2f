@@ -1,6 +1,5 @@
 use openssl::bn::BigNumContext;
-use openssl::bn::BigNumContextRef;
-use openssl::ec::{EcGroup, EcGroupRef, EcKey, EcPoint, EcPointRef, PointConversionForm};
+use openssl::ec::{EcGroup, EcKey, EcPoint, PointConversionForm};
 use openssl::nid::Nid;
 use openssl::pkey::Public;
 use std::result::Result;
@@ -12,7 +11,6 @@ pub struct PublicKey(EcKey<Public>);
 
 impl PublicKey {
     pub(crate) fn from_key(key: &PrivateKey) -> PublicKey {
-        let mut ctx = BigNumContext::new().unwrap();
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
         PublicKey(EcKey::from_public_key(&group, &key.0.public_key()).unwrap())
     }
