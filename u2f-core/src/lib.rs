@@ -885,7 +885,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let user_presence_byte = user_presence_byte(true);
         let user_public_key =
             PublicKey::from_bytes(&registration.user_public_key).unwrap();
-        let user_pkey = PKey::from_ec_key(user_public_key.to_ec_key()).unwrap();
+        let user_pkey = PKey::from_ec_key(user_public_key.as_ec_key()).unwrap();
         let signed_data = message_to_sign_for_authenticate(
             &application,
             &authentication_challenge,
