@@ -26,9 +26,9 @@ mod application_key;
 mod attestation;
 mod constants;
 mod key_handle;
-mod key;
 mod known_app_ids;
 mod openssl_crypto;
+mod private_key;
 mod public_key;
 mod request;
 mod response;
@@ -48,9 +48,9 @@ use slog::Drain;
 pub use app_id::AppId;
 pub use application_key::ApplicationKey;
 pub use key_handle::KeyHandle;
-pub use key::Key;
 pub use known_app_ids::try_reverse_app_id;
 pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
+pub use private_key::PrivateKey;
 pub use request::{AuthenticateControlCode, Request};
 pub use response::Response;
 pub use self_signed_attestation::self_signed_attestation;
@@ -118,7 +118,7 @@ pub trait CryptoOperations {
     fn attest(&self, data: &[u8]) -> Result<Box<Signature>, SignError>;
     fn generate_application_key(&self, application: &AppId) -> io::Result<ApplicationKey>;
     fn get_attestation_certificate(&self) -> AttestationCertificate;
-    fn sign(&self, key: &Key, data: &[u8]) -> Result<Box<Signature>, SignError>;
+    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<Signature>, SignError>;
 }
 
 pub trait SecretStore {

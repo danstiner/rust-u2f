@@ -1,10 +1,10 @@
 use attestation::{Attestation, AttestationCertificate};
-use key::Key;
+use private_key::PrivateKey;
 
 pub fn self_signed_attestation() -> Attestation {
     Attestation {
         certificate: AttestationCertificate::from_pem(SELF_SIGNED_ATTESTATION_CERTIFICATE_PEM),
-        key: Key::from_pem(SELF_SIGNED_ATTESTATION_KEY_PEM),
+        key: PrivateKey::from_pem(SELF_SIGNED_ATTESTATION_KEY_PEM),
     }
 }
 
