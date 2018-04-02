@@ -1,9 +1,8 @@
 [package]
+authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "linux-uhid-sys"
 version = "1.0.0"
-authors = ["Daniel Stiner <danstiner@gmail.com>"]
-
 [build-dependencies]
-bindgen = "0.32.1"
+bindgen = "0.35.0"
 
 [dependencies]

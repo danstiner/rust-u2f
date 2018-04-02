@@ -2,10 +2,11 @@ use std::fmt::{self, Debug};
 use std::result::Result;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use openssl::ec::EcKey;
+use openssl::pkey::Private;
 
 use serde_base64::{to_base64, from_base64};
 
-pub struct Key(pub(crate) EcKey);
+pub struct Key(pub(crate) EcKey<Private>);
 
 impl Key {
     pub fn from_pem(pem: &str) -> Key {
@@ -15,7 +16,7 @@ impl Key {
 
 impl Clone for Key {
     fn clone(&self) -> Key {
-        Key(self.0.to_owned().unwrap())
+        Key(self.0.to_owned())
     }
 }
 
