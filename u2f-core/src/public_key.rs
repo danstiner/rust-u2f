@@ -8,20 +8,13 @@ use std::result::Result;
 use constants::EC_POINT_FORMAT_UNCOMPRESSED;
 use private_key::PrivateKey;
 
-pub struct PublicKey {
-    group: EcGroup,
-    point: EcPoint,
-}
+pub struct PublicKey(EcKey<Public>);
 
 impl PublicKey {
     pub(crate) fn from_key(key: &PrivateKey) -> PublicKey {
         let mut ctx = BigNumContext::new().unwrap();
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
-        let point = copy_ec_point(key.0.public_key(), &group, &mut ctx);
-        PublicKey {
-            group: group,
-            point: point,
-        }
+        PublicKey(EcKey::from_public_key(&group, &key.0.public_key()).unwrap())
     }
 
     /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
@@ -40,14 +33,11 @@ impl PublicKey {
         }
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
         let point = EcPoint::from_bytes(&group, bytes, &mut ctx).unwrap();
-        Ok(PublicKey {
-            group: group,
-            point: point,
-        })
+        Ok(PublicKey(EcKey::from_public_key(&group, &point).unwrap()))
     }
 
-    pub(crate) fn to_ec_key(&self) -> EcKey<Public> {
-        EcKey::from_public_key(&self.group, &self.point).unwrap()
+    pub(crate) fn as_ec_key(&self) -> &EcKey<Public> {
+        return &self.0
     }
 
     /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
@@ -56,12 +46,6 @@ impl PublicKey {
     pub(crate) fn to_raw(&self) -> Vec<u8> {
         let mut ctx = BigNumContext::new().unwrap();
         let form = PointConversionForm::UNCOMPRESSED;
-        self.point.to_bytes(&self.group, form, &mut ctx).unwrap()
+        self.0.public_key().to_bytes(self.0.group(), form, &mut ctx).unwrap()
     }
-}
-
-fn copy_ec_point(point: &EcPointRef, group: &EcGroupRef, ctx: &mut BigNumContextRef) -> EcPoint {
-    let form = PointConversionForm::UNCOMPRESSED;
-    let bytes = point.to_bytes(&group, form, ctx).unwrap();
-    EcPoint::from_bytes(&group, &bytes, ctx).unwrap()
 }
