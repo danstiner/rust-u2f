@@ -1,23 +1,23 @@
 use app_id::AppId;
 use key_handle::KeyHandle;
-use key::Key;
+use private_key::PrivateKey;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ApplicationKey {
     pub application: AppId,
     pub handle: KeyHandle,
-    key: Key,
+    key: PrivateKey,
 }
 
 impl ApplicationKey {
-    pub fn new(application: AppId, handle: KeyHandle, key: Key) -> ApplicationKey {
+    pub fn new(application: AppId, handle: KeyHandle, key: PrivateKey) -> ApplicationKey {
         ApplicationKey {
             application: application,
             handle: handle,
             key: key,
         }
     }
-    pub(crate) fn key(&self) -> &Key {
+    pub(crate) fn key(&self) -> &PrivateKey {
         &self.key
     }
 }

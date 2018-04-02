@@ -149,14 +149,14 @@ mod tests {
 
     use self::tempdir::TempDir;
     use super::*;
-    use u2f_core::Key;
+    use u2f_core::PrivateKey;
 
     fn fake_app_id() -> AppId {
         AppId::from_bytes(&vec![0u8; 32])
     }
 
-    fn fake_key() -> Key {
-        Key::from_pem("-----BEGIN EC PRIVATE KEY-----
+    fn fake_key() -> PrivateKey {
+        PrivateKey::from_pem("-----BEGIN EC PRIVATE KEY-----
 MHcCAQEEICm1nBaPoI3Q3+RJ143W8eCBAdkxrq5YUoNQ9joO0CdroAoGCCqGSM49
 AwEHoUQDQgAE4CiwgIh5tZgW85DKWRajIeTv7Z11C0nmida+m53yVySriU2YK/8O
 i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==

@@ -6,27 +6,27 @@ use openssl::pkey::Private;
 
 use serde_base64::{to_base64, from_base64};
 
-pub struct Key(pub(crate) EcKey<Private>);
+pub struct PrivateKey(pub(crate) EcKey<Private>);
 
-impl Key {
-    pub fn from_pem(pem: &str) -> Key {
-        Key(EcKey::private_key_from_pem(pem.as_bytes()).unwrap())
+impl PrivateKey {
+    pub fn from_pem(pem: &str) -> PrivateKey {
+        PrivateKey(EcKey::private_key_from_pem(pem.as_bytes()).unwrap())
     }
 }
 
-impl Clone for Key {
-    fn clone(&self) -> Key {
-        Key(self.0.to_owned())
+impl Clone for PrivateKey {
+    fn clone(&self) -> PrivateKey {
+        PrivateKey(self.0.to_owned())
     }
 }
 
-impl Debug for Key {
+impl Debug for PrivateKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Key")
+        write!(f, "PrivateKey")
     }
 }
 
-impl Serialize for Key {
+impl Serialize for PrivateKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -35,8 +35,8 @@ impl Serialize for Key {
     }
 }
 
-impl<'de> Deserialize<'de> for Key {
-    fn deserialize<D>(deserializer: D) -> Result<Key, D::Error>
+impl<'de> Deserialize<'de> for PrivateKey {
+    fn deserialize<D>(deserializer: D) -> Result<PrivateKey, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -47,11 +47,11 @@ impl<'de> Deserialize<'de> for Key {
 struct PrivateKeyAsPEM(Vec<u8>);
 
 impl PrivateKeyAsPEM {
-    fn as_key(&self) -> Key {
-        Key(EcKey::private_key_from_pem(&self.0).unwrap())
+    fn as_key(&self) -> PrivateKey {
+        PrivateKey(EcKey::private_key_from_pem(&self.0).unwrap())
     }
 
-    fn from_key(key: &Key) -> PrivateKeyAsPEM {
+    fn from_key(key: &PrivateKey) -> PrivateKeyAsPEM {
         PrivateKeyAsPEM(key.0.private_key_to_pem().unwrap())
     }
 }

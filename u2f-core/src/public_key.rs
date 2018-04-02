@@ -6,7 +6,7 @@ use openssl::pkey::Public;
 use std::result::Result;
 
 use constants::EC_POINT_FORMAT_UNCOMPRESSED;
-use key::Key;
+use private_key::PrivateKey;
 
 pub struct PublicKey {
     group: EcGroup,
@@ -14,7 +14,7 @@ pub struct PublicKey {
 }
 
 impl PublicKey {
-    pub(crate) fn from_key(key: &Key) -> PublicKey {
+    pub(crate) fn from_key(key: &PrivateKey) -> PublicKey {
         let mut ctx = BigNumContext::new().unwrap();
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
         let point = copy_ec_point(key.0.public_key(), &group, &mut ctx);
