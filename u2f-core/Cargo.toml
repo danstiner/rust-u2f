@@ -2,20 +2,22 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "u2f-core"
 version = "0.2.0"
-
 [dependencies]
-assert_matches = "1.1.0"
+assert_matches = "1.2.0"
 base64 = "0.9.0"
-byteorder = "1.1.0"
-futures = "0.1.16"
+byteorder = "1.2.2"
+futures = "0.1.20"
 lazy_static = "1.0.0"
-openssl = "0.9.20"
+openssl = "0.10.5"
 quick-error = "1.2.1"
-rand = "0.4.1"
+rand = "0.4.2"
 ring = "0.12.1"
-serde = "1.0.27"
-serde_derive = "1.0.27"
-slog = { version = "2.0.12", features = ["max_level_trace"] }
+serde = "1.0.36"
+serde_derive = "1.0.36"
 slog-stdlog = "3.0.2"
-subtle = "0.3.0"
+subtle = "0.6.0"
 tokio-service = "0.1.0"
+
+[dependencies.slog]
+features = ["max_level_trace"]
+version = "2.2.3"

@@ -6,6 +6,7 @@ use std::path::Path;
 use futures::{Async, AsyncSink, Poll, Sink, StartSend, Stream};
 use nix;
 use nix::fcntl;
+use nix::libc;
 use slog_stdlog;
 use slog;
 use slog::Drain;
@@ -53,9 +54,8 @@ impl UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>> {
     ) -> io::Result<UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>>> {
         let fd = fcntl::open(
             path,
-            fcntl::O_RDWR | fcntl::O_CLOEXEC | fcntl::O_NONBLOCK,
-            nix::sys::stat::S_IRUSR | nix::sys::stat::S_IWUSR | nix::sys::stat::S_IRGRP
-                | nix::sys::stat::S_IWGRP,
+            fcntl::OFlag::from_bits(libc::O_RDWR | libc::O_CLOEXEC | libc::O_NONBLOCK).unwrap(),
+            nix::sys::stat::Mode::from_bits(libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP).unwrap(),
         ).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,

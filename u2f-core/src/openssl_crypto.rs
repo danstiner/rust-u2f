@@ -1,5 +1,5 @@
 use openssl::ec::{EcGroup, EcKey};
-use openssl::nid;
+use openssl::nid::Nid;
 use std::io;
 use openssl::hash::MessageDigest;
 use openssl::sign::Signer;
@@ -28,7 +28,7 @@ impl OpenSSLCryptoOperations {
     }
 
     fn generate_key() -> Key {
-        let group = EcGroup::from_curve_name(nid::X9_62_PRIME256V1).unwrap();
+        let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
         let ec_key = EcKey::generate(&group).unwrap();
         Key(ec_key)
     }
@@ -54,7 +54,7 @@ impl CryptoOperations for OpenSSLCryptoOperations {
     }
 
     fn sign(&self, key: &Key, data: &[u8]) -> Result<Box<Signature>, SignError> {
-        let ec_key = key.0.to_owned().unwrap();
+        let ec_key = key.0.to_owned();
         let pkey = PKey::from_ec_key(ec_key).unwrap();
         let mut signer = Signer::new(MessageDigest::sha256(), &pkey).unwrap();
         signer.update(data).unwrap();

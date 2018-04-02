@@ -3,7 +3,7 @@ use std::result::Result;
 use rand::Rand;
 use rand::Rng;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use subtle;
+use subtle::ConstantTimeEq;
 
 use serde_base64::{to_base64, from_base64};
 use constants::MAX_KEY_HANDLE_LEN;
@@ -18,7 +18,7 @@ impl KeyHandle {
     }
 
     pub fn eq_consttime(&self, other: &KeyHandle) -> bool {
-        self.0.len() == other.0.len() && subtle::slices_equal(&self.0, &other.0) == 1
+        self.0.ct_eq(&other.0).unwrap_u8() == 1
     }
 }
 
