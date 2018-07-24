@@ -24,12 +24,12 @@ softu2f-system-daemon being installed.
 rm -rf $RPM_BUILD_ROOT
 mkdir $RPM_BUILD_ROOT
 cargo build --bin softu2f-user-daemon --release
-cp ../target/release/softu2f-user-daemon %{_builddir}
-strip %{_builddir}/softu2f-user-daemon
+cp ../target/release/softu2f-user-daemon %{_tmppath}
+strip %{_tmppath}/softu2f-user-daemon
 
 %install
 install -d %{buildroot}%{_libexecdir}/softu2f
-install -m 755 %{_builddir}/softu2f-user-daemon %{buildroot}%{_libexecdir}/softu2f/user-daemon
+install -m 755 %{_tmppath}/softu2f-user-daemon %{buildroot}%{_libexecdir}/softu2f/user-daemon
 install -d %{buildroot}%{_userunitdir}
 install -m 644 %{SOURCE0} %{buildroot}%{_userunitdir}/softu2f.service
 install -d %{buildroot}%{_prefix}/lib/systemd/user-preset

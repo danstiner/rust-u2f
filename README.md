@@ -15,20 +15,27 @@ More information on U2F: https://www.yubico.com/solutions/fido-u2f/
 
 ### Fedora Installation
 ```bash
-$ curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.rpm.sh | sudo bash
-$ sudo dnf install softu2f
-$ systemctl --user start softu2f
+curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.rpm.sh | sudo bash
+sudo dnf install softu2f
+systemctl --user start softu2f
 ```
 
 ### Ubuntu Installation
 ```bash
-$ sudo apt install -y curl
-$ curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.deb.sh | sudo bash
-$ sudo apt install -y softu2f
-$ systemctl --user start softu2f
+sudo apt install -y curl
+curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.deb.sh | sudo bash
+sudo apt install -y softu2f
+systemctl --user start softu2f
 ```
 
 Note: on Ubuntu 16.04 LTS a reboot is required for changes from [dbus-user-session](https://launchpad.net/ubuntu/xenial/+package/dbus-user-session) to take effect.
+
+## Building
+
+### Fedora
+```bash
+dnf install clang dbus-devel openssl-devel protobuf-compiler systemd-devel rpm-build selinux-devel 
+```
 
 # License
 
