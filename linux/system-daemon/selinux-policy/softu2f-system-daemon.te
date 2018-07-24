@@ -2,8 +2,12 @@ policy_module(softu2f-system-daemon, 1.0.0)
 
 require {
 	type kernel_t;
+	type passwd_file_t;
+	type sssd_public_t;
 	type uhid_device_t;
 	class chr_file { open read write };
+	class dir search;
+	class file { getattr open read };
 	class system module_request;
 }
 
@@ -29,6 +33,8 @@ allow softu2f_system_daemon_t self:fifo_file rw_fifo_file_perms;
 allow softu2f_system_daemon_t self:unix_stream_socket create_stream_socket_perms;
 allow softu2f_system_daemon_t kernel_t:system module_request;
 allow softu2f_system_daemon_t uhid_device_t:chr_file { open read write };
+allow softu2f_system_daemon_t passwd_file_t:file { getattr open read };
+allow softu2f_system_daemon_t sssd_public_t:dir search;
 
 domain_use_interactive_fds(softu2f_system_daemon_t)
 
