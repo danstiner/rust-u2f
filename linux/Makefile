@@ -24,7 +24,7 @@ install: build
 	systemctl --user start softu2f.service
 
 uninstall:
-	-systemctl --user disable softu2f.socket
+	-systemctl --user disable softu2f.service
 	-systemctl --user stop softu2f.service
 	-sudo systemctl --system disable softu2f.socket
 	-sudo systemctl --system stop softu2f.service
@@ -34,7 +34,7 @@ uninstall:
 	-sudo rm /etc/tmpfiles.d/softu2f.conf
 	-sudo rm /usr/libexec/softu2f/user-daemon
 	-sudo rm /etc/systemd/user/softu2f.service
-	# TODO uninstall selinux-policy/softu2f-system-daemon
+	-sudo semodule -r softu2f-system-daemon
 
 rpm: softu2f.spec rpm-selinux-policy rpm-system-daemon rpm-user-daemon
 	rpmbuild --define "_sourcedir ${pwd}" --define "_specdir ${pwd}" --define "_builddir ${pwd}" --define "_srcrpmdir ${targetdir}" --define "_rpmdir ${targetdir}" --define "_buildrootdir ${pwd}/.build" -ba softu2f.spec
