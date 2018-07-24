@@ -10,30 +10,30 @@ build:
 	cargo build
 
 install: build
-	mkdir -p /usr/libexec/softu2f
-	install -m 755 target/debug/softu2f-system-daemon /usr/libexec/softu2f/system-daemon
-	install -m 644 ${systemdaemondir}/softu2f.service /etc/systemd/system/softu2f.service
-	install -m 644 ${systemdaemondir}/softu2f.socket /etc/systemd/system/softu2f.socket
-	install -m 644 ${systemdaemondir}/softu2f-tmpfiles.conf /etc/tmpfiles.d/softu2f.conf
-	${selinuxpolicydir}/softu2f-system-daemon.sh
-	systemctl --system enable softu2f.socket
-	systemctl --system start softu2f.socket
-	install -m 755 target/debug/softu2f-user-daemon /usr/libexec/softu2f/user-daemon
-	install -m 644 ${userdaemondir}/softu2f.service /etc/systemd/user/softu2f.service
+	sudo mkdir -p /usr/libexec/softu2f
+	sudo install -m 755 target/debug/softu2f-system-daemon /usr/libexec/softu2f/system-daemon
+	sudo install -m 644 ${systemdaemondir}/softu2f.service /etc/systemd/system/softu2f.service
+	sudo install -m 644 ${systemdaemondir}/softu2f.socket /etc/systemd/system/softu2f.socket
+	sudo install -m 644 ${systemdaemondir}/softu2f-tmpfiles.conf /etc/tmpfiles.d/softu2f.conf
+	sudo ${selinuxpolicydir}/softu2f-system-daemon.sh
+	sudo systemctl --system enable softu2f.socket
+	sudo systemctl --system start softu2f.socket
+	sudo install -m 755 target/debug/softu2f-user-daemon /usr/libexec/softu2f/user-daemon
+	sudo install -m 644 ${userdaemondir}/softu2f.service /etc/systemd/user/softu2f.service
 	systemctl --user enable softu2f.service
 	systemctl --user start softu2f.service
 
 uninstall:
-	systemctl --system disable softu2f.socket
-	systemctl --system stop softu2f.service
-	rm /usr/libexec/softu2f/system-daemon
-	rm /etc/systemd/system/softu2f.service
-	rm /etc/systemd/system/softu2f.socket
-	rm /etc/tmpfiles.d/softu2f.conf
-	systemctl --user disable softu2f.socket
-	systemctl --user stop softu2f.service
-	rm /usr/libexec/softu2f/user-daemon
-	rm /etc/systemd/user/softu2f.service
+	-systemctl --user disable softu2f.socket
+	-systemctl --user stop softu2f.service
+	-sudo systemctl --system disable softu2f.socket
+	-sudo systemctl --system stop softu2f.service
+	-sudo rm /usr/libexec/softu2f/system-daemon
+	-sudo rm /etc/systemd/system/softu2f.service
+	-sudo rm /etc/systemd/system/softu2f.socket
+	-sudo rm /etc/tmpfiles.d/softu2f.conf
+	-sudo rm /usr/libexec/softu2f/user-daemon
+	-sudo rm /etc/systemd/user/softu2f.service
 	# TODO uninstall selinux-policy/softu2f-system-daemon
 
 rpm: softu2f.spec rpm-selinux-policy rpm-system-daemon rpm-user-daemon
