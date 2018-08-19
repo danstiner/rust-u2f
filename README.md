@@ -1,5 +1,6 @@
 # Rust U2F
 [![Build Status](https://travis-ci.org/danstiner/rust-u2f.svg?branch=master)](https://travis-ci.org/danstiner/rust-u2f)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fdanstiner%2Frust-u2f.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fdanstiner%2Frust-u2f?ref=badge_shield)
 
 In-progress software-only U2F implementation on Linux using Rust
 
@@ -47,6 +48,9 @@ This project is licensed under either of
    http://opensource.org/licenses/MIT)
 
 at your option.
+
+
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fdanstiner%2Frust-u2f.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fdanstiner%2Frust-u2f?ref=badge_large)
 
 ### Contribution
 
