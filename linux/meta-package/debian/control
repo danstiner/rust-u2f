@@ -9,5 +9,5 @@ Homepage: https://github.com/danstiner/softu2f-linux
 Package: softu2f
 Architecture: all
 Depends: softu2f-user-daemon, ${misc:Depends}
-Description: U2F tokens emulated as software
+Description: U2F security token emulator written in Rust
  <insert long description, indented with spaces>
