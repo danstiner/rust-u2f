@@ -39,11 +39,16 @@ use u2fhid_protocol::{Packet, U2FHID};
 use file_store::FileStore;
 use user_presence::NotificationUserPresence;
 
-fn socket_output_to_packet(output_event: SocketOutput) -> Option<Packet> {
-    match output_event {
-        SocketOutput::Packet(raw_packet) => {
-            Some(Packet::from_bytes(&raw_packet.into_bytes()).unwrap())
-        }
+fn socket_output_to_packet(logger: &Logger, event: SocketOutput) -> Option<Packet> {
+    match event {
+        SocketOutput::Packet(raw_packet) => match Packet::from_bytes(&raw_packet.to_bytes()) {
+            Ok(packet) => Some(packet),
+            Err(error) => {
+                info!(logger, "Bad packet"; "parse_error" => error);
+                trace!(logger, "Packet"; "raw_packet" => raw_packet);
+                None
+            }
+        },
         _ => None,
     }
 }
@@ -105,12 +110,13 @@ fn run(logger: Logger) -> io::Result<()> {
                                 return Box::new(future::err(io::Error::new(
                                     io::ErrorKind::Other,
                                     "Expected create device response",
-                                )))
+                                )));
                             }
                         };
 
+                        let packet_logger = logger.new(o!());
                         let transport = socket
-                            .filter_map(socket_output_to_packet)
+                            .filter_map(move |event| socket_output_to_packet(&packet_logger, event))
                             .with(packet_to_socket_input);
 
                         let attestation = u2f_core::self_signed_attestation();

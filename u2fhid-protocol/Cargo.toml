@@ -13,6 +13,7 @@ serde_derive = "1.0.36"
 slog = "2.2.3"
 slog-stdlog = "3.0.2"
 tokio-core = "0.1.16"
+quick-error = "1.2.1"
 
 [dependencies.u2f-core]
 path = "../u2f-core"

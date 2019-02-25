@@ -373,19 +373,46 @@ where
                 if receive.buffer.len() >= receive.payload_len {
                     let bytes = &receive.buffer[0..receive.payload_len];
                     debug!(self.logger, "Received payload"; "len" => receive.payload_len, "bytes" => format!("0x{:02x}", bytes.iter().format("")));
-                    let message = RequestMessage::decode(&receive.command, bytes).unwrap();
-                    let response_future = self.handle_request(Request {
-                        channel_id: receive.channel_id,
-                        message: message,
-                    })?;
-                    let dispatch_state = DispatchState {
-                        channel_id: receive.channel_id,
-                        future: response_future,
-                        timeout: receive.transaction_timeout,
-                    };
-                    StateTransition {
-                        new_state: State::Dispatch(dispatch_state),
-                        output: None,
+                    match RequestMessage::decode(&receive.command, bytes) {
+                        Err(RequestMessageDecodeError::UnsupportedCommand(Command::Unknown { .. })) => {
+                            info!(self.logger, "Unknown command. Responding with InvalidCommand error to encourage fallback to U2F protocol");
+                            StateTransition {
+                                new_state: State::Idle,
+                                output: Some(Response {
+                                    channel_id: receive.channel_id,
+                                    message: ResponseMessage::Error {
+                                        code: ErrorCode::InvalidCommand,
+                                    },
+                                }),
+                            }
+                        },
+                        Err(error) => {
+                            debug!(self.logger, "Unable to decode request message"; "error" => error);
+                            StateTransition {
+                                new_state: State::Idle,
+                                output: Some(Response {
+                                    channel_id: receive.channel_id,
+                                    message: ResponseMessage::Error {
+                                        code: ErrorCode::Other,
+                                    },
+                                }),
+                            }
+                        },
+                        Ok(message) => {
+                            let response_future = self.handle_request(Request {
+                                channel_id: receive.channel_id,
+                                message: message,
+                            })?;
+                            let dispatch_state = DispatchState {
+                                channel_id: receive.channel_id,
+                                future: response_future,
+                                timeout: receive.transaction_timeout,
+                            };
+                            StateTransition {
+                                new_state: State::Dispatch(dispatch_state),
+                                output: None,
+                            }
+                        }
                     }
                 } else {
                     debug!(self.logger, "Payload incomplete"; "payload_len" => receive.payload_len, "receive_len" => receive.buffer.len());

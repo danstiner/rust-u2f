@@ -34,6 +34,9 @@ const U2FHID_ERROR: u8 = FRAME_TYPE_INIT | 0x3f; // Error response
 const U2FHID_VENDOR_FIRST: u8 = FRAME_TYPE_INIT | 0x40; // First vendor defined command
 const U2FHID_VENDOR_LAST: u8 = FRAME_TYPE_INIT | 0x7f; // Last vendor defined command
 
+const COMMAND_INIT_DATA_LEN: usize = 8;
+const COMMAND_WINK_DATA_LEN: usize = 1;
+
 pub const BROADCAST_CHANNEL_ID: ChannelId = ChannelId(0xffffffff);
 
 pub fn packet_timeout_duration() -> Duration {
@@ -106,7 +109,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub enum Command {
     Msg,
     Ping,
@@ -116,6 +119,7 @@ pub enum Command {
     Lock,
     Sync,
     Vendor { identifier: u8 },
+    Unknown { identifier: u8 },
 }
 
 impl slog::Value for Command {
@@ -133,6 +137,7 @@ impl slog::Value for Command {
             &Command::Wink => "Wink",
             &Command::Lock => "Lock",
             &Command::Sync => "Sync",
+            &Command::Unknown { .. } => "Unknown",
             &Command::Vendor { .. } => "Vendor",
         }.serialize(record, key, serializer)
     }
@@ -176,13 +181,13 @@ impl Packet {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Packet, ()> {
-        // TODO assert_eq!(bytes.len(), HID_REPORT_LEN);
+        assert_eq!(bytes.len(), HID_REPORT_LEN + 1);
         let mut reader = Cursor::new(bytes);
         reader.read_u8().unwrap(); // TODO why do we have this extra byte to skip here
         let channel_id = ChannelId(reader.read_u32::<BigEndian>().unwrap());
-        let frame_type_byte = reader.read_u8().unwrap();
-        if frame_type_byte & FRAME_TYPE_MASK == FRAME_TYPE_INIT {
-            let command = match frame_type_byte {
+        let first_byte = reader.read_u8().unwrap();
+        if first_byte & FRAME_TYPE_MASK == FRAME_TYPE_INIT {
+            let command = match first_byte {
                 U2FHID_MSG => Command::Msg,
                 U2FHID_PING => Command::Ping,
                 U2FHID_INIT => Command::Init,
@@ -193,7 +198,7 @@ impl Packet {
                 id if id >= U2FHID_VENDOR_FIRST && id <= U2FHID_VENDOR_LAST => {
                     Command::Vendor { identifier: id }
                 }
-                _ => return Err(()),
+                id => Command::Unknown { identifier: id }
             };
             let payload_len = reader.read_u16::<BigEndian>().unwrap();
             let mut packet_data = vec![0u8; INITIAL_PACKET_DATA_LEN];
@@ -205,7 +210,7 @@ impl Packet {
                 payload_len: payload_len as usize,
             })
         } else {
-            let sequence_number = frame_type_byte;
+            let sequence_number = first_byte;
             let mut packet_data = vec![0u8; CONTINUATION_PACKET_DATA_LEN];
             reader.read_exact(&mut packet_data[..]).unwrap();
             Ok(Packet::Continuation {
@@ -239,6 +244,7 @@ impl Packet {
                     Command::Lock => U2FHID_LOCK,
                     Command::Sync => U2FHID_SYNC,
                     Command::Vendor { identifier } => identifier,
+                    Command::Unknown { identifier } => identifier,
                 };
                 bytes.push(command_byte);
 
@@ -294,7 +300,7 @@ pub enum RequestMessage {
 }
 
 impl RequestMessage {
-    pub fn decode(command: &Command, data: &[u8]) -> Result<RequestMessage, ()> {
+    pub fn decode(command: &Command, data: &[u8]) -> Result<RequestMessage, RequestMessageDecodeError> {
         match command {
             &Command::Msg => Ok(RequestMessage::EncapsulatedRequest {
                 data: data.to_vec(),
@@ -303,31 +309,57 @@ impl RequestMessage {
                 data: data.to_vec(),
             }),
             &Command::Init => {
-                if data.len() != 8 {
-                    Err(())
+                if data.len() != COMMAND_INIT_DATA_LEN {
+                    Err(RequestMessageDecodeError::PayloadLength(COMMAND_INIT_DATA_LEN, data.len()))
                 } else {
-                    let mut nonce = [0u8; 8];
+                    let mut nonce = [0u8; COMMAND_INIT_DATA_LEN];
                     nonce.copy_from_slice(&data[..]);
                     Ok(RequestMessage::Init { nonce: nonce })
                 }
-            }
+            },
             &Command::Wink => Ok(RequestMessage::Wink),
             &Command::Lock => {
-                if data.len() != 1 {
-                    Err(())
+                if data.len() != COMMAND_WINK_DATA_LEN {
+                    Err(RequestMessageDecodeError::PayloadLength(COMMAND_WINK_DATA_LEN, data.len()))
                 } else {
                     Ok(RequestMessage::Lock {
                         lock_time: Duration::from_secs(data[0].into()),
                     })
                 }
-            }
+            },
             &Command::Sync => {
-                // TODO
-                Err(())
-            }
-            &Command::Error => Err(()),
-            &Command::Vendor { .. } => Err(()),
+                Err(RequestMessageDecodeError::UnsupportedCommand(*command))
+            },
+            &Command::Error => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
+            &Command::Vendor { .. } => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
+
+            &Command::Unknown { .. } => {
+                // The Fido v2.0 specification is backwards compatible with U2F
+                // authenticators if they responded to unknown messages with
+                // the error message InvalidCommand (0x01).
+                // https://fidoalliance.org/specs/fido-v2.0-rd-20170927/fido-client-to-authenticator-protocol-v2.0-rd-20170927.html#interoperating-with-ctap1-u2f-authenticators
+                Err(RequestMessageDecodeError::UnsupportedCommand(*command))
+            },
         }
+    }
+}
+
+quick_error! {
+    #[derive(Debug)]
+    pub enum RequestMessageDecodeError {
+        PayloadLength(expected_len: usize, actual_len: usize)
+        UnsupportedCommand(command: Command)
+    }
+}
+
+impl slog::Value for RequestMessageDecodeError {
+    fn serialize(
+        &self,
+        record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut slog::Serializer,
+    ) -> slog::Result {
+        format!("{:?}", self).serialize(record, key, serializer)
     }
 }
 

@@ -1,8 +1,8 @@
 use std::io;
 
-use futures_cpupool::CpuPool;
 use futures::future;
 use futures::prelude::*;
+use futures_cpupool::CpuPool;
 use notify_rust::{self, Notification, NotificationHint, NotificationUrgency};
 use slog::Logger;
 use time::Duration;

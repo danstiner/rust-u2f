@@ -6,6 +6,8 @@ extern crate futures;
 extern crate serde_derive;
 #[macro_use]
 extern crate slog;
+#[macro_use]
+extern crate quick_error;
 
 extern crate byteorder;
 extern crate itertools;
@@ -90,20 +92,17 @@ where
             // Always tick the transport first
             // TODO self.transport.tick();
 
-            trace!(self.logger, "Ensure sink is ready");
             try_ready!(self.transport.poll_complete());
 
-            trace!(self.logger, "Try to step state machine");
             if let Some(response) = self.state_machine.step()? {
                 debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
                 assert_send(&mut self.transport, response)?;
                 continue;
             }
 
-            trace!(self.logger, "Poll read from transport stream");
             match try_ready!(self.transport.poll()) {
                 Some(packet) => {
-                    trace!(self.logger, "Run state machine with read packet"; "packet" => &packet);
+                    trace!(self.logger, "Got packet from transport"; "packet" => &packet);
                     match self.state_machine.accept_packet(packet)? {
                         Some(response) => {
                             debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
