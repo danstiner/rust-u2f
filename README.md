@@ -3,10 +3,6 @@
 
 Prototype software-only U2F implementation on Linux implemented in [Rust](https://www.rust-lang.org/)
 
-## Usage
-
-After installing, open Google Chrome or Firefox and use your new virtual U2F device on a site supporting it such as: https://demo.yubico.com/webauthn
-
 More information on U2F: https://www.yubico.com/solutions/fido-u2f/
 
 <p align="center">
@@ -31,6 +27,8 @@ curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.de
 sudo apt install -y softu2f
 systemctl --user start softu2f
 ```
+
+After installing, open Google Chrome or Firefox and use your new virtual U2F device on a site supporting it such as: https://demo.yubico.com/webauthn
 
 Note on Ubuntu 16.04 LTS a reboot is required for changes from [dbus-user-session](https://launchpad.net/ubuntu/xenial/+package/dbus-user-session) to take effect.
 
