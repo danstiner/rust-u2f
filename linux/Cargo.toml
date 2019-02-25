@@ -4,4 +4,3 @@ members = ["uhid-sys", "uhid-tokio", "uhid-tokio/example", "user-daemon", "syste
 [profile.release]
 lto = true
 panic = 'abort'
-backtrace = false
