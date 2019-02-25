@@ -1,5 +1,5 @@
-use futures::{Future, IntoFuture};
 use futures::future;
+use futures::{Future, IntoFuture};
 use serde_json;
 use std::collections::HashMap;
 use std::fs;
@@ -12,10 +12,12 @@ use std::path::PathBuf;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
 macro_rules! tryf {
-    ($e:expr) => (match $e {
-        Ok(t) => t,
-        Err(e) => return Box::new(future::err(From::from(e))),
-    })
+    ($e:expr) => {
+        match $e {
+            Ok(t) => t,
+            Err(e) => return Box::new(future::err(From::from(e))),
+        }
+    };
 }
 
 #[derive(Serialize, Deserialize)]
@@ -30,9 +32,7 @@ pub struct FileStore {
 
 impl FileStore {
     pub fn new(path: PathBuf) -> io::Result<FileStore> {
-        Ok(FileStore {
-            path: path,
-        })
+        Ok(FileStore { path: path })
     }
 
     fn save(&self, data: &Data) -> io::Result<()> {
@@ -107,9 +107,9 @@ where
     W: FnOnce(Box<&mut Write>) -> io::Result<()>,
 {
     let directory = path.parent().ok_or(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Invalid file path, does not have a parent directory",
-        ))?;
+        io::ErrorKind::InvalidInput,
+        "Invalid file path, does not have a parent directory",
+    ))?;
     let tmp_path = make_tmp_path(path)?;
 
     {
@@ -134,10 +134,13 @@ fn fsync_dir(dir: &Path) -> io::Result<()> {
 
 fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
     let mut tmp_path = PathBuf::from(path);
-    let mut file_name = tmp_path.file_name().ok_or(io::Error::new(
+    let mut file_name = tmp_path
+        .file_name()
+        .ok_or(io::Error::new(
             io::ErrorKind::InvalidInput,
             "Invalid file path, does not end in a file name",
-        ))?.to_owned();
+        ))?
+        .to_owned();
     file_name.push(".tmp");
     tmp_path.set_file_name(file_name);
     Ok(tmp_path)
@@ -156,11 +159,13 @@ mod tests {
     }
 
     fn fake_key() -> PrivateKey {
-        PrivateKey::from_pem("-----BEGIN EC PRIVATE KEY-----
+        PrivateKey::from_pem(
+            "-----BEGIN EC PRIVATE KEY-----
 MHcCAQEEICm1nBaPoI3Q3+RJ143W8eCBAdkxrq5YUoNQ9joO0CdroAoGCCqGSM49
 AwEHoUQDQgAE4CiwgIh5tZgW85DKWRajIeTv7Z11C0nmida+m53yVySriU2YK/8O
 i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
------END EC PRIVATE KEY-----")
+-----END EC PRIVATE KEY-----",
+        )
     }
 
     fn fake_key_handle() -> KeyHandle {
@@ -181,7 +186,7 @@ i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
         let counter0 = store.get_and_increment_counter(&app_id).wait().unwrap();
         let counter1 = store.get_and_increment_counter(&app_id).wait().unwrap();
 
-        assert_eq!(counter0+1, counter1);
+        assert_eq!(counter0 + 1, counter1);
     }
 
     #[test]

@@ -31,7 +31,6 @@ path = "../../u2fhid-protocol"
 [dev-dependencies]
 tempdir = "0.3.7"
 
-
 [package.metadata.deb]
 assets = [
     ["softu2f.service", "usr/lib/systemd/user/", "644"],
