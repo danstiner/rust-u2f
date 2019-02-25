@@ -28,7 +28,7 @@ sudo apt install -y softu2f
 systemctl --user start softu2f
 ```
 
-After installing, open Google Chrome or Firefox and use your new virtual U2F device on a site supporting it such as: https://demo.yubico.com/webauthn
+After installing, open Google Chrome or Firefox and use your new virtual U2F device on a site supporting it such as: https://demo.yubico.com/webauthn-technical/registration
 
 Note on Ubuntu 16.04 LTS a reboot is required for changes from [dbus-user-session](https://launchpad.net/ubuntu/xenial/+package/dbus-user-session) to take effect.
 
