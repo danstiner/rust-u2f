@@ -2,7 +2,7 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 description = "System daemon for U2F device simulated in software"
 name = "softu2f-system-daemon"
-version = "0.2.0"
+version = "0.3.0"
 
 [build-dependencies]
 protoc-rust = "1.5.0"

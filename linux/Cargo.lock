@@ -314,7 +314,7 @@ name = "example"
 version = "0.1.0"
 dependencies = [
  "futures 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)",
- "linux-uhid-tokio 0.2.0",
+ "linux-uhid-tokio 0.3.0",
  "tokio-core 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -484,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "linux-uhid-tokio"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bitflags 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1022,14 +1022,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "softu2f-system-daemon"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bincode 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "hostname 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.40 (registry+https://github.com/rust-lang/crates.io-index)",
- "linux-uhid-tokio 0.2.0",
+ "linux-uhid-tokio 0.3.0",
  "protoc-rust 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.36 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.36 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1042,13 +1042,13 @@ dependencies = [
  "tokio-io 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-serde-bincode 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-uds 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "u2fhid-protocol 0.2.0",
+ "u2fhid-protocol 0.3.0",
  "users 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "softu2f-user-daemon"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "futures 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-cpupool 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1059,15 +1059,15 @@ dependencies = [
  "serde_json 1.0.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog-term 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "softu2f-system-daemon 0.2.0",
+ "softu2f-system-daemon 0.3.0",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-core 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-serde-bincode 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-uds 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "u2f-core 0.2.0",
- "u2fhid-protocol 0.2.0",
+ "u2f-core 0.3.0",
+ "u2fhid-protocol 0.3.0",
 ]
 
 [[package]]
@@ -1377,7 +1377,7 @@ dependencies = [
 
 [[package]]
 name = "u2f-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "base64 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "u2fhid-protocol"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bitflags 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1410,7 +1410,7 @@ dependencies = [
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog-stdlog 3.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-core 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
- "u2f-core 0.2.0",
+ "u2f-core 0.3.0",
 ]
 
 [[package]]
