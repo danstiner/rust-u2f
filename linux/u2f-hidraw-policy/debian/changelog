@@ -1,0 +1,5 @@
+u2f-hidraw-policy (1.0.2-1) UNRELEASED; urgency=medium
+
+  * Initial debian release.
+
+ -- Daniel Stiner <daniel.stiner@gmail.com>  Thu, 28 Dec 2017 14:11:16 -0800

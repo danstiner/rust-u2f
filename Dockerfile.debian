@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y \
       libdbus-1-dev \
       libssl-dev \
       libsystemd-dev \
+      libudev-dev \
+      systemd \
       unzip
 
 ARG protoc_version=3.6.1
@@ -45,12 +47,15 @@ RUN cargo test
 RUN mkdir -p dist/
 
 RUN cd system-daemon && cargo deb
-RUN cp target/debian/*.deb dist/
+RUN mv target/debian/*.deb dist/
 
 RUN cd user-daemon && cargo deb
-RUN cp target/debian/*.deb dist/
+RUN mv target/debian/*.deb dist/
 
 RUN cd meta-package && dpkg-buildpackage -us -uc
-RUN cp *.deb dist/
+RUN mv *.deb dist/
+
+RUN cd u2f-hidraw-policy && dpkg-buildpackage -b
+RUN mv *.deb dist/
 
 CMD ["/bin/bash"]
