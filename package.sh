@@ -22,7 +22,6 @@ package_with_docker() {
 
 [[ -d dist/ ]] && rm -r dist/
 
-package_with_docker debian debian latest
 package_with_docker debian debian stretch
 
 package_with_docker debian ubuntu bionic
