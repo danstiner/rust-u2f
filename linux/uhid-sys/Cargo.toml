@@ -2,6 +2,8 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "uhid-sys"
 version = "1.0.0"
+description = "FFI bindings to Linux UHID (user-space HID transport drivers)"
+license = "MIT"
 
 [build-dependencies]
 bindgen = "0.35.0"

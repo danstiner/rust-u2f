@@ -2,6 +2,8 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "tokio-linux-uhid"
 version = "0.3.0"
+description = "Tokio-based interface to Linux UHID (user-space HID transport drivers)"
+license = "MIT"
 
 [dependencies]
 bitflags = "1.0.1"
