@@ -1,7 +1,8 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
-name = "linux-uhid-tokio"
+name = "tokio-linux-uhid"
 version = "0.3.0"
+
 [dependencies]
 bitflags = "1.0.1"
 bytes = "0.4.6"
@@ -15,5 +16,5 @@ tokio-core = "0.1.16"
 tokio-io = "0.1.6"
 tokio-proto = "0.1.1"
 
-[dependencies.linux-uhid-sys]
+[dependencies.uhid-sys]
 path = "../uhid-sys"

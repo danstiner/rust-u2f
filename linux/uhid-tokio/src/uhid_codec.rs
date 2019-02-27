@@ -8,7 +8,7 @@ use bytes::BytesMut;
 use slog;
 
 use character_device::{Decoder, Encoder};
-use linux_uhid_sys as sys;
+use uhid_sys as sys;
 
 quick_error! {
     #[derive(Debug)]

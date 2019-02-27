@@ -12,7 +12,7 @@ use users::get_user_by_uid;
 
 use bidirectional_pipe::BidirectionalPipe;
 use softu2f_system_daemon::*;
-use linux_uhid_tokio::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UHIDDevice};
+use tokio_linux_uhid::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UHIDDevice};
 
 const INPUT_REPORT_LEN: u8 = 64;
 const OUTPUT_REPORT_LEN: u8 = 64;

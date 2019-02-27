@@ -26,7 +26,7 @@ tokio-serde-bincode = "0.1.1"
 tokio-uds = "0.1.7"
 users = "0.6.1"
 
-[dependencies.linux-uhid-tokio]
+[dependencies.tokio-linux-uhid]
 path = "../uhid-tokio"
 
 [dependencies.u2fhid-protocol]

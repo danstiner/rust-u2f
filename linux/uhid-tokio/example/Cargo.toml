@@ -7,5 +7,5 @@ version = "0.1.0"
 futures = "0.1.15"
 tokio-core = "0.1.9"
 
-[dependencies.linux-uhid-tokio]
+[dependencies.tokio-linux-uhid]
 path = "../"
