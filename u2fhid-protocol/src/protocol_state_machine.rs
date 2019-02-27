@@ -372,7 +372,7 @@ where
             State::Receive(receive) => {
                 if receive.buffer.len() >= receive.payload_len {
                     let bytes = &receive.buffer[0..receive.payload_len];
-                    debug!(self.logger, "Received payload"; "len" => receive.payload_len, "bytes" => format!("0x{:02x}", bytes.iter().format("")));
+                    debug!(self.logger, "Received payload"; "len" => receive.payload_len);
                     match RequestMessage::decode(&receive.command, bytes) {
                         Err(RequestMessageDecodeError::UnsupportedCommand(Command::Unknown { .. })) => {
                             info!(self.logger, "Unknown command. Responding with InvalidCommand error to encourage fallback to U2F protocol");
