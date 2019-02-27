@@ -2,7 +2,7 @@ softu2f (0.3.1) unstable; urgency=medium
 
   * Fix handling of key handles over 128 bytes
 
- -- Dan <daniel.stiner@gmail.com>  Tues, 26 Feb 2019 23:11:00 -0800
+ -- Dan <daniel.stiner@gmail.com>  Tue, 26 Feb 2019 23:11:00 -0800
 
 softu2f (0.3.0) unstable; urgency=medium
 
