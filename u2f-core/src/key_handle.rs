@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use subtle::ConstantTimeEq;
 
 use serde_base64::{to_base64, from_base64};
-use constants::MAX_KEY_HANDLE_LEN;
+use constants::{DEFAULT_KEY_HANDLE_LEN, MAX_KEY_HANDLE_LEN};
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct KeyHandle(Vec<u8>);
@@ -31,8 +31,8 @@ impl AsRef<[u8]> for KeyHandle {
 impl Rand for KeyHandle {
     #[inline]
     fn rand<R: Rng>(rng: &mut R) -> KeyHandle {
-        let mut bytes = Vec::with_capacity(MAX_KEY_HANDLE_LEN);
-        for _ in 0..MAX_KEY_HANDLE_LEN {
+        let mut bytes = Vec::with_capacity(DEFAULT_KEY_HANDLE_LEN);
+        for _ in 0..DEFAULT_KEY_HANDLE_LEN {
             bytes.push(rng.gen::<u8>());
         }
         KeyHandle(bytes)

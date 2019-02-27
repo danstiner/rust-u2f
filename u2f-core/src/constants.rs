@@ -17,8 +17,7 @@ pub(crate) const AUTH_ENFORCE: u8 = 0x03; // Enforce user presence and sign
 pub(crate) const AUTH_CHECK_ONLY: u8 = 0x07; // Check only
 pub(crate) const AUTH_DONT_ENFORCE: u8 = 0x08; // Don't enforce user presence and sign
 
-/// Spec says 255 is max length, but the provided .C header says 128
-/// Chose the smaller, it is still sufficient entropy to avoid collisions
-pub(crate) const MAX_KEY_HANDLE_LEN: usize = 128;
+pub(crate) const DEFAULT_KEY_HANDLE_LEN: usize = 255;
+pub(crate) const MAX_KEY_HANDLE_LEN: usize = 255;
 
 pub(crate) const EC_POINT_FORMAT_UNCOMPRESSED: u8 = 0x04;
