@@ -48,6 +48,6 @@ impl slog::Value for AppId {
         key: slog::Key,
         serializer: &mut slog::Serializer,
     ) -> slog::Result {
-        slog::Value::serialize(&format!("{:?}", self.0), record, key, serializer)
+        slog::Value::serialize(&format!("{:X?}", self.0), record, key, serializer)
     }
 }
