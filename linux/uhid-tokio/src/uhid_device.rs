@@ -23,6 +23,7 @@ pub struct UHIDDevice<T> {
     logger: slog::Logger,
 }
 
+/// The paramters used to create the UHID device
 pub struct CreateParams {
     pub name: String,
     pub phys: String,
@@ -38,6 +39,7 @@ pub struct CreateParams {
 // ===== impl UHIDDevice =====
 
 impl UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>> {
+    /// Create a UHID device using '/dev/uhid'
     pub fn create<L: Into<Option<slog::Logger>>>(
         handle: &Handle,
         params: CreateParams,
@@ -46,6 +48,7 @@ impl UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>> {
         Self::create_with_path(Path::new("/dev/uhid"), handle, params, logger)
     }
 
+    /// Create a UHID device, using the specified UHID device file path
     pub fn create_with_path<L: Into<Option<slog::Logger>>>(
         path: &Path,
         handle: &Handle,
@@ -107,6 +110,7 @@ where
         device
     }
 
+    /// Send a HID packet to the UHID device
     pub fn send_input(&mut self, data: &[u8]) -> Result<(), <UHIDCodec as Encoder>::Error> {
         trace!(self.logger, "Send input event");
         self.inner.send(InputEvent::Input {
@@ -114,7 +118,8 @@ where
         })
     }
 
-    pub fn destory(mut self) -> Result<(), <UHIDCodec as Encoder>::Error> {
+    /// Send a 'destroy' to the UHID device and close it
+    pub fn destroy(mut self) -> Result<(), <UHIDCodec as Encoder>::Error> {
         self.inner.send(InputEvent::Destroy)?;
         self.inner.close()?;
         Ok(())
