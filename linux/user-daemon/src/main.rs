@@ -23,7 +23,6 @@ extern crate u2fhid_protocol;
 mod file_store;
 mod user_presence;
 
-use std::env;
 use std::io;
 
 use futures::future;
@@ -46,7 +45,7 @@ fn socket_output_to_packet(logger: &Logger, event: SocketOutput) -> Option<Packe
             Ok(packet) => Some(packet),
             Err(error) => {
                 info!(logger, "Bad packet"; "parse_error" => error);
-                trace!(logger, "Packet"; "raw_packet" => raw_packet);
+                debug!(logger, "Packet"; "raw_packet" => raw_packet);
                 None
             }
         },
@@ -67,9 +66,8 @@ fn run(logger: Logger) -> io::Result<()> {
     let mut store_path = dirs::home_dir().unwrap();
     store_path.push(".softu2f-secrets.json");
 
-    info!(logger, "Started SoftU2f Session"; "store_path" => store_path.to_str().unwrap());
-
-    info!(logger, "Opening socket");
+    info!(logger, "Starting SoftU2F user daemon"; "store_path" => store_path.to_str().unwrap());
+    debug!(logger, "Opening socket"; "path" => softu2f_system_daemon::SOCKET_PATH);
     let stream = UnixStream::connect(softu2f_system_daemon::SOCKET_PATH, &handle)?;
 
     let _peer_cred = stream.peer_cred()?;
@@ -90,7 +88,7 @@ fn run(logger: Logger) -> io::Result<()> {
         socket
             .send(SocketInput::CreateDeviceRequest(create_device_request))
             .and_then(|socket| {
-                info!(logger, "Sent create device request");
+                debug!(logger, "Sent create device request");
                 socket
                     .into_future()
                     .then(|res| -> Box<Future<Item = (), Error = io::Error>> {
@@ -102,7 +100,7 @@ fn run(logger: Logger) -> io::Result<()> {
                             }
                         };
 
-                        info!(logger, "Got response"; "response" => &response);
+                        info!(logger, "Received response"; "response" => &response);
                         match response {
                             Some(SocketOutput::CreateDeviceResponse(create_response)) => {
                                 create_response
@@ -142,8 +140,9 @@ fn run(logger: Logger) -> io::Result<()> {
 }
 
 fn main() {
-    let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
-    let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
+    let decorator = slog_term::PlainSyncDecorator::new(std::io::stdout());
+    let drain = slog_term::FullFormat::new(decorator).build().fuse();
+    let logger = Logger::root(drain, o!());
 
     run(logger).unwrap();
 }

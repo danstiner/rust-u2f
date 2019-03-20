@@ -213,7 +213,7 @@ impl U2F {
         challenge: Challenge,
         key_handle: KeyHandle,
     ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
-        trace!(self.0.logger, "authenticate");
+        debug!(self.0.logger, "authenticate");
         Self::_authenticate_step1(self.0.clone(), application, challenge, key_handle)
     }
 
@@ -330,7 +330,7 @@ impl U2F {
         key_handle: &KeyHandle,
         application: &AppId,
     ) -> Box<Future<Item = bool, Error = io::Error>> {
-        trace!(self.0.logger, "is_valid_key_handle");
+        debug!(self.0.logger, "is_valid_key_handle");
         Box::new(
             self.0
                 .storage
@@ -347,7 +347,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
     ) -> Box<Future<Item = Registration, Error = RegisterError>> {
-        trace!(self.0.logger, "register");
+        debug!(self.0.logger, "register");
         Self::_register_step1(self.0.clone(), application, challenge)
     }
 
@@ -427,7 +427,7 @@ impl Service for U2F {
 
     fn call(&self, req: Self::Request) -> Self::Future {
         let logger = self.0.logger.clone();
-        trace!(logger, "call U2F service");
+        debug!(logger, "call U2F service");
         match req {
             Request::Register {
                 challenge,
@@ -477,7 +477,7 @@ impl Service for U2F {
                     .new(o!("request" => "authenticate", "app_id" => application));
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
-                        trace!(logger, "ControlCode::CheckOnly");
+                        debug!(logger, "ControlCode::CheckOnly");
                         Box::new(self.is_valid_key_handle(&key_handle, &application).map(
                             move |is_valid| {
                                 info!(logger, "ControlCode::CheckOnly"; "is_valid_key_handle" => is_valid);
@@ -489,7 +489,7 @@ impl Service for U2F {
                         ))
                     }
                     AuthenticateControlCode::EnforceUserPresenceAndSign => {
-                        trace!(logger, "ControlCode::EnforceUserPresenceAndSign");
+                        debug!(logger, "ControlCode::EnforceUserPresenceAndSign");
                         let logger_clone = logger.clone();
                         Box::new(
                             self.authenticate(application, challenge, key_handle)
@@ -522,7 +522,7 @@ impl Service for U2F {
                         )
                     }
                     AuthenticateControlCode::DontEnforceUserPresenceAndSign => {
-                        trace!(
+                        debug!(
                             logger,
                             "Request::Authenticate::DontEnforceUserPresenceAndSign"
                         );
@@ -533,7 +533,7 @@ impl Service for U2F {
                 }
             }
             Request::GetVersion => {
-                trace!(logger, "Request::GetVersion");
+                debug!(logger, "Request::GetVersion");
                 let response = Response::Version {
                     version_string: self.get_version_string(),
                 };
