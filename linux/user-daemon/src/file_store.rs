@@ -6,6 +6,7 @@ use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -116,6 +117,7 @@ where
         let mut tmp_file = OpenOptions::new()
             .write(true)
             .create_new(true)
+            .mode(0o600)
             .open(&tmp_path)?;
         writer_fn(Box::new(&mut tmp_file))?;
         tmp_file.flush()?;
