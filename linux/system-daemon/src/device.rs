@@ -88,15 +88,16 @@ pub struct Device {
 }
 
 impl Device {
-    pub fn new<T>(user: UCred, socket_transport: T, handle: &Handle, logger: Logger) -> Device
+    pub fn new<T>(user: UCred, socket_transport: T, handle: &Handle, logger: &Logger) -> Device
     where
         T: Stream<Item = SocketInput, Error = io::Error>
             + Sink<SinkItem = SocketOutput, SinkError = io::Error>
             + 'static,
     {
+        let id = nanoid::simple();
         Device {
             handle: handle.clone(),
-            logger: logger,
+            logger: logger.new(o!("device_id" => id)),
             state: DeviceState::Uninitialized(Box::new(socket_transport)),
             user: user,
         }
@@ -127,7 +128,7 @@ fn initialize(
         data: REPORT_DESCRIPTOR.to_vec(),
     };
 
-    let uhid_device = UHIDDevice::create(&handle, create_params, logger.new(o!())).unwrap();
+    let uhid_device = UHIDDevice::create(&handle, create_params, logger.clone()).unwrap();
     // TODO chown device to self.user creds
     let uhid_transport = into_transport(uhid_device);
 

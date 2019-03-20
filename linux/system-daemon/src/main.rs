@@ -4,6 +4,7 @@ extern crate slog;
 extern crate futures;
 extern crate hostname;
 extern crate libc;
+extern crate nanoid;
 extern crate slog_journald;
 extern crate slog_term;
 extern crate softu2f_system_daemon;
@@ -59,7 +60,7 @@ fn run(logger: Logger) -> io::Result<()> {
 
     let listener = unsafe { UnixListener::from_raw_fd(fd) };
     let listener = tokio_uds::UnixListener::from_listener(listener, &handle)?;
-    debug!(logger, "Listening to incoming connections");
+    debug!(logger, "Listening for incoming connections");
     core.run(listener.incoming().for_each(|connection| {
         let (stream, _addr) = connection;
         handle.spawn(accept(stream, &handle, &logger));
@@ -87,7 +88,7 @@ fn accept(
     });
 
     Box::new(
-        Device::new(peer_cred, mapped_err, handle, logger.new(o!())).or_else(move |err| {
+        Device::new(peer_cred, mapped_err, handle, &logger).or_else(move |err| {
             error!(logger, "Error"; "err" => %err);
             future::ok(())
         }),
@@ -95,8 +96,9 @@ fn accept(
 }
 
 fn main() {
-    let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
-    let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
+    let decorator = slog_term::PlainSyncDecorator::new(std::io::stdout());
+    let drain = slog_term::FullFormat::new(decorator).build().fuse();
+    let logger = Logger::root(drain, o!());
 
     run(logger).unwrap();
 }

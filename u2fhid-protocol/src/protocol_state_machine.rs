@@ -207,19 +207,19 @@ where
     }
 
     pub fn accept_packet(&mut self, packet: Packet) -> Result<Option<Response>, io::Error> {
-        trace!(self.logger, "check_channel_id");
+        debug!(self.logger, "check_channel_id");
         try_some!(self.check_channel_id(&packet));
 
-        trace!(self.logger, "check_lock");
+        debug!(self.logger, "check_lock");
         try_some!(self.check_lock(&packet));
 
-        trace!(self.logger, "step_with_packet");
+        debug!(self.logger, "step_with_packet");
         try_some!(self.step_with_packet(packet));
 
-        trace!(self.logger, "try_complete_receive");
+        debug!(self.logger, "try_complete_receive");
         try_some!(self.try_complete_receive());
 
-        trace!(self.logger, "try_complete_dispatch");
+        debug!(self.logger, "try_complete_dispatch");
         try_some!(self.try_complete_dispatch());
 
         Ok(None)
