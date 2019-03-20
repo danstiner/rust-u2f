@@ -19,5 +19,4 @@ subtle = "0.6.0"
 tokio-service = "0.1.0"
 
 [dependencies.slog]
-features = ["max_level_trace"]
 version = "2.2.3"
