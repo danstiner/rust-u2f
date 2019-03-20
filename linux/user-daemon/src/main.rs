@@ -5,6 +5,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate slog;
 
+extern crate dirs;
 extern crate futures;
 extern crate futures_cpupool;
 extern crate notify_rust;
@@ -63,7 +64,7 @@ fn run(logger: Logger) -> io::Result<()> {
     let mut core = Core::new()?;
     let handle = core.handle();
 
-    let mut store_path = env::home_dir().unwrap();
+    let mut store_path = dirs::home_dir().unwrap();
     store_path.push(".softu2f-secrets.json");
 
     info!(logger, "Started SoftU2f Session"; "store_path" => store_path.to_str().unwrap());
