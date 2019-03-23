@@ -28,6 +28,9 @@ package() {
 
 [[ -d dist/ ]] && rm -r dist/
 
+package fedora fedora 29
+package fedora fedora 28
+
 package debian debian stretch
 
 package debian ubuntu bionic
@@ -35,5 +38,3 @@ package debian ubuntu cosmic
 package debian ubuntu disco
 package debian ubuntu xenial
 
-package fedora fedora 29
-package fedora fedora 28
