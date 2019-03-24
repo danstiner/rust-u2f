@@ -1,3 +1,10 @@
+softu2f (0.3.2) unstable; urgency=medium
+
+  * Set user-only file mode on secrets file
+
+ -- Dan <daniel.stiner@gmail.com>  Sat, 23 Mar 2019 17:08:00 -0800
+
+
 softu2f (0.3.1) unstable; urgency=medium
 
   * Fix handling of key handles over 128 bytes
