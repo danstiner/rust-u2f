@@ -31,6 +31,7 @@ package() {
 package fedora fedora 29
 package fedora fedora 28
 
+package debian debian buster
 package debian debian stretch
 
 package debian ubuntu bionic
