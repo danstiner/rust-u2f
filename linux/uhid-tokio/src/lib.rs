@@ -70,7 +70,7 @@
 //!         product: 0x0a37,
 //!         version: 0,
 //!         country: 0,
-//!         // Most inportant field - HID Report Descriptor
+//!         // Most important field - HID Report Descriptor
 //!         data: RDESC.to_vec(),
 //!     };
 //! 
