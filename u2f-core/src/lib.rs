@@ -13,6 +13,7 @@ extern crate slog;
 extern crate base64;
 extern crate byteorder;
 extern crate futures;
+extern crate hex;
 extern crate openssl;
 extern crate rand;
 extern crate ring;

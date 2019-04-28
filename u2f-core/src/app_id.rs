@@ -1,4 +1,5 @@
 use std::result::Result;
+use hex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use slog;
 
@@ -48,6 +49,6 @@ impl slog::Value for AppId {
         key: slog::Key,
         serializer: &mut slog::Serializer,
     ) -> slog::Result {
-        slog::Value::serialize(&format!("{:X?}", self.0), record, key, serializer)
+        slog::Value::serialize(&format!("0x{}", hex::encode_upper(self.0)), record, key, serializer)
     }
 }
