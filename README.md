@@ -9,6 +9,14 @@ Implementation of a [Universal 2nd Factor](https://www.yubico.com/solutions/fido
 
 This program is basically complete, I am not currently planning to add new features like passwordless login the newer [FIDO2 standard](https://fidoalliance.org/specifications/) supports.
 
+## Security
+
+Disclaimer: This is a personal project, I am not a security expert and make no guarantee of security.
+
+Like any U2F authenticator this program provides a degree of protection against phishing and poorly chosen passwords. It does **not** provide the same level of protection against malware that a hardware authenticator does. For some people the protection against phishing and convenience may be worth the security trade-off.
+
+If your machine is compromised by malware, the attacker could steal a copy of the secret keys stored by this authenticator. In this situation you should immediately unregister this authenticator anywhere it is registered in addition to changing the passwords of any potentially compromised account. With a hardware authenticator secret keys never leave the device so in the case of malware you can simply unplug from the infected machine and be confident your accounts are safe from further compromise.
+
 ## Installation
 
 ### Fedora
@@ -31,14 +39,6 @@ systemctl --user start softu2f
 After installing, use your new virtual U2F device on a site supporting it such as: https://demo.yubico.com/webauthn-technical/registration
 
 Note on Ubuntu 16.04 LTS a reboot is required for changes from [dbus-user-session](https://launchpad.net/ubuntu/xenial/+package/dbus-user-session) to take effect.
-
-## Security
-
-Disclaimer: This is a personal project, I am not a security expert and make no guarantee of security.
-
-Like any U2F authenticator this program provides a degree of protection against phishing and poorly chosen passwords. However it does not provide the same level of protection against malware that a hardware authenticator does. For some people the protection against phishing and convenience may be worth the security trade-off.
-
-If your machine is compromised by malware, the attacker could steal a copy of the secret keys stored by this authenticator. In this situation you should immediately unregister this authenticator anywhere it is registered in addition to changing the passwords of any potentially compromised account. With a hardware authenticator secret keys never leave the device so in the case of malware you can simply unplug from the infected machine and be confident your accounts are safe from further compromise.
 
 ## License
 
