@@ -57,7 +57,7 @@ impl NotificationUserPresence {
             let server_info = notify_rust::get_server_information().unwrap();
             if server_info.name == "notify-osd" && server_info.version == "1.0" {
                 // See https://github.com/danstiner/softu2f-linux/issues/12
-                debug!(logger, "Workaround for pre-Ubuntu 17.10 use of notify-osd"; "server_info" => ?server_info);
+                debug!(logger, "Detected notify-osd server, applying workaround"; "server_info" => ?server_info);
                 notification.action("default", "");
                 default_means_user_present = true;
             } else {
@@ -67,7 +67,7 @@ impl NotificationUserPresence {
 
             let notify_handle = notification.show().unwrap();
 
-            let mut action = String::from("");
+            let mut action = String::new();
             notify_handle.wait_for_action(|a| action = a.to_owned());
 
             let user_present = match action.as_str() {
