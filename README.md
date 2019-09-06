@@ -1,7 +1,7 @@
 # Rust U2F
 [![Build Status](https://travis-ci.org/danstiner/rust-u2f.svg?branch=master)](https://travis-ci.org/danstiner/rust-u2f)
 
-Implementation of a [Universal 2nd Factor](https://www.yubico.com/solutions/fido-u2f/) software-only token. Supports Google Chrome on Linux. Written in [Rust](https://www.rust-lang.org/).
+A software-only [Universal 2nd Factor](https://www.yubico.com/solutions/fido-u2f/) token. Supports Google Chrome and Firefox on Linux. Written in [Rust](https://www.rust-lang.org/).
 
 <p align="center">
   <img src="https://user-images.githubusercontent.com/52513/53316061-32725f80-387b-11e9-8476-36207606db58.png" />
