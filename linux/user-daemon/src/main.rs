@@ -34,9 +34,8 @@ use tokio_serde_bincode::{ReadBincode, WriteBincode};
 use tokio_uds::{UCred, UnixStream};
 use u2f_core::{SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
-
 use file_store::FileStore;
-use softu2f_system_daemon::{CreateDeviceRequest, SocketInput, SocketOutput};
+use softu2f_system_daemon::{CreateDeviceRequest, CreateDeviceError, DeviceDescription, SocketInput, SocketOutput};
 use user_presence::NotificationUserPresence;
 
 mod file_store;
@@ -53,6 +52,9 @@ quick_error! {
         }
         InvalidState(message: &'static str) {
             display("{}", message)
+        }
+        DeviceCreateFailed(err: CreateDeviceError) {
+            display("{:?}", err)
         }
     }
 }
@@ -105,7 +107,7 @@ fn connected(stream: UnixStream, handle: Handle, logger: Logger) -> Box<dyn Futu
     let transport = bind_transport(stream);
     let created_device = create_device(transport, logger.clone());
 
-    Box::new(created_device.and_then(move |transport| bind_service(transport, handle, &logger.clone())))
+    Box::new(created_device.and_then(move |(device, transport)| bind_service(device, transport, handle, &logger.clone())))
 }
 
 fn bind_transport(stream: UnixStream) -> Transport {
@@ -117,14 +119,15 @@ fn bind_transport(stream: UnixStream) -> Transport {
     Box::new(bincode_readwrite)
 }
 
-fn create_device<T>(transport: T, logger: Logger) -> Box<dyn Future<Item = T, Error = TransportError>> where T: Sink<SinkItem = SocketInput, SinkError = TransportError> + Stream<Item = SocketOutput, Error = TransportError> + 'static {
+fn create_device<T>(transport: T, logger: Logger) -> Box<dyn Future<Item=(DeviceDescription, T), Error=TransportError>> where T: Sink<SinkItem=SocketInput, SinkError=TransportError> + Stream<Item=SocketOutput, Error=TransportError> + 'static {
     let request = CreateDeviceRequest;
     debug!(logger, "Sending create device request"; "request" => &request);
     let send = transport.send(SocketInput::CreateDeviceRequest(request));
     let created = send.and_then(move |transport| {
         transport.into_future().and_then(|(output, transport)| {
             let res = match output {
-                Some(SocketOutput::CreateDeviceResponse(_)) => future::ok(transport),
+                Some(SocketOutput::CreateDeviceResponse(Ok(device))) => future::ok((device, transport)),
+                Some(SocketOutput::CreateDeviceResponse(Err(err))) => future::err((TransportError::DeviceCreateFailed(err), transport)),
                 Some(_) => future::err((TransportError::InvalidState("Expected create device response"), transport)),
                 None => future::err((TransportError::Io(io::Error::new(io::ErrorKind::ConnectionAborted, "Socket transport closed unexpectedly")), transport)),
             };
@@ -136,7 +139,7 @@ fn create_device<T>(transport: T, logger: Logger) -> Box<dyn Future<Item = T, Er
     Box::new(created)
 }
 
-fn bind_service<T>(transport: T, handle: Handle, logger: &Logger) -> Box<dyn Future<Item = (), Error = TransportError>> where T: Sink<SinkItem = SocketInput, SinkError = TransportError> + Stream<Item = SocketOutput, Error = TransportError> + 'static {
+fn bind_service<T>(device: DeviceDescription, transport: T, handle: Handle, logger: &Logger) -> Box<dyn Future<Item=(), Error=TransportError>> where T: Sink<SinkItem=SocketInput, SinkError=TransportError> + Stream<Item=SocketOutput, Error=TransportError> + 'static {
     let packet_logger = logger.new(o!());
     let transport = transport
         .filter_map(move |output| socket_output_to_packet(&packet_logger, output))
@@ -144,7 +147,7 @@ fn bind_service<T>(transport: T, handle: Handle, logger: &Logger) -> Box<dyn Fut
 
     let mut store_path = dirs::home_dir().unwrap();
     store_path.push(".softu2f-secrets.json");
-    info!(logger, "Virtual U2F device created"; "store_path" => store_path.to_str().unwrap());
+    info!(logger, "Virtual U2F device created"; "device_id" => device.id, "store_path" => store_path.to_str().unwrap());
 
     let attestation = u2f_core::self_signed_attestation();
     let user_presence = Box::new(NotificationUserPresence::new(&handle, logger.new(o!())));
@@ -191,4 +194,3 @@ fn require_root(cred: UCred) -> Result<(), TransportError> {
         Ok(())
     }
 }
-

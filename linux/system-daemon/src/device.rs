@@ -1,20 +1,21 @@
+use std::io;
+use std::io::Write;
+
 use futures::future;
 use futures::prelude::*;
 use hostname::get_hostname;
 use slog::Logger;
-use std::io;
-use std::io::Write;
 use take_mut::take;
 use tokio::reactor::Handle;
 use tokio_io::AsyncRead;
+use tokio_io::codec::length_delimited;
+use tokio_serde_bincode::{ReadBincode, WriteBincode};
 use tokio_uds::{UCred, UnixStream};
 use users::get_user_by_uid;
 
 use bidirectional_pipe::BidirectionalPipe;
 use softu2f_system_daemon::*;
 use tokio_linux_uhid::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UHIDDevice};
-use tokio_io::codec::length_delimited;
-use tokio_serde_bincode::{ReadBincode, WriteBincode};
 
 const INPUT_REPORT_LEN: u8 = 64;
 const OUTPUT_REPORT_LEN: u8 = 64;
@@ -102,6 +103,7 @@ enum DeviceState {
 }
 
 pub struct Device {
+    id: String,
     handle: Handle,
     state: DeviceState,
     user: UCred,
@@ -115,11 +117,11 @@ impl Device {
     {
         let user = stream.peer_cred()?;
         let id = nanoid::simple();
-        let transport = bind_transport(stream);
         Ok(Device {
+            id: id.clone(),
             handle: handle.clone(),
             logger: logger.new(o!("device_id" => id)),
-            state: DeviceState::Uninitialized(transport),
+            state: DeviceState::Uninitialized(bind_transport(stream)),
             user,
         })
     }
@@ -136,6 +138,7 @@ fn bind_transport(stream: UnixStream) -> SocketPipe {
 }
 
 fn initialize(
+    device_id: &str,
     socket_transport: SocketPipe,
     handle: &Handle,
     logger: &Logger,
@@ -164,7 +167,7 @@ fn initialize(
     let uhid_transport = into_transport(uhid_device);
 
     let socket_future = socket_transport.send(SocketOutput::CreateDeviceResponse(
-        CreateDeviceResponse::Success,
+        Ok(DeviceDescription { id: device_id.to_string() }),
     )).from_err();
 
     (Box::new(socket_future), uhid_transport)
@@ -246,6 +249,7 @@ impl Future for Device {
             let logger = &self.logger;
             let state = &mut self.state;
             let user = &self.user;
+            let device_id = &self.id;
             take(state, |state| match state {
                 DeviceState::Uninitialized(mut socket_transport) => {
                     debug!(logger, "state unitialized");
@@ -273,7 +277,7 @@ impl Future for Device {
                         SocketInput::CreateDeviceRequest(request) => {
                             res = Ok(AsyncLoop::Continue);
                             let (socket_future, uhid_transport) =
-                                initialize(socket_transport, handle, logger, request, user);
+                                initialize(device_id, socket_transport, handle, logger, request, user);
 
                             debug!(logger, "initialized");
                             DeviceState::Initialized {
