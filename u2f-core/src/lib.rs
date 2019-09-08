@@ -1,26 +1,48 @@
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate quick_error;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate slog;
-
 extern crate base64;
 extern crate byteorder;
 extern crate futures;
 extern crate hex;
+#[macro_use]
+extern crate lazy_static;
 extern crate openssl;
+#[macro_use]
+extern crate quick_error;
 extern crate rand;
 extern crate ring;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate slog;
 extern crate slog_stdlog;
 extern crate subtle;
 extern crate tokio_service;
+
+use std::fmt::Debug;
+use std::io;
+use std::rc::Rc;
+use std::result::Result;
+
+pub use app_id::AppId;
+pub use application_key::ApplicationKey;
+use attestation::AttestationCertificate;
+use byteorder::{BigEndian, WriteBytesExt};
+use constants::*;
+use futures::Future;
+use futures::future;
+pub use key_handle::KeyHandle;
+pub use known_app_ids::try_reverse_app_id;
+pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
+pub use private_key::PrivateKey;
+use public_key::PublicKey;
+pub use request::{AuthenticateControlCode, Request};
+pub use response::Response;
+pub use self_signed_attestation::self_signed_attestation;
+use slog::Drain;
+pub use tokio_service::Service;
 
 mod app_id;
 mod application_key;
@@ -35,31 +57,6 @@ mod request;
 mod response;
 mod self_signed_attestation;
 mod serde_base64;
-
-use std::fmt::Debug;
-use std::io;
-use std::rc::Rc;
-use std::result::Result;
-
-use byteorder::{BigEndian, WriteBytesExt};
-use futures::Future;
-use futures::future;
-use slog::Drain;
-
-pub use app_id::AppId;
-pub use application_key::ApplicationKey;
-pub use key_handle::KeyHandle;
-pub use known_app_ids::try_reverse_app_id;
-pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
-pub use private_key::PrivateKey;
-pub use request::{AuthenticateControlCode, Request};
-pub use response::Response;
-pub use self_signed_attestation::self_signed_attestation;
-pub use tokio_service::Service;
-
-use attestation::AttestationCertificate;
-use constants::*;
-use public_key::PublicKey;
 
 #[derive(Debug)]
 pub enum StatusCode {
@@ -107,35 +104,35 @@ pub trait UserPresence {
     fn approve_registration(
         &self,
         application: &AppId,
-    ) -> Box<Future<Item = bool, Error = io::Error>>;
+    ) -> Box<dyn Future<Item=bool, Error=io::Error>>;
     fn approve_authentication(
         &self,
         application: &AppId,
-    ) -> Box<Future<Item = bool, Error = io::Error>>;
-    fn wink(&self) -> Box<Future<Item = (), Error = io::Error>>;
+    ) -> Box<dyn Future<Item=bool, Error=io::Error>>;
+    fn wink(&self) -> Box<dyn Future<Item=(), Error=io::Error>>;
 }
 
 pub trait CryptoOperations {
-    fn attest(&self, data: &[u8]) -> Result<Box<Signature>, SignError>;
+    fn attest(&self, data: &[u8]) -> Result<Box<dyn Signature>, SignError>;
     fn generate_application_key(&self, application: &AppId) -> io::Result<ApplicationKey>;
     fn get_attestation_certificate(&self) -> AttestationCertificate;
-    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<Signature>, SignError>;
+    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<dyn Signature>, SignError>;
 }
 
 pub trait SecretStore {
     fn add_application_key(
         &self,
         key: &ApplicationKey,
-    ) -> Box<Future<Item = (), Error = io::Error>>;
+    ) -> Box<dyn Future<Item=(), Error=io::Error>>;
     fn get_and_increment_counter(
         &self,
         application: &AppId,
-    ) -> Box<Future<Item = Counter, Error = io::Error>>;
+    ) -> Box<dyn Future<Item=Counter, Error=io::Error>>;
     fn retrieve_application_key(
         &self,
         application: &AppId,
         handle: &KeyHandle,
-    ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>>;
+    ) -> Box<dyn Future<Item=Option<ApplicationKey>, Error=io::Error>>;
 }
 
 #[derive(Debug)]
@@ -143,13 +140,13 @@ pub struct Registration {
     user_public_key: Vec<u8>,
     key_handle: KeyHandle,
     attestation_certificate: AttestationCertificate,
-    signature: Box<Signature>,
+    signature: Box<dyn Signature>,
 }
 
 #[derive(Debug)]
 pub struct Authentication {
     counter: Counter,
-    signature: Box<Signature>,
+    signature: Box<dyn Signature>,
     user_present: bool,
 }
 
@@ -183,17 +180,17 @@ quick_error! {
 pub struct U2F(Rc<U2FInner>);
 
 struct U2FInner {
-    approval: Box<UserPresence>,
+    approval: Box<dyn UserPresence>,
     logger: slog::Logger,
-    operations: Box<CryptoOperations>,
-    storage: Box<SecretStore>,
+    operations: Box<dyn CryptoOperations>,
+    storage: Box<dyn SecretStore>,
 }
 
 impl U2F {
     pub fn new<L: Into<Option<slog::Logger>>>(
-        approval: Box<UserPresence>,
-        operations: Box<CryptoOperations>,
-        storage: Box<SecretStore>,
+        approval: Box<dyn UserPresence>,
+        operations: Box<dyn CryptoOperations>,
+        storage: Box<dyn SecretStore>,
         logger: L,
     ) -> io::Result<Self> {
         let logger = logger
@@ -213,7 +210,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
-    ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
+    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
         debug!(self.0.logger, "authenticate");
         Self::_authenticate_step1(self.0.clone(), application, challenge, key_handle)
     }
@@ -223,7 +220,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
-    ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
+    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
         let application_key_future = {
             self_rc
                 .storage
@@ -248,7 +245,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         application_key: ApplicationKey,
-    ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
+    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
         Box::new(
             self_rc
                 .approval
@@ -272,7 +269,7 @@ impl U2F {
         challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
-    ) -> Box<Future<Item = Authentication, Error = AuthenticateError>> {
+    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
         if !user_present {
             return Box::new(future::err(AuthenticateError::ApprovalRequired));
         }
@@ -330,7 +327,7 @@ impl U2F {
         &self,
         key_handle: &KeyHandle,
         application: &AppId,
-    ) -> Box<Future<Item = bool, Error = io::Error>> {
+    ) -> Box<dyn Future<Item=bool, Error=io::Error>> {
         debug!(self.0.logger, "is_valid_key_handle");
         Box::new(
             self.0
@@ -344,7 +341,7 @@ impl U2F {
         &self,
         application: AppId,
         challenge: Challenge,
-    ) -> Box<Future<Item = Registration, Error = RegisterError>> {
+    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
         debug!(self.0.logger, "register");
         Self::_register_step1(self.0.clone(), application, challenge)
     }
@@ -353,7 +350,7 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         application: AppId,
         challenge: Challenge,
-    ) -> Box<Future<Item = Registration, Error = RegisterError>> {
+    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
         Box::new(
             self_rc
                 .approval
@@ -370,7 +367,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         user_present: bool,
-    ) -> Box<Future<Item = Registration, Error = RegisterError>> {
+    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
         if !user_present {
             return Box::new(future::err(RegisterError::ApprovalRequired));
         }
@@ -412,7 +409,7 @@ impl U2F {
         })
     }
 
-    fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
+    fn wink(&self) -> Box<dyn Future<Item=(), Error=io::Error>> {
         self.0.approval.wink()
     }
 }
@@ -421,7 +418,7 @@ impl Service for U2F {
     type Request = Request;
     type Response = Response;
     type Error = io::Error;
-    type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
+    type Future = Box<dyn Future<Item=Self::Response, Error=Self::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
         let logger = self.0.logger.clone();
@@ -609,16 +606,17 @@ fn message_to_sign_for_register(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use super::attestation::Attestation;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
 
     use openssl::hash::MessageDigest;
     use openssl::pkey::PKey;
     use openssl::sign::Verifier;
     use rand::os::OsRng;
     use rand::Rng;
-    use std::cell::RefCell;
-    use std::collections::HashMap;
+
+    use super::*;
+    use super::attestation::Attestation;
 
     fn fake_app_id() -> AppId {
         AppId([0u8; 32])

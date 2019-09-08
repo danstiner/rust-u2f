@@ -1,9 +1,9 @@
 use std::result::Result;
+
 use hex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_base64::{from_base64, to_base64};
 use slog;
-
-use serde_base64::{to_base64, from_base64};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AppId(pub(crate) [u8; 32]);
@@ -47,7 +47,7 @@ impl slog::Value for AppId {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         slog::Value::serialize(&format!("0x{}", hex::encode_upper(self.0)), record, key, serializer)
     }

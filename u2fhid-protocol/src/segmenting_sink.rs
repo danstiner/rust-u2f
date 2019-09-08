@@ -1,11 +1,11 @@
+use std::collections::vec_deque::VecDeque;
+use std::fmt;
+
 use futures::{Async, Poll};
 use futures::{AsyncSink, StartSend};
 use futures::sink::Sink;
 use futures::stream::Stream;
 use futures::task::{self, Task};
-
-use std::collections::vec_deque::VecDeque;
-use std::fmt;
 
 pub trait Segmenter {
     type Item;
@@ -27,9 +27,9 @@ where
 {
     pub fn new(sink: S, segmenter: G) -> SegmentingSink<S, G> {
         SegmentingSink {
-            sink: sink,
+            sink,
             buf: VecDeque::new(),
-            segmenter: segmenter,
+            segmenter,
             task: None,
         }
     }
@@ -56,7 +56,7 @@ where
     fn try_empty_buffer(&mut self) -> Poll<(), S::SinkError> {
         let mut started_send = false;
         while let Some(item) = self.buf.pop_front() {
-            if let AsyncSink::NotReady(item) = try!(self.sink.start_send(item)) {
+            if let AsyncSink::NotReady(item) = self.sink.start_send(item)? {
                 self.buf.push_front(item);
                 return Ok(Async::NotReady);
             }

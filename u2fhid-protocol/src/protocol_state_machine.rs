@@ -2,13 +2,12 @@ use std::io;
 use std::mem;
 use std::time::Duration;
 
+use definitions::*;
 use futures::{Async, Future};
 use futures::future;
 use slog::Logger;
 use tokio_core::reactor::Handle;
 use tokio_core::reactor::Timeout;
-
-use definitions::*;
 use u2f_core::{self, Service};
 
 macro_rules! try_some {
@@ -31,7 +30,7 @@ struct ReceiveState {
 
 struct DispatchState {
     channel_id: ChannelId,
-    future: Box<Future<Item = ResponseMessage, Error = io::Error>>,
+    future: Box<dyn Future<Item = ResponseMessage, Error = io::Error>>,
     timeout: Timeout,
 }
 
@@ -149,7 +148,7 @@ where
         Request = u2f_core::Request,
         Response = u2f_core::Response,
         Error = io::Error,
-        Future = Box<Future<Item = u2f_core::Response, Error = io::Error>>,
+        Future = Box<dyn Future<Item = u2f_core::Response, Error = io::Error>>,
     >,
     ResponseMessage: From<<S as u2f_core::Service>::Response>,
 {
@@ -466,7 +465,7 @@ where
     fn handle_request(
         &mut self,
         request: Request,
-    ) -> Result<Box<Future<Item = ResponseMessage, Error = io::Error>>, io::Error> {
+    ) -> Result<Box<dyn Future<Item = ResponseMessage, Error = io::Error>>, io::Error> {
         let channel_id = request.channel_id;
         match request.message {
             RequestMessage::EncapsulatedRequest { data } => {
@@ -515,7 +514,7 @@ where
     fn dispatch(
         &mut self,
         request: u2f_core::Request,
-    ) -> Box<Future<Item = ResponseMessage, Error = io::Error>> {
+    ) -> Box<dyn Future<Item = ResponseMessage, Error = io::Error>> {
         Box::new(self.service.call(request).map(|response| response.into()))
     }
 }
@@ -524,11 +523,13 @@ where
 mod tests {
     extern crate rand;
 
-    use super::*;
-    use self::rand::{OsRng, Rng};
     use slog::{self, Drain};
     use slog_stdlog;
     use tokio_core::reactor::Core;
+
+    use super::*;
+
+    use self::rand::{OsRng, Rng};
 
     struct FakeU2FService;
 
@@ -536,10 +537,10 @@ mod tests {
         type Request = u2f_core::Request;
         type Response = u2f_core::Response;
         type Error = io::Error;
-        type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
+        type Future = Box<dyn Future<Item = Self::Response, Error = Self::Error>>;
 
         fn call(&self, _req: Self::Request) -> Self::Future {
-            panic!("Fake service, not implemented");
+            panic!("Fake service, not implemented")
         }
     }
 
@@ -570,7 +571,7 @@ mod tests {
             Request = u2f_core::Request,
             Response = u2f_core::Response,
             Error = io::Error,
-            Future = Box<Future<Item = u2f_core::Response, Error = io::Error>>,
+            Future = Box<dyn Future<Item = u2f_core::Response, Error = io::Error>>,
         >,
     {
         let mut os_rng = OsRng::new().unwrap();
