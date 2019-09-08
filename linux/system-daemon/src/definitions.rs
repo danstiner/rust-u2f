@@ -8,7 +8,7 @@ pub enum SocketInput {
 
 #[derive(Serialize, Deserialize)]
 pub enum SocketOutput {
-    CreateDeviceResponse(CreateDeviceResponse),
+    CreateDeviceResponse(Result<DeviceDescription, CreateDeviceError>),
     Packet(Packet),
 }
 
@@ -48,8 +48,12 @@ impl slog::Value for CreateDeviceRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum CreateDeviceResponse {
-    Success,
+pub struct DeviceDescription {
+    pub id: String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum CreateDeviceError {
     IOError,
     AlreadyExists,
     Closed,
