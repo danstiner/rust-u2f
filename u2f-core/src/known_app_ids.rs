@@ -27,6 +27,9 @@ lazy_static! {
         map.insert(from_url("demo.yubico.com"), "demo.yubico.com");
         map.insert(from_url("https://gitlab.com"), "gitlab.com");
         map.insert(from_url("https://www.fastmail.com"), "www.fastmail.com");
+        map.insert(from_url("https://u2f.bin.coffee"), "u2f.bin.coffee");
+        map.insert(from_url("bin.coffee"), "bin.coffee");
+        map.insert(from_url("webauthn.bin.coffee"), "webauthn.bin.coffee");
 
         map
     };
