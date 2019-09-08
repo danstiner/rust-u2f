@@ -10,10 +10,10 @@ use nix::libc;
 use slog_stdlog;
 use slog;
 use slog::Drain;
-use tokio_core::reactor::Handle;
+use tokio::reactor::Handle;
 use tokio_io::AsyncRead;
 
-use poll_evented_read_wrapper::PollEventedRead;
+use tokio::reactor::PollEvented;
 use character_device_file::CharacterDeviceFile;
 use character_device::{CharacterDevice, Decoder, Encoder, SyncSink};
 use uhid_codec::*;
@@ -23,7 +23,7 @@ pub struct UHIDDevice<T> {
     logger: slog::Logger,
 }
 
-/// The paramters used to create the UHID device
+/// Parameters used to create UHID devices
 pub struct CreateParams {
     pub name: String,
     pub phys: String,
@@ -38,13 +38,13 @@ pub struct CreateParams {
 
 // ===== impl UHIDDevice =====
 
-impl UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>> {
+impl UHIDDevice<PollEvented<CharacterDeviceFile<File>>> {
     /// Create a UHID device using '/dev/uhid'
     pub fn create<L: Into<Option<slog::Logger>>>(
         handle: &Handle,
         params: CreateParams,
         logger: L,
-    ) -> io::Result<UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>>> {
+    ) -> io::Result<UHIDDevice<PollEvented<CharacterDeviceFile<File>>>> {
         Self::create_with_path(Path::new("/dev/uhid"), handle, params, logger)
     }
 
@@ -54,7 +54,7 @@ impl UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>> {
         handle: &Handle,
         params: CreateParams,
         logger: L,
-    ) -> io::Result<UHIDDevice<PollEventedRead<CharacterDeviceFile<File>>>> {
+    ) -> io::Result<UHIDDevice<PollEvented<CharacterDeviceFile<File>>>> {
         let fd = fcntl::open(
             path,
             fcntl::OFlag::from_bits(libc::O_RDWR | libc::O_CLOEXEC | libc::O_NONBLOCK).unwrap(),
@@ -89,7 +89,7 @@ where
             .unwrap_or(slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
         let mut device = UHIDDevice {
             inner: CharacterDevice::new(inner, UHIDCodec, UHIDCodec, logger.clone()),
-            logger: logger,
+            logger,
         };
         debug!(device.logger, "Send create device event");
         device
@@ -148,6 +148,11 @@ impl<T: Write> Sink for UHIDDevice<T> {
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
         debug!(self.logger, "poll_complete");
         self.inner.flush()?;
+        Ok(Async::Ready(()))
+    }
+
+    fn close(&mut self) -> Result<Async<()>, Self::SinkError> {
+        self.inner.close()?;
         Ok(Async::Ready(()))
     }
 }

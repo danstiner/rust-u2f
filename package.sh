@@ -1,7 +1,9 @@
 #!/bin/bash
-set -euxo pipefail
+set -euo pipefail
 
-if hash podman 2>/dev/null; then
+if [[ -n ${DOCKER+x} ]]; then
+    docker="$DOCKER"
+elif hash podman 2>/dev/null; then
     docker=podman
 else
     docker=docker
@@ -18,7 +20,7 @@ package() {
     dist_dockerfile="${dist_path}Dockerfile"
 
     mkdir -p "$dist_path"
-    cat "$base_dockerfile" | sed -e "s/$baseimage:latest/$image:$tag/" > "$dist_dockerfile"
+    sed -e "s/$baseimage:latest/$image:$tag/" < "$base_dockerfile" > "$dist_dockerfile"
     $docker build -f "$dist_dockerfile" -t "$build_target" .
 
     id=$($docker create "$build_target")

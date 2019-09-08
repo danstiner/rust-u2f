@@ -54,18 +54,20 @@ where
     }
 
     fn try_empty_buffer(&mut self) -> Poll<(), S::SinkError> {
-        let mut started_some = false;
+        let mut started_send = false;
         while let Some(item) = self.buf.pop_front() {
             if let AsyncSink::NotReady(item) = try!(self.sink.start_send(item)) {
                 self.buf.push_front(item);
                 return Ok(Async::NotReady);
             }
-            started_some = true;
+            started_send = true;
         }
 
-        if started_some {
-            // Notify any pending tasks
-            self.task.take().map(|t| t.notify());
+        // Notify any pending tasks
+        if started_send {
+            if let Some(task) = self.task.take() {
+                task.notify();
+            }
         }
 
         Ok(Async::Ready(()))

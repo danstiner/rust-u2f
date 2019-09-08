@@ -19,8 +19,8 @@ const HID_REPORT_LEN: usize = 64;
 const INITIAL_PACKET_DATA_LEN: usize = HID_REPORT_LEN - 7;
 const CONTINUATION_PACKET_DATA_LEN: usize = HID_REPORT_LEN - 5;
 
-const FRAME_TYPE_INIT: u8 = 0b10000000;
-const FRAME_TYPE_CONT: u8 = 0b00000000;
+const FRAME_TYPE_INIT: u8 = 0b1000_0000;
+const FRAME_TYPE_CONT: u8 = 0b0000_0000;
 const FRAME_TYPE_MASK: u8 = FRAME_TYPE_INIT;
 
 const U2FHID_PING: u8 = FRAME_TYPE_INIT | 0x01; // Echo data through local processor only
@@ -37,7 +37,7 @@ const U2FHID_VENDOR_LAST: u8 = FRAME_TYPE_INIT | 0x7f; // Last vendor defined co
 const COMMAND_INIT_DATA_LEN: usize = 8;
 const COMMAND_WINK_DATA_LEN: usize = 1;
 
-pub const BROADCAST_CHANNEL_ID: ChannelId = ChannelId(0xffffffff);
+pub const BROADCAST_CHANNEL_ID: ChannelId = ChannelId(0xffff_ffff);
 
 pub fn packet_timeout_duration() -> Duration {
     Duration::from_millis(500)
@@ -72,7 +72,7 @@ impl slog::Value for ChannelId {
 
 bitflags! {
     pub struct CapabilityFlags: u8 {
-        const CAPFLAG_WINK = 0b00000001;
+        const CAPFLAG_WINK = 0b0000_0001;
     }
 }
 
@@ -439,12 +439,12 @@ impl slog::Value for ResponseMessage {
         serializer: &mut slog::Serializer,
     ) -> slog::Result {
         match self {
-            &ResponseMessage::EncapsulatedResponse { .. } => "EncapsulatedResponse",
-            &ResponseMessage::Init { .. } => "Init",
-            &ResponseMessage::Pong { .. } => "Pong",
-            &ResponseMessage::Error { .. } => "Error",
-            &ResponseMessage::Wink => "Wink",
-            &ResponseMessage::Lock => "Lock",
+            ResponseMessage::EncapsulatedResponse { .. } => "EncapsulatedResponse",
+            ResponseMessage::Init { .. } => "Init",
+            ResponseMessage::Pong { .. } => "Pong",
+            ResponseMessage::Error { .. } => "Error",
+            ResponseMessage::Wink => "Wink",
+            ResponseMessage::Lock => "Lock",
         }.serialize(record, key, serializer)
     }
 }

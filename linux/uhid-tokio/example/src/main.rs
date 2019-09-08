@@ -1,8 +1,10 @@
 extern crate futures;
+extern crate tokio;
 extern crate tokio_linux_uhid;
-extern crate tokio_core;
 
 use std::io;
+
+use tokio::runtime::Runtime;
 
 use tokio_linux_uhid::{Bus, CreateParams, UHIDDevice};
 
@@ -66,8 +68,8 @@ fn main() {
         data: RDESC.to_vec(),
     };
 
-    let core = tokio_core::reactor::Core::new().unwrap();
-    let handle = core.handle();
+    let mut runtime = Runtime::new().unwrap();
+    let handle = runtime.handle();
     let mut uhid_device = UHIDDevice::create(&handle, create_params, None).unwrap();
 
     let button_flags = 0;

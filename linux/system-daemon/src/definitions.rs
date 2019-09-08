@@ -17,7 +17,7 @@ impl slog::Value for SocketOutput {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         match self {
             &SocketOutput::CreateDeviceResponse(ref response) => slog::Value::serialize(
@@ -41,7 +41,7 @@ impl slog::Value for CreateDeviceRequest {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         slog::Value::serialize(&format!("{:?}", self), record, key, serializer)
     }
@@ -79,7 +79,7 @@ impl slog::Value for Packet {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         slog::Value::serialize(&format!("{:?}", self), record, key, serializer)
     }

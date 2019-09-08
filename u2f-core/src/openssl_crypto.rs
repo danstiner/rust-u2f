@@ -4,8 +4,6 @@ use std::io;
 use openssl::hash::MessageDigest;
 use openssl::sign::Signer;
 use openssl::pkey::PKey;
-use rand::os::OsRng;
-use rand::Rng;
 
 use app_id::AppId;
 use application_key::ApplicationKey;
@@ -34,7 +32,7 @@ impl OpenSSLCryptoOperations {
     }
 
     fn generate_key_handle() -> io::Result<KeyHandle> {
-        Ok(OsRng::new()?.gen())
+        Ok(rand::random())
     }
 }
 

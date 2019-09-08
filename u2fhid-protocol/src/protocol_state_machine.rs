@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use futures::{Async, Future};
 use futures::future;
-use itertools::Itertools;
 use slog::Logger;
 use tokio_core::reactor::Handle;
 use tokio_core::reactor::Timeout;
@@ -110,8 +109,8 @@ impl LockState {
 
     fn tick(&mut self) -> Result<(), io::Error> {
         // Check lock timeout
-        let timed_out = match self {
-            &mut LockState::Locked {
+        let timed_out = match *self {
+            LockState::Locked {
                 ref mut timeout, ..
             } => match timeout.poll()? {
                 Async::Ready(()) => true,
@@ -240,8 +239,8 @@ where
 
     fn check_lock(&self, packet: &Packet) -> Result<Option<Response>, io::Error> {
         let packet_channel_id = packet.channel_id();
-        match &self.lock {
-            &LockState::Locked { channel_id, .. } => {
+        match self.lock {
+            LockState::Locked { channel_id, .. } => {
                 if packet_channel_id != channel_id {
                     Ok(Some(Self::error_output(
                         ErrorCode::ChannelBusy,
@@ -251,7 +250,7 @@ where
                     Ok(None)
                 }
             }
-            &LockState::None => Ok(None),
+            LockState::None => Ok(None),
         }
     }
 
@@ -439,7 +438,7 @@ where
                     new_state: State::Idle,
                     output: Some(Response {
                         channel_id: dispatch.channel_id,
-                        message: response.into(),
+                        message: response,
                     }),
                 },
                 Async::NotReady => StateTransition {
