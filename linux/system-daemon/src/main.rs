@@ -1,12 +1,11 @@
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate quick_error;
-
 extern crate futures;
 extern crate hostname;
 extern crate libc;
 extern crate nanoid;
+#[macro_use]
+extern crate quick_error;
+#[macro_use]
+extern crate slog;
 extern crate slog_journald;
 extern crate slog_term;
 extern crate softu2f_system_daemon;
@@ -22,9 +21,6 @@ extern crate tokio_uds;
 extern crate u2fhid_protocol;
 extern crate users;
 
-mod bidirectional_pipe;
-mod device;
-
 use std::io;
 use std::os::unix::io::FromRawFd;
 
@@ -34,13 +30,21 @@ use slog::{Drain, Logger};
 use systemd::daemon::{is_socket_unix, Listening, SocketType};
 use tokio::reactor::Handle;
 use tokio::runtime::Runtime;
-use softu2f_system_daemon::*;
+
 use device::Device;
+use softu2f_system_daemon::*;
+
+mod bidirectional_pipe;
+mod device;
+
+const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
 fn main() {
     let decorator = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let logger = Logger::root(drain, o!());
+
+    info!(logger, "Starting SoftU2F system daemon"; "version" => VERSION);
 
     run(&logger).unwrap_or_else(|err| error!(logger, "Failed to run system daemon"; "err" => err.to_string()));
 }

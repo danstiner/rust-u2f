@@ -1,18 +1,18 @@
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate quick_error;
-
 extern crate bincode;
+extern crate core;
 extern crate dirs;
 extern crate futures;
 extern crate futures_cpupool;
+#[macro_use]
+extern crate lazy_static;
 extern crate notify_rust;
+#[macro_use]
+extern crate quick_error;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
+#[macro_use]
+extern crate slog;
 extern crate slog_term;
 extern crate softu2f_system_daemon;
 extern crate time;
@@ -22,26 +22,25 @@ extern crate tokio_serde_bincode;
 extern crate tokio_uds;
 extern crate u2f_core;
 extern crate u2fhid_protocol;
-extern crate core;
-
-mod file_store;
-mod user_presence;
 
 use std::io;
 
 use futures::future;
 use futures::prelude::*;
 use slog::{Drain, Logger};
-use softu2f_system_daemon::{CreateDeviceRequest, SocketInput, SocketOutput};
 use tokio_core::reactor::{Core, Handle};
 use tokio_io::codec::length_delimited;
 use tokio_serde_bincode::{ReadBincode, WriteBincode};
-use tokio_uds::{UnixStream, UCred};
+use tokio_uds::{UCred, UnixStream};
 use u2f_core::{SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
 
 use file_store::FileStore;
+use softu2f_system_daemon::{CreateDeviceRequest, SocketInput, SocketOutput};
 use user_presence::NotificationUserPresence;
+
+mod file_store;
+mod user_presence;
 
 quick_error! {
     #[derive(Debug)]
@@ -81,15 +80,14 @@ fn main() {
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let logger = Logger::root(drain, o!());
 
+    info!(logger, "Starting SoftU2F user daemon"; "version" => VERSION);
+
     run(logger).unwrap();
 }
 
 fn run(logger: Logger) -> Result<(), TransportError> {
     let mut core = Core::new()?;
     let handle = core.handle();
-
-    info!(logger, "Starting SoftU2F user daemon"; "version" => VERSION);
-
     core.run(connect(softu2f_system_daemon::SOCKET_PATH, handle, logger))
 }
 
