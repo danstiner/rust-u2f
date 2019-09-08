@@ -75,13 +75,13 @@ pub enum StatusCode {
 impl StatusCode {
     pub fn write<W: WriteBytesExt>(&self, write: &mut W) {
         let value = match self {
-            &StatusCode::NoError => SW_NO_ERROR,
-            &StatusCode::TestOfUserPresenceNotSatisfied => SW_CONDITIONS_NOT_SATISFIED,
-            &StatusCode::InvalidKeyHandle => SW_WRONG_DATA,
-            &StatusCode::RequestLengthInvalid => SW_WRONG_LENGTH,
-            &StatusCode::RequestClassNotSupported => SW_CLA_NOT_SUPPORTED,
-            &StatusCode::RequestInstructionNotSuppored => SW_INS_NOT_SUPPORTED,
-            &StatusCode::UnknownError => SW_UNKNOWN,
+            StatusCode::NoError => SW_NO_ERROR,
+            StatusCode::TestOfUserPresenceNotSatisfied => SW_CONDITIONS_NOT_SATISFIED,
+            StatusCode::InvalidKeyHandle => SW_WRONG_DATA,
+            StatusCode::RequestLengthInvalid => SW_WRONG_LENGTH,
+            StatusCode::RequestClassNotSupported => SW_CLA_NOT_SUPPORTED,
+            StatusCode::RequestInstructionNotSuppored => SW_INS_NOT_SUPPORTED,
+            StatusCode::UnknownError => SW_UNKNOWN,
         };
         write.write_u16::<BigEndian>(value).unwrap();
     }
@@ -198,12 +198,12 @@ impl U2F {
     ) -> io::Result<Self> {
         let logger = logger
             .into()
-            .unwrap_or(slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
+            .unwrap_or_else(|| slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
         let inner = U2FInner {
-            approval: approval,
-            logger: logger,
-            operations: operations,
-            storage: storage,
+            approval,
+            logger,
+            operations,
+            storage,
         };
         Ok(U2F(Rc::new(inner)))
     }
@@ -316,9 +316,9 @@ impl U2F {
         )?;
 
         Ok(Authentication {
-            counter: counter,
-            signature: signature,
-            user_present: user_present,
+            counter,
+            signature,
+            user_present,
         })
     }
 
@@ -336,10 +336,7 @@ impl U2F {
             self.0
                 .storage
                 .retrieve_application_key(application, key_handle)
-                .map(|res| match res {
-                    Some(_) => true,
-                    None => false,
-                }),
+                .map(|res| res.is_some()),
         )
     }
 
@@ -410,8 +407,8 @@ impl U2F {
         Ok(Registration {
             user_public_key: public_key_bytes,
             key_handle: application_key.handle,
-            attestation_certificate: attestation_certificate,
-            signature: signature,
+            attestation_certificate,
+            signature,
         })
     }
 
@@ -458,11 +455,11 @@ impl Service for U2F {
                             }
                             RegisterError::Io(err) => {
                                 debug!(logger_clone, "Request::Register => IoError"; "error" => format!("{:?}", err));
-                                Err(err.into())
+                                Err(err)
                             }
                             RegisterError::Signing(err) => {
                                 debug!(logger_clone, "Request::Register => SigningError"; "error" => format!("{:?}", err));
-                                Err(io::Error::new(io::ErrorKind::Other, "Signing error").into())
+                                Err(io::Error::new(io::ErrorKind::Other, "Signing error"))
                             }
                         }),
                 )
@@ -482,9 +479,10 @@ impl Service for U2F {
                         Box::new(self.is_valid_key_handle(&key_handle, &application).map(
                             move |is_valid| {
                                 info!(logger, "ControlCode::CheckOnly"; "is_valid_key_handle" => is_valid);
-                                match is_valid {
-                                    true => Response::TestOfUserPresenceNotSatisfied,
-                                    false => Response::InvalidKeyHandle,
+                                if is_valid {
+                                    Response::TestOfUserPresenceNotSatisfied
+                                } else {
+                                    Response::InvalidKeyHandle
                                 }
                             },
                         ))
@@ -649,11 +647,11 @@ mod tests {
     }
 
     impl UserPresence for FakeUserPresence {
-        fn approve_authentication(&self, _: &AppId) -> Box<Future<Item = bool, Error = io::Error>> {
-            Box::new(future::ok(self.should_approve_authentication))
-        }
         fn approve_registration(&self, _: &AppId) -> Box<Future<Item = bool, Error = io::Error>> {
             Box::new(future::ok(self.should_approve_registration))
+        }
+        fn approve_authentication(&self, _: &AppId) -> Box<Future<Item = bool, Error = io::Error>> {
+            Box::new(future::ok(self.should_approve_authentication))
         }
         fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
             Box::new(future::ok(()))
@@ -929,7 +927,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         );
     }
 
-    fn verify_signature(signature: &Signature, data: &[u8], public_key: &PKey) {
+    fn verify_signature(signature: &Signature, data: &[u8], public_key: &PKey<PublicKey>) {
         let mut verifier = Verifier::new(MessageDigest::sha256(), public_key).unwrap();
         verifier.update(data).unwrap();
         assert!(verifier.verify(signature.as_ref()).unwrap());

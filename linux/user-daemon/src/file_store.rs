@@ -33,7 +33,7 @@ pub struct FileStore {
 
 impl FileStore {
     pub fn new(path: PathBuf) -> io::Result<FileStore> {
-        Ok(FileStore { path: path })
+        Ok(FileStore { path })
     }
 
     fn save(&self, data: &Data) -> io::Result<()> {
@@ -58,7 +58,7 @@ impl SecretStore for FileStore {
     fn add_application_key(
         &self,
         key: &ApplicationKey,
-    ) -> Box<Future<Item = (), Error = io::Error>> {
+    ) -> Box<dyn Future<Item = (), Error = io::Error>> {
         let mut data = tryf!(self.load());
         data.application_keys.insert(key.application, key.clone());
         Box::new(self.save(&data).into_future())
@@ -67,7 +67,7 @@ impl SecretStore for FileStore {
     fn get_and_increment_counter(
         &self,
         application: &AppId,
-    ) -> Box<Future<Item = Counter, Error = io::Error>> {
+    ) -> Box<dyn Future<Item = Counter, Error = io::Error>> {
         let mut data = tryf!(self.load());
 
         if !data.counters.contains_key(application) {
@@ -90,7 +90,7 @@ impl SecretStore for FileStore {
         &self,
         application: &AppId,
         handle: &KeyHandle,
-    ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>> {
+    ) -> Box<dyn Future<Item = Option<ApplicationKey>, Error = io::Error>> {
         let data = tryf!(self.load());
         let opt_key = data.application_keys.get(application).and_then(|key| {
             if key.handle.eq_consttime(handle) {
@@ -105,7 +105,7 @@ impl SecretStore for FileStore {
 
 fn overwrite_file_atomic<W>(path: &Path, writer_fn: W) -> io::Result<()>
 where
-    W: FnOnce(Box<&mut Write>) -> io::Result<()>,
+    W: FnOnce(Box<&mut dyn Write>) -> io::Result<()>,
 {
     let directory = path.parent().ok_or(io::Error::new(
         io::ErrorKind::InvalidInput,

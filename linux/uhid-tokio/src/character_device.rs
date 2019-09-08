@@ -93,10 +93,10 @@ where
 {
     pub fn new(inner: T, encoder: E, decoder: D, logger: slog::Logger) -> CharacterDevice<T, E, D> {
         CharacterDevice {
-            decoder: decoder,
-            encoder: encoder,
-            inner: inner,
-            logger: logger,
+            decoder,
+            encoder,
+            inner,
+            logger,
         }
     }
 }
@@ -123,8 +123,7 @@ where
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let read_len = self.decoder.read_len();
         let mut buffer = vec![0u8; read_len];
-        let read = self.inner.read(&mut buffer[..]);
-        match read {
+        match self.inner.read(&mut buffer[..]) {
             Ok(0) => {
                 trace!(self.logger, "poll => read(0)");
                 Ok(Async::Ready(None))
@@ -135,15 +134,15 @@ where
                 }
                 let frame = self.decoder.decode(&mut BytesMut::from_buf(buffer))?;
                 trace!(self.logger, "poll => Ok"; "frame" => &frame);
-                return Ok(Async::Ready(Some(frame)));
+                Ok(Async::Ready(Some(frame)))
             }
             Err(ref e) if e.kind() == ::std::io::ErrorKind::WouldBlock => {
                 trace!(self.logger, "poll => WouldBlock");
-                return Ok(Async::NotReady);
+                Ok(Async::NotReady)
             }
             Err(e) => {
                 trace!(self.logger, "poll => Err");
-                return Err(e.into());
+                Err(e.into())
             }
         }
     }
@@ -159,7 +158,7 @@ where
 
     fn send(&mut self, item: Self::SinkItem) -> Result<(), Self::SinkError> {
         let mut buffer = BytesMut::new();
-        try!(self.encoder.encode(item, &mut buffer));
+        self.encoder.encode(item, &mut buffer)?;
         let bytes = buffer.take();
 
         match self.inner.write(&bytes) {

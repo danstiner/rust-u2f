@@ -30,11 +30,11 @@ impl NotificationUserPresence {
     pub fn new(_handle: &Handle, logger: Logger) -> NotificationUserPresence {
         NotificationUserPresence {
             executor: CpuPool::new(MAX_CONCURRENT_NOTIFICATIONS),
-            logger: logger,
+            logger,
         }
     }
 
-    fn test_user_presence(&self, message: &str) -> Box<Future<Item = bool, Error = io::Error>> {
+    fn test_user_presence(&self, message: &str) -> Box<dyn Future<Item = bool, Error = io::Error>> {
         debug!(self.logger, "test_user_presence"; "message" => message);
 
         let body = message.to_owned();
@@ -89,7 +89,7 @@ impl UserPresence for NotificationUserPresence {
     fn approve_registration(
         &self,
         application: &AppId,
-    ) -> Box<Future<Item = bool, Error = io::Error>> {
+    ) -> Box<dyn Future<Item = bool, Error = io::Error>> {
         let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
         let message = format!("Register with {}", site_name);
         self.test_user_presence(&message)
@@ -98,13 +98,13 @@ impl UserPresence for NotificationUserPresence {
     fn approve_authentication(
         &self,
         application: &AppId,
-    ) -> Box<Future<Item = bool, Error = io::Error>> {
+    ) -> Box<dyn Future<Item = bool, Error = io::Error>> {
         let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
         let message = format!("Authenticate with {}", site_name);
         self.test_user_presence(&message)
     }
 
-    fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
+    fn wink(&self) -> Box<dyn Future<Item = (), Error = io::Error>> {
         let message = String::from("Ready to authenticate");
         Notification::new()
             .appname(APPNAME)

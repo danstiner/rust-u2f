@@ -5,8 +5,8 @@
 //! ## Example
 //! ```rust,no_run
 //!#  extern crate futures;
+//!#  extern crate tokio;
 //!#  extern crate tokio_linux_uhid;
-//!#  extern crate tokio_core;
 //! 
 //! use tokio_linux_uhid::{Bus, CreateParams, UHIDDevice};
 //! 
@@ -74,8 +74,8 @@
 //!         data: RDESC.to_vec(),
 //!     };
 //! 
-//!     let core = tokio_core::reactor::Core::new().unwrap();
-//!     let handle = core.handle();
+//!     let runtime = tokio::runtime::Runtime::new().unwrap();
+//!     let handle = runtime.handle();
 //!     // Give the UHID device a handle to the tokio event loop and the create parameters
 //!     let mut uhid_device = UHIDDevice::create(&handle, create_params, None).unwrap();
 //! 
@@ -102,7 +102,7 @@ extern crate futures;
 extern crate mio;
 extern crate nix;
 extern crate slog_stdlog;
-extern crate tokio_core;
+extern crate tokio;
 extern crate tokio_io;
 extern crate uhid_sys;
 
@@ -110,7 +110,6 @@ mod character_device_file;
 mod character_device;
 mod uhid_codec;
 mod uhid_device;
-mod poll_evented_read_wrapper;
 
 pub use uhid_device::UHIDDevice;
 pub use uhid_device::CreateParams;

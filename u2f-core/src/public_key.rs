@@ -21,10 +21,10 @@ impl PublicKey {
     pub(crate) fn from_bytes(bytes: &[u8]) -> Result<PublicKey, String> {
         let mut ctx = BigNumContext::new().unwrap();
         if bytes.len() != 65 {
-            return Err(String::from(format!(
+            return Err(format!(
                 "Expected 65 bytes, found {}",
                 bytes.len()
-            )));
+            ));
         }
         if bytes[0] != EC_POINT_FORMAT_UNCOMPRESSED {
             return Err(String::from("Expected uncompressed point"));
@@ -35,7 +35,7 @@ impl PublicKey {
     }
 
     pub(crate) fn as_ec_key(&self) -> &EcKey<Public> {
-        return &self.0
+        &self.0
     }
 
     /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].

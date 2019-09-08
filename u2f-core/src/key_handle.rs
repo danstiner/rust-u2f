@@ -1,6 +1,6 @@
 use std::fmt::{self, Debug};
 use std::result::Result;
-use rand::Rand;
+use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use subtle::ConstantTimeEq;
@@ -28,14 +28,9 @@ impl AsRef<[u8]> for KeyHandle {
     }
 }
 
-impl Rand for KeyHandle {
-    #[inline]
-    fn rand<R: Rng>(rng: &mut R) -> KeyHandle {
-        let mut bytes = Vec::with_capacity(DEFAULT_KEY_HANDLE_LEN);
-        for _ in 0..DEFAULT_KEY_HANDLE_LEN {
-            bytes.push(rng.gen::<u8>());
-        }
-        KeyHandle(bytes)
+impl Distribution<KeyHandle> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> KeyHandle {
+        KeyHandle(Standard.sample_iter(rng).take(DEFAULT_KEY_HANDLE_LEN).collect())
     }
 }
 

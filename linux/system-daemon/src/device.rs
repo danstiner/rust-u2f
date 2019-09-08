@@ -5,14 +5,16 @@ use slog::Logger;
 use std::io;
 use std::io::Write;
 use take_mut::take;
-use tokio_core::reactor::Handle;
+use tokio::reactor::Handle;
 use tokio_io::AsyncRead;
-use tokio_uds::UCred;
+use tokio_uds::{UCred, UnixStream};
 use users::get_user_by_uid;
 
 use bidirectional_pipe::BidirectionalPipe;
 use softu2f_system_daemon::*;
 use tokio_linux_uhid::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UHIDDevice};
+use tokio_io::codec::length_delimited;
+use tokio_serde_bincode::{ReadBincode, WriteBincode};
 
 const INPUT_REPORT_LEN: u8 = 64;
 const OUTPUT_REPORT_LEN: u8 = 64;
@@ -56,27 +58,46 @@ const REPORT_DESCRIPTOR: [u8; 34] = [
 ];
 
 type PacketPipe =
-    Box<Pipe<Item = Packet, Error = io::Error, SinkItem = Packet, SinkError = io::Error>>;
+    Box<dyn Pipe<Item = Packet, Error = Error, SinkItem = Packet, SinkError = Error> + Send>;
 
-type SocketPipe = Box<
-    Pipe<Item = SocketInput, Error = io::Error, SinkItem = SocketOutput, SinkError = io::Error>,
->;
+type SocketPipe = Box<dyn Pipe<Item = SocketInput, Error = Error, SinkItem = SocketOutput, SinkError = Error> + Send + 'static>;
 
 trait Pipe: Stream + Sink {}
 
 impl<'a, T> Pipe for T
 where
-    T: Stream + Sink + 'a,
+    T: Stream + Sink + Send + 'a,
 {
+}
+
+quick_error! {
+    #[derive(Debug)]
+    pub enum Error {
+        Io(err: io::Error) {
+            from()
+        }
+        Bincode(err: Box<bincode::ErrorKind>) {
+            from()
+        }
+        StreamError(err: StreamError) {
+            from()
+        }
+    }
+}
+
+impl slog::Value for Error {
+    fn serialize(&self, record: &slog::Record, key: slog::Key, serializer: &mut dyn slog::Serializer) -> slog::Result {
+        serializer.emit_arguments(key, &format_args!("{}", self))
+    }
 }
 
 enum DeviceState {
     Uninitialized(SocketPipe),
     Initialized {
-        socket_future: Box<Future<Item = SocketPipe, Error = io::Error>>,
+        socket_future: Box<dyn Future<Item = SocketPipe, Error = Error> + Send + 'static>,
         uhid_transport: PacketPipe,
     },
-    Running(BidirectionalPipe<PacketPipe, PacketPipe, io::Error>),
+    Running(BidirectionalPipe<PacketPipe, PacketPipe, Error>),
     Closed,
 }
 
@@ -88,20 +109,30 @@ pub struct Device {
 }
 
 impl Device {
-    pub fn new<T>(user: UCred, socket_transport: T, handle: &Handle, logger: &Logger) -> Device
-    where
-        T: Stream<Item = SocketInput, Error = io::Error>
-            + Sink<SinkItem = SocketOutput, SinkError = io::Error>
-            + 'static,
+    pub fn new(stream: UnixStream,
+                  handle: &Handle,
+                  logger: &Logger) -> io::Result<Device>
     {
+        let user = stream.peer_cred()?;
         let id = nanoid::simple();
-        Device {
+        let transport = bind_transport(stream);
+        Ok(Device {
             handle: handle.clone(),
             logger: logger.new(o!("device_id" => id)),
-            state: DeviceState::Uninitialized(Box::new(socket_transport)),
-            user: user,
-        }
+            state: DeviceState::Uninitialized(transport),
+            user,
+        })
     }
+}
+
+
+fn bind_transport(stream: UnixStream) -> SocketPipe {
+    let framed_write = length_delimited::FramedWrite::new(stream);
+    let framed_readwrite = length_delimited::FramedRead::new(framed_write);
+    let mapped_err = framed_readwrite.sink_from_err().from_err();
+    let bincode_read = ReadBincode::new(mapped_err);
+    let bincode_readwrite = WriteBincode::<_, SocketOutput>::new(bincode_read);
+    Box::new(bincode_readwrite)
 }
 
 fn initialize(
@@ -111,7 +142,7 @@ fn initialize(
     _request: CreateDeviceRequest,
     user: &UCred,
 ) -> (
-    Box<Future<Item = SocketPipe, Error = io::Error>>,
+    Box<dyn Future<Item = SocketPipe, Error = Error> + Send>,
     PacketPipe,
 ) {
     info!(logger, "initialize");
@@ -134,7 +165,7 @@ fn initialize(
 
     let socket_future = socket_transport.send(SocketOutput::CreateDeviceResponse(
         CreateDeviceResponse::Success,
-    ));
+    )).from_err();
 
     (Box::new(socket_future), uhid_transport)
 }
@@ -142,7 +173,8 @@ fn initialize(
 fn get_device_name(ucred: &UCred) -> String {
     if let Some(hostname) = get_hostname() {
         if let Some(user) = get_user_by_uid(ucred.uid) {
-            format!("SoftU2F Linux ({}@{})", user.name(), hostname)
+            let username = user.name().to_str().unwrap_or("<unknown>");
+            format!("SoftU2F Linux ({}@{})", username, hostname)
         } else {
             format!("SoftU2F Linux ({})", hostname)
         }
@@ -155,7 +187,7 @@ fn run(
     socket_transport: SocketPipe,
     uhid_transport: PacketPipe,
     logger: &Logger,
-) -> BidirectionalPipe<PacketPipe, PacketPipe, io::Error> {
+) -> BidirectionalPipe<PacketPipe, PacketPipe, Error> {
     info!(logger, "run");
     let mapped_socket_transport = Box::new(
         socket_transport
@@ -169,21 +201,7 @@ fn run(
     BidirectionalPipe::new(mapped_socket_transport, uhid_transport)
 }
 
-fn into_transport<T: AsyncRead + Write + 'static>(device: UHIDDevice<T>) -> PacketPipe {
-    fn stream_error_to_io_error(err: StreamError) -> io::Error {
-        match err {
-            StreamError::Io(err) => err,
-            StreamError::UnknownEventType(_) => {
-                io::Error::new(io::ErrorKind::Other, "Unknown event type")
-            }
-            StreamError::BufferOverflow(_, _) => {
-                io::Error::new(io::ErrorKind::Other, "Buffer overflow")
-            }
-            StreamError::Nul(err) => io::Error::new(io::ErrorKind::Other, err),
-            StreamError::Unknown => io::Error::new(io::ErrorKind::Other, "Unknown"),
-        }
-    }
-
+fn into_transport<T: AsyncRead + Write + Send + 'static>(device: UHIDDevice<T>) -> PacketPipe {
     Box::new(
         device
             .filter_map(|event| match event {
@@ -195,8 +213,7 @@ fn into_transport<T: AsyncRead + Write + 'static>(device: UHIDDevice<T>) -> Pack
                     data: packet.into_bytes(),
                 }))
             })
-            .map_err(stream_error_to_io_error)
-            .sink_map_err(stream_error_to_io_error),
+            .map_err(Error::StreamError),
     )
 }
 
@@ -208,8 +225,8 @@ enum AsyncLoop<T> {
 }
 
 impl<T> From<Async<T>> for AsyncLoop<T> {
-    fn from(async: Async<T>) -> AsyncLoop<T> {
-        match async {
+    fn from(a: Async<T>) -> AsyncLoop<T> {
+        match a {
             Async::Ready(x) => AsyncLoop::Done(x),
             Async::NotReady => AsyncLoop::NotReady,
         }
@@ -218,12 +235,12 @@ impl<T> From<Async<T>> for AsyncLoop<T> {
 
 impl Future for Device {
     type Item = ();
-    type Error = io::Error;
+    type Error = Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         debug!(self.logger, "poll");
 
-        let mut res: io::Result<AsyncLoop<()>> = Ok(AsyncLoop::Continue);
+        let mut res: Result<AsyncLoop<()>, Self::Error> = Ok(AsyncLoop::Continue);
         while let Ok(AsyncLoop::Continue) = res {
             let handle = &self.handle;
             let logger = &self.logger;
@@ -260,8 +277,8 @@ impl Future for Device {
 
                             debug!(logger, "initialized");
                             DeviceState::Initialized {
-                                socket_future: socket_future,
-                                uhid_transport: uhid_transport,
+                                socket_future,
+                                uhid_transport,
                             }
                         }
                         _ => {
@@ -285,8 +302,8 @@ impl Future for Device {
                         Ok(Async::NotReady) => {
                             res = Ok(AsyncLoop::NotReady);
                             DeviceState::Initialized {
-                                socket_future: socket_future,
-                                uhid_transport: uhid_transport,
+                                socket_future,
+                                uhid_transport,
                             }
                         }
                         Err(err) => {
@@ -298,7 +315,7 @@ impl Future for Device {
                 }
                 DeviceState::Running(mut pipe) => {
                     debug!(logger, "running");
-                    res = pipe.poll().map(|async| async.into());
+                    res = pipe.poll().map(AsyncLoop::from);
                     DeviceState::Running(pipe)
                 }
                 DeviceState::Closed => {
@@ -309,7 +326,7 @@ impl Future for Device {
             });
         }
         match res {
-            Ok(AsyncLoop::Done(x)) => Ok(Async::Ready(x)),
+            Ok(AsyncLoop::Done(())) => Ok(Async::Ready(())),
             Ok(AsyncLoop::NotReady) => Ok(Async::NotReady),
             Ok(AsyncLoop::Continue) => unreachable!(),
             Err(err) => Err(err),

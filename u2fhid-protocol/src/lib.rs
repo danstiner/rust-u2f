@@ -50,40 +50,42 @@ pub struct U2FHID<T: Sink + Stream, S> {
     transport: SegmentingSink<T, PacketSegmenter>,
 }
 
-impl<T> U2FHID<T, U2F>
+impl<T, E> U2FHID<T, U2F>
 where
-    T: Sink<SinkItem = Packet, SinkError = io::Error> + Stream<Item = Packet, Error = io::Error>,
+    T: Sink<SinkItem = Packet, SinkError = E> + Stream<Item = Packet, Error = E>,
+    E: From<io::Error>,
 {
     pub fn bind_service<L: Into<Option<slog::Logger>>>(
-        handle: &Handle,
+        handle: Handle,
         transport: T,
         service: U2F,
         logger: L,
     ) -> U2FHID<T, U2F> {
         let logger = logger
             .into()
-            .unwrap_or(slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
+            .unwrap_or_else(|| slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
         let state_machine_logger = logger.new(o!());
         U2FHID {
-            logger: logger,
-            state_machine: StateMachine::new(service, handle.clone(), state_machine_logger),
+            logger,
+            state_machine: StateMachine::new(service, handle, state_machine_logger),
             transport: SegmentingSink::new(transport, PacketSegmenter),
         }
     }
 }
 
-impl<T, S> Future for U2FHID<T, S>
+impl<T, S, E> Future for U2FHID<T, S>
 where
-    T: Sink<SinkItem = Packet, SinkError = io::Error> + Stream<Item = Packet, Error = io::Error>,
+    T: Sink<SinkItem = Packet, SinkError = E> + Stream<Item = Packet, Error = E>,
     S: Service<
         Request = u2f_core::Request,
         Response = u2f_core::Response,
         Error = io::Error,
         Future = Box<Future<Item = u2f_core::Response, Error = io::Error>>,
     >,
+    E: From<io::Error>
 {
     type Item = ();
-    type Error = io::Error;
+    type Error = E;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         loop {
@@ -96,19 +98,16 @@ where
 
             if let Some(response) = self.state_machine.step()? {
                 debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
-                assert_send(&mut self.transport, response)?;
+                send(&mut self.transport, response)?;
                 continue;
             }
 
             match try_ready!(self.transport.poll()) {
                 Some(packet) => {
                     trace!(self.logger, "Got packet from transport"; "packet" => &packet);
-                    match self.state_machine.accept_packet(packet)? {
-                        Some(response) => {
-                            debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
-                            assert_send(&mut self.transport, response)?;
-                        }
-                        None => {}
+                    if let Some(response) = self.state_machine.accept_packet(packet)? {
+                        debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
+                        send(&mut self.transport, response)?;
                     }
                 }
                 None => {
@@ -120,7 +119,7 @@ where
     }
 }
 
-fn assert_send<S: Sink>(s: &mut S, item: S::SinkItem) -> Result<(), S::SinkError> {
+fn send<S: Sink>(s: &mut S, item: S::SinkItem) -> Result<(), S::SinkError> {
     match try!(s.start_send(item)) {
         AsyncSink::Ready => Ok(()),
         AsyncSink::NotReady(_) => panic!(
