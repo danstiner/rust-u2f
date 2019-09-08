@@ -58,12 +58,12 @@ quick_error! {
 }
 
 impl slog::Value for TransportError {
-    fn serialize(&self, record: &slog::Record, key: slog::Key, serializer: &mut dyn slog::Serializer) -> slog::Result {
+    fn serialize(&self, _record: &slog::Record, key: slog::Key, serializer: &mut dyn slog::Serializer) -> slog::Result {
         serializer.emit_arguments(key, &format_args!("{}", self))
     }
 }
 
-type Transport = dyn Pipe<Item = SocketOutput, Error = io::Error, SinkItem = SocketInput, SinkError = io::Error>;
+type Transport = Box<dyn Pipe<Item=SocketOutput, Error=TransportError, SinkItem=SocketInput, SinkError=TransportError>>;
 
 trait Pipe: Stream + Sink {}
 
@@ -108,7 +108,7 @@ fn connected(stream: UnixStream, handle: Handle, logger: Logger) -> Box<dyn Futu
     Box::new(created_device.and_then(move |transport| bind_service(transport, handle, &logger.clone())))
 }
 
-fn bind_transport(stream: UnixStream) -> Box<dyn Pipe<SinkItem = SocketInput, SinkError = TransportError, Item = SocketOutput, Error = TransportError>> {
+fn bind_transport(stream: UnixStream) -> Transport {
     let framed_write = length_delimited::FramedWrite::new(stream);
     let framed_readwrite = length_delimited::FramedRead::new(framed_write);
     let mapped_err = framed_readwrite.sink_from_err().from_err();

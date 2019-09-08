@@ -33,9 +33,9 @@ quick_error! {
 
 bitflags! {
     pub struct DevFlags: u64 {
-        const NUMBERED_FEATURE_REPORTS = 0b00000001;
-        const NUMBERED_OUTPUT_REPORTS  = 0b00000010;
-        const NUMBERED_INPUT_REPORTS   = 0b00000100;
+        const NUMBERED_FEATURE_REPORTS = 0b0000_0001;
+        const NUMBERED_OUTPUT_REPORTS  = 0b0000_0010;
+        const NUMBERED_INPUT_REPORTS   = 0b0000_0100;
     }
 }
 
@@ -128,7 +128,7 @@ impl slog::Value for OutputEvent {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         match self {
             &OutputEvent::Start { .. } => "Start",
@@ -146,7 +146,7 @@ impl slog::Value for OutputEvent {
 pub struct UHIDCodec;
 
 impl InputEvent {
-    fn to_uhid_event(self) -> Result<sys::uhid_event, StreamError> {
+    fn into_uhid_event(self) -> Result<sys::uhid_event, StreamError> {
         let mut event: sys::uhid_event = unsafe { mem::zeroed() };
 
         match self {
@@ -289,7 +289,7 @@ fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
 fn to_uhid_event_type(value: u32) -> Option<sys::uhid_event_type> {
     let last_valid_value = sys::uhid_event_type_UHID_SET_REPORT_REPLY as u32;
     if value <= last_valid_value {
-        Some(unsafe { mem::transmute(value) })
+        Some(value)
     } else {
         None
     }
@@ -300,7 +300,7 @@ fn read_event(src: &mut BytesMut) -> Option<sys::uhid_event> {
     if src.len() >= uhid_event_size {
         let bytes = src.split_to(uhid_event_size);
         let ptr = bytes.as_ptr();
-        Some(unsafe { *mem::transmute::<*const u8, &sys::uhid_event>(ptr) })
+        Some(unsafe { *(ptr as *const sys::uhid_event) })
     } else {
         None
     }
@@ -336,7 +336,7 @@ impl Encoder for UHIDCodec {
     type Error = StreamError;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let event = item.to_uhid_event()?;
+        let event = item.into_uhid_event()?;
         dst.extend_from_slice(encode_event(&event));
         Ok(())
     }

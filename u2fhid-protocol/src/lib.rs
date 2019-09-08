@@ -1,37 +1,34 @@
 #[macro_use]
 extern crate bitflags;
+extern crate byteorder;
 #[macro_use]
 extern crate futures;
+extern crate itertools;
+#[macro_use]
+extern crate quick_error;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
 extern crate slog;
-#[macro_use]
-extern crate quick_error;
-
-extern crate byteorder;
-extern crate itertools;
 extern crate slog_stdlog;
 extern crate tokio_core;
 extern crate u2f_core;
 
+use std::collections::vec_deque::VecDeque;
+use std::io;
+
+use definitions::*;
+pub use definitions::Packet;
+use futures::{Async, AsyncSink, Future, Poll, Sink, Stream};
+use protocol_state_machine::StateMachine;
+use segmenting_sink::{Segmenter, SegmentingSink};
+use slog::Drain;
+use tokio_core::reactor::Handle;
+use u2f_core::{Service, U2F};
+
 mod definitions;
 mod protocol_state_machine;
 mod segmenting_sink;
-
-pub use definitions::Packet;
-
-use std::io;
-use std::collections::vec_deque::VecDeque;
-
-use futures::{Async, AsyncSink, Future, Poll, Sink, Stream};
-use slog::Drain;
-use tokio_core::reactor::Handle;
-
-use definitions::*;
-use protocol_state_machine::StateMachine;
-use segmenting_sink::{Segmenter, SegmentingSink};
-use u2f_core::{Service, U2F};
 
 struct PacketSegmenter;
 
@@ -40,7 +37,7 @@ impl Segmenter for PacketSegmenter {
     type SegmentedItem = Packet;
 
     fn segment(&self, item: Self::Item) -> VecDeque<Self::SegmentedItem> {
-        item.to_packets()
+        item.into_packets()
     }
 }
 
@@ -80,7 +77,7 @@ where
         Request = u2f_core::Request,
         Response = u2f_core::Response,
         Error = io::Error,
-        Future = Box<Future<Item = u2f_core::Response, Error = io::Error>>,
+        Future = Box<dyn Future<Item = u2f_core::Response, Error = io::Error>>,
     >,
     E: From<io::Error>
 {
@@ -120,7 +117,7 @@ where
 }
 
 fn send<S: Sink>(s: &mut S, item: S::SinkItem) -> Result<(), S::SinkError> {
-    match try!(s.start_send(item)) {
+    match s.start_send(item)? {
         AsyncSink::Ready => Ok(()),
         AsyncSink::NotReady(_) => panic!(
             "sink reported itself as ready after `poll_ready` but was \

@@ -1,24 +1,25 @@
 use std::io;
-use byteorder::{BigEndian, WriteBytesExt};
 
 use attestation::AttestationCertificate;
+use byteorder::{BigEndian, WriteBytesExt};
 use key_handle::KeyHandle;
+
+use super::Counter;
 use super::Signature;
 use super::SignError;
-use super::Counter;
-use super::user_presence_byte;
 use super::StatusCode;
+use super::user_presence_byte;
 
 pub enum Response {
     Registration {
         user_public_key: Vec<u8>,
         key_handle: KeyHandle,
         attestation_certificate: AttestationCertificate,
-        signature: Box<Signature>,
+        signature: Box<dyn Signature>,
     },
     Authentication {
         counter: Counter,
-        signature: Box<Signature>,
+        signature: Box<dyn Signature>,
         user_present: bool,
     },
     Version {

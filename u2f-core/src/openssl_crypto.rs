@@ -1,15 +1,16 @@
-use openssl::ec::{EcGroup, EcKey};
-use openssl::nid::Nid;
 use std::io;
-use openssl::hash::MessageDigest;
-use openssl::sign::Signer;
-use openssl::pkey::PKey;
 
 use app_id::AppId;
 use application_key::ApplicationKey;
 use attestation::{Attestation, AttestationCertificate};
 use key_handle::KeyHandle;
+use openssl::ec::{EcGroup, EcKey};
+use openssl::hash::MessageDigest;
+use openssl::nid::Nid;
+use openssl::pkey::PKey;
+use openssl::sign::Signer;
 use private_key::PrivateKey;
+
 use super::CryptoOperations;
 use super::Signature;
 use super::SignError;
@@ -37,7 +38,7 @@ impl OpenSSLCryptoOperations {
 }
 
 impl CryptoOperations for OpenSSLCryptoOperations {
-    fn attest(&self, data: &[u8]) -> Result<Box<Signature>, SignError> {
+    fn attest(&self, data: &[u8]) -> Result<Box<dyn Signature>, SignError> {
         self.sign(&self.attestation.key, data)
     }
 
@@ -51,7 +52,7 @@ impl CryptoOperations for OpenSSLCryptoOperations {
         self.attestation.certificate.clone()
     }
 
-    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<Signature>, SignError> {
+    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<dyn Signature>, SignError> {
         let ec_key = key.0.to_owned();
         let pkey = PKey::from_ec_key(ec_key).unwrap();
         let mut signer = Signer::new(MessageDigest::sha256(), &pkey).unwrap();

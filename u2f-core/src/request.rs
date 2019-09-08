@@ -1,12 +1,13 @@
-use byteorder::{BigEndian, ReadBytesExt};
 use std::io::Cursor;
 use std::io::Read;
 use std::result::Result;
 
-use super::Challenge;
 use app_id::AppId;
-use key_handle::KeyHandle;
+use byteorder::{BigEndian, ReadBytesExt};
 use constants::*;
+use key_handle::KeyHandle;
+
+use super::Challenge;
 
 #[derive(Debug)]
 pub enum AuthenticateControlCode {
@@ -145,7 +146,7 @@ impl Request {
                 Request::Authenticate {
                     application: AppId(application_parameter),
                     challenge: Challenge(challenge_parameter),
-                    control_code: control_code,
+                    control_code,
                     key_handle: KeyHandle::from(&key_handle_bytes),
                 }
             }

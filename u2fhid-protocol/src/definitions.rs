@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use slog;
-
 use u2f_core;
 
 pub const MAJOR_DEVICE_VERSION_NUMBER: u8 = 0;
@@ -64,7 +63,7 @@ impl slog::Value for ChannelId {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         format!("{:#01$X}", self.0, size_of::<u32>() * 2).serialize(record, key, serializer)
     }
@@ -127,7 +126,7 @@ impl slog::Value for Command {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         match self {
             &Command::Msg => "Msg",
@@ -163,7 +162,7 @@ impl slog::Value for Packet {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         match self {
             &Packet::Initialization { .. } => "Initialization",
@@ -204,8 +203,8 @@ impl Packet {
             let mut packet_data = vec![0u8; INITIAL_PACKET_DATA_LEN];
             reader.read_exact(&mut packet_data[..]).unwrap();
             Ok(Packet::Initialization {
-                channel_id: channel_id,
-                command: command,
+                channel_id,
+                command,
                 data: packet_data,
                 payload_len: payload_len as usize,
             })
@@ -214,8 +213,8 @@ impl Packet {
             let mut packet_data = vec![0u8; CONTINUATION_PACKET_DATA_LEN];
             reader.read_exact(&mut packet_data[..]).unwrap();
             Ok(Packet::Continuation {
-                channel_id: channel_id,
-                sequence_number: sequence_number,
+                channel_id,
+                sequence_number,
                 data: packet_data,
             })
         }
@@ -314,7 +313,7 @@ impl RequestMessage {
                 } else {
                     let mut nonce = [0u8; COMMAND_INIT_DATA_LEN];
                     nonce.copy_from_slice(&data[..]);
-                    Ok(RequestMessage::Init { nonce: nonce })
+                    Ok(RequestMessage::Init { nonce })
                 }
             },
             &Command::Wink => Ok(RequestMessage::Wink),
@@ -357,7 +356,7 @@ impl slog::Value for RequestMessageDecodeError {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         format!("{:?}", self).serialize(record, key, serializer)
     }
@@ -370,7 +369,7 @@ pub struct Response {
 }
 
 impl Response {
-    pub fn to_packets(self) -> VecDeque<Packet> {
+    pub fn into_packets(self) -> VecDeque<Packet> {
         let channel_id = self.channel_id;
         match self.message {
             ResponseMessage::EncapsulatedResponse { data } => {
@@ -436,7 +435,7 @@ impl slog::Value for ResponseMessage {
         &self,
         record: &slog::Record,
         key: slog::Key,
-        serializer: &mut slog::Serializer,
+        serializer: &mut dyn slog::Serializer,
     ) -> slog::Result {
         match self {
             ResponseMessage::EncapsulatedResponse { .. } => "EncapsulatedResponse",
@@ -463,14 +462,14 @@ fn encode_response(channel_id: ChannelId, command: Command, data: &[u8]) -> VecD
     let split_index = cmp::min(data.len(), INITIAL_PACKET_DATA_LEN);
     let (initial, remaining) = data.split_at(split_index);
     packets.push_back(Packet::Initialization {
-        channel_id: channel_id,
-        command: command,
-        payload_len: payload_len,
+        channel_id,
+        command,
+        payload_len,
         data: initial.to_vec(),
     });
     for (i, chunk) in remaining.chunks(CONTINUATION_PACKET_DATA_LEN).enumerate() {
         packets.push_back(Packet::Continuation {
-            channel_id: channel_id,
+            channel_id,
             sequence_number: i as u8,
             data: chunk.to_vec(),
         });
