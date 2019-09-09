@@ -1,3 +1,4 @@
+extern crate clap;
 extern crate futures;
 extern crate hostname;
 extern crate libc;
@@ -24,6 +25,7 @@ extern crate users;
 use std::io;
 use std::os::unix::io::FromRawFd;
 
+use clap::{App, Arg};
 use futures::future;
 use futures::prelude::*;
 use slog::{Drain, Logger};
@@ -37,36 +39,59 @@ use softu2f_system_daemon::*;
 mod bidirectional_pipe;
 mod device;
 
-const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
+const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const PATH_ARG: &str = "path";
 
 fn main() {
+    let args = App::new("SoftU2F System Daemon")
+        .version(VERSION)
+        .author(AUTHORS)
+        .about(DESCRIPTION)
+        .arg(Arg::with_name(PATH_ARG)
+            .short("s")
+            .long("socket")
+            .takes_value(true)
+            .help("Bind to specified socket path instead of file-descriptor from systemd"))
+        .after_help("By default expects to be run via systemd as root and passed a socket file-descriptor to listen on.")
+        .get_matches();
+
+    let socket_path = args.value_of(PATH_ARG);
     let decorator = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let logger = Logger::root(drain, o!());
 
     info!(logger, "Starting SoftU2F system daemon"; "version" => VERSION);
 
-    run(&logger).unwrap_or_else(|err| error!(logger, "Failed to run system daemon"; "err" => err.to_string()));
+    run(socket_path, &logger).unwrap_or_else(|err| error!(logger, "Exiting"; "err" => err.to_string()));
 }
 
-fn run(logger: &Logger) -> Result<(), device::Error> {
+fn run(socket_path: Option<&str>, logger: &Logger) -> Result<(), device::Error> {
     let mut runtime = Runtime::new()?;
     let handle = runtime.handle();
-    runtime.block_on(listen(handle, logger))?;
+    runtime.block_on(listen(socket_path, handle, logger))?;
     runtime.shutdown_on_idle().wait().unwrap();
     Ok(())
 }
 
-fn listen(handle: &Handle, logger: &Logger) -> Box<dyn Future<Item = (), Error = device::Error> + Send + 'static> {
+fn listen(socket_path: Option<&str>, handle: &Handle, logger: &Logger) -> Box<dyn Future<Item=(), Error=device::Error> + Send + 'static> {
     let handle = handle.clone();
     let logger = logger.clone();
-    match systemd_socket_listener(&handle) {
+    match socket_listener(socket_path, &handle) {
         Ok(listener) => Box::new(listener.incoming().from_err().for_each(move |connection| accept(connection, &handle, &logger))),
         Err(err) => Box::new(future::err(err).from_err()),
     }
 }
 
-fn systemd_socket_listener(handle: &Handle) -> io::Result<tokio_uds::UnixListener> {
+fn socket_listener(socket_path: Option<&str>, handle: &Handle) -> io::Result<tokio_uds::UnixListener> {
+    let listener = socket_path
+        .map(std::os::unix::net::UnixListener::bind)
+        .unwrap_or_else(|| systemd_socket_listener())?;
+    tokio_uds::UnixListener::from_std(listener, handle)
+}
+
+fn systemd_socket_listener() -> io::Result<std::os::unix::net::UnixListener> {
     let listen_fds = systemd::daemon::listen_fds(true)?;
     if listen_fds != 1 {
         return Err(io::Error::new(io::ErrorKind::Other, "expected exactly one socket from systemd"));
@@ -77,8 +102,7 @@ fn systemd_socket_listener(handle: &Handle) -> io::Result<tokio_uds::UnixListene
         return Err(io::Error::new(io::ErrorKind::Other, "expected the softu2f socket from systemd"));
     }
 
-    let std_listener = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
-    tokio_uds::UnixListener::from_std(std_listener, handle)
+    Ok(unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) })
 }
 
 fn accept(stream: tokio_uds::UnixStream, handle: &Handle, logger: &Logger,) -> Box<dyn Future<Item = (), Error = device::Error> + Send + 'static> {

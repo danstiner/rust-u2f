@@ -1,6 +1,6 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
-description = "System daemon for U2F device simulated in software"
+description = "System daemon for emulating U2F devices"
 name = "softu2f-system-daemon"
 version = "0.3.2"
 
@@ -10,6 +10,7 @@ protoc-rust = "1.7.5"
 [dependencies]
 bincode = "1.1.4"
 bytes = "0.4.12"
+clap = "2.33.0"
 futures = "0.1.28"
 hostname = "0.1.5"
 libc = "0.2.62"
@@ -53,5 +54,6 @@ assets = [
     ["../target/release/softu2f-system-daemon", "usr/libexec/softu2f/system-daemon", "755"]
 ]
 depends = "$auto, systemd, u2f-hidraw-policy"
-extended-description = "A systemd daemon that provides a socket interface for unprivileged users to create emulated U2F devices."
+extended-description = """Provides a socket interface for unprivileged users to create emulated Universal 2nd Factor
+devices. By default expects to be run via systemd as root and passed a socket file-descriptor to listen on."""
 maintainer-scripts = "maintainer-scripts"

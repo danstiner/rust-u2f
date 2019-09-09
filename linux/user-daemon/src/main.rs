@@ -1,4 +1,5 @@
 extern crate bincode;
+extern crate clap;
 extern crate core;
 extern crate dirs;
 extern crate futures;
@@ -25,6 +26,7 @@ extern crate u2fhid_protocol;
 
 use std::io;
 
+use clap::{App, Arg};
 use futures::future;
 use futures::prelude::*;
 use slog::{Drain, Logger};
@@ -34,8 +36,9 @@ use tokio_serde_bincode::{ReadBincode, WriteBincode};
 use tokio_uds::{UCred, UnixStream};
 use u2f_core::{SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
+
 use file_store::FileStore;
-use softu2f_system_daemon::{CreateDeviceRequest, CreateDeviceError, DeviceDescription, SocketInput, SocketOutput};
+use softu2f_system_daemon::{CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput};
 use user_presence::NotificationUserPresence;
 
 mod file_store;
@@ -46,9 +49,13 @@ quick_error! {
     pub enum TransportError {
         Io(err: io::Error) {
             from()
+            cause(err)
+            display("I/O error: {}", err)
         }
         Bincode(err: Box<bincode::ErrorKind>) {
             from()
+            cause(err)
+            display("Bincode error: {}", err)
         }
         InvalidState(message: &'static str) {
             display("{}", message)
@@ -75,25 +82,43 @@ impl<'a, T> Pipe for T
 {
 }
 
-const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
+const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const PATH_ARG: &str = "path";
 
 fn main() {
+    let args = App::new("SoftU2F System Daemon")
+        .version(VERSION)
+        .author(AUTHORS)
+        .about(DESCRIPTION)
+        .arg(Arg::with_name(PATH_ARG)
+            .short("s")
+            .long("socket")
+            .takes_value(true)
+            .help("Bind to specified socket path instead of file-descriptor from systemd"))
+        .after_help("By default expects to be run via systemd as root and passed a socket file-descriptor to listen on.")
+        .get_matches();
+
+    let socket_path = args.value_of(PATH_ARG);
     let decorator = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let logger = Logger::root(drain, o!());
 
     info!(logger, "Starting SoftU2F user daemon"; "version" => VERSION);
 
-    run(logger).unwrap();
+    run(socket_path, &logger).unwrap_or_else(|err| error!(logger, "Exiting"; "err" => err.to_string()));
 }
 
-fn run(logger: Logger) -> Result<(), TransportError> {
+fn run(socket_path: Option<&str>, logger: &Logger) -> Result<(), TransportError> {
+    let socket_path = socket_path.unwrap_or(softu2f_system_daemon::SOCKET_PATH);
     let mut core = Core::new()?;
     let handle = core.handle();
-    core.run(connect(softu2f_system_daemon::SOCKET_PATH, handle, logger))
+    core.run(connect(socket_path, handle, logger))
 }
 
-fn connect(socket_path: &str, handle: Handle, logger: Logger) -> Box<dyn Future<Item = (), Error = TransportError>> {
+fn connect(socket_path: &str, handle: Handle, logger: &Logger) -> Box<dyn Future<Item=(), Error=TransportError>> {
+    let logger = logger.clone();
     debug!(logger, "Opening socket"; "path" => socket_path);
     Box::new(UnixStream::connect(socket_path).map_err(TransportError::Io).and_then(|stream| connected(stream, handle, logger)))
 }

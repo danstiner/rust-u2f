@@ -92,25 +92,26 @@
 //! ```
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate quick_error;
-
 extern crate bytes;
 extern crate futures;
 extern crate mio;
 extern crate nix;
+#[macro_use]
+extern crate quick_error;
+#[macro_use]
+extern crate slog;
 extern crate slog_stdlog;
 extern crate tokio;
 extern crate tokio_io;
 extern crate uhid_sys;
 
+pub use uhid_codec::{Bus, InputEvent, OutputEvent, StreamError};
+pub use uhid_device::CreateParams;
+pub use uhid_device::UHIDDevice;
+
 mod character_device_file;
 mod character_device;
+mod uhid_device_file;
 mod uhid_codec;
 mod uhid_device;
 
-pub use uhid_device::UHIDDevice;
-pub use uhid_device::CreateParams;
-pub use uhid_codec::{Bus, InputEvent, OutputEvent, StreamError};

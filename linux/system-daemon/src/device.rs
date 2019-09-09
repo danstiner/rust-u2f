@@ -76,12 +76,18 @@ quick_error! {
     pub enum Error {
         Io(err: io::Error) {
             from()
+            cause(err)
+            display("I/O error: {}", err)
         }
         Bincode(err: Box<bincode::ErrorKind>) {
             from()
+            cause(err)
+            display("Bincode error: {}", err)
         }
         StreamError(err: StreamError) {
             from()
+            cause(err)
+            display("Stream error: {}", err)
         }
     }
 }
@@ -148,8 +154,6 @@ fn initialize(
     Box<dyn Future<Item = SocketPipe, Error = Error> + Send>,
     PacketPipe,
 ) {
-    info!(logger, "initialize");
-
     let create_params = CreateParams {
         name: get_device_name(user),
         phys: String::from(""),
@@ -162,6 +166,7 @@ fn initialize(
         data: REPORT_DESCRIPTOR.to_vec(),
     };
 
+    info!(logger, "Creating virtual U2F device"; "name" => &create_params.name);
     let uhid_device = UHIDDevice::create(&handle, create_params, logger.clone()).unwrap();
     // TODO chown device to self.user creds
     let uhid_transport = into_transport(uhid_device);
@@ -252,7 +257,7 @@ impl Future for Device {
             let device_id = &self.id;
             take(state, |state| match state {
                 DeviceState::Uninitialized(mut socket_transport) => {
-                    debug!(logger, "state unitialized");
+                    debug!(logger, "uninitialized");
                     let input = socket_transport.poll();
 
                     let input = match input {
@@ -279,7 +284,6 @@ impl Future for Device {
                             let (socket_future, uhid_transport) =
                                 initialize(device_id, socket_transport, handle, logger, request, user);
 
-                            debug!(logger, "initialized");
                             DeviceState::Initialized {
                                 socket_future,
                                 uhid_transport,
@@ -295,7 +299,7 @@ impl Future for Device {
                     mut socket_future,
                     uhid_transport,
                 } => {
-                    debug!(logger, "state initialized");
+                    debug!(logger, "initialized");
                     match socket_future.poll() {
                         Ok(Async::Ready(socket)) => {
                             let mut pipe = run(socket, uhid_transport, logger);
