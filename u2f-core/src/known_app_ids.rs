@@ -1,7 +1,7 @@
-use ring::digest;
 use std::collections::HashMap;
 
 use app_id::AppId;
+use ring::digest;
 
 pub fn try_reverse_app_id(app_id: &AppId) -> Option<String> {
     KNOWN_APP_IDS.get(app_id).map(|s| String::from(*s))
@@ -24,11 +24,12 @@ lazy_static! {
         map.insert(from_url("https://lastpass.com"), "lastpass.com");
 
         // Additional known app IDs not yet in KnownFacets.swift
+        map.insert(from_url("bin.coffee"), "bin.coffee");
+        map.insert(from_url("coinbase.com"), "coinbase.com");
         map.insert(from_url("demo.yubico.com"), "demo.yubico.com");
         map.insert(from_url("https://gitlab.com"), "gitlab.com");
-        map.insert(from_url("https://www.fastmail.com"), "www.fastmail.com");
         map.insert(from_url("https://u2f.bin.coffee"), "u2f.bin.coffee");
-        map.insert(from_url("bin.coffee"), "bin.coffee");
+        map.insert(from_url("https://www.fastmail.com"), "www.fastmail.com");
         map.insert(from_url("webauthn.bin.coffee"), "webauthn.bin.coffee");
 
         map
