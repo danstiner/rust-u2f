@@ -7,16 +7,16 @@ use futures::{Async, AsyncSink, Poll, Sink, StartSend, Stream};
 use nix;
 use nix::fcntl;
 use nix::libc;
-use slog_stdlog;
 use slog;
 use slog::Drain;
+use slog_stdlog;
 use tokio::reactor::Handle;
 use tokio_io::AsyncRead;
 
-use tokio::reactor::PollEvented;
-use character_device_file::CharacterDeviceFile;
 use character_device::{CharacterDevice, Decoder, Encoder, SyncSink};
+use character_device_file::CharacterDeviceFile;
 use uhid_codec::*;
+use uhid_device_file::UHIDDeviceFile;
 
 pub struct UHIDDevice<T> {
     inner: CharacterDevice<T, UHIDCodec, UHIDCodec>,
@@ -38,13 +38,13 @@ pub struct CreateParams {
 
 // ===== impl UHIDDevice =====
 
-impl UHIDDevice<PollEvented<CharacterDeviceFile<File>>> {
+impl UHIDDevice<UHIDDeviceFile<CharacterDeviceFile<File>>> {
     /// Create a UHID device using '/dev/uhid'
     pub fn create<L: Into<Option<slog::Logger>>>(
         handle: &Handle,
         params: CreateParams,
         logger: L,
-    ) -> io::Result<UHIDDevice<PollEvented<CharacterDeviceFile<File>>>> {
+    ) -> io::Result<UHIDDevice<UHIDDeviceFile<CharacterDeviceFile<File>>>> {
         Self::create_with_path(Path::new("/dev/uhid"), handle, params, logger)
     }
 
@@ -54,7 +54,7 @@ impl UHIDDevice<PollEvented<CharacterDeviceFile<File>>> {
         handle: &Handle,
         params: CreateParams,
         logger: L,
-    ) -> io::Result<UHIDDevice<PollEvented<CharacterDeviceFile<File>>>> {
+    ) -> io::Result<UHIDDevice<UHIDDeviceFile<CharacterDeviceFile<File>>>> {
         let fd = fcntl::open(
             path,
             fcntl::OFlag::from_bits(libc::O_RDWR | libc::O_CLOEXEC | libc::O_NONBLOCK).unwrap(),

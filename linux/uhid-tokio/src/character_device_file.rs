@@ -1,8 +1,10 @@
-use std::os::unix::io::{AsRawFd, RawFd};
 use std::io;
+use std::os::unix::io::{AsRawFd, RawFd};
 
 use mio;
-use tokio::reactor::{Handle, PollEvented};
+use tokio::reactor::{Handle, PollEvented, PollEvented2};
+
+use uhid_device_file::UHIDDeviceFile;
 
 #[derive(Debug)]
 pub struct CharacterDeviceFile<F>(F);
@@ -24,8 +26,8 @@ impl<F: AsRawFd> CharacterDeviceFile<F> {
     /// fn into_io(File<impl AsRawFd + Read>, &Handle) -> Result<impl AsyncRead>;
     /// fn into_io(File<impl AsRawFd + Write>, &Handle) -> Result<impl AsyncWrite>;
     /// ```
-    pub fn into_io(self, handle: &Handle) -> io::Result<PollEvented<Self>> {
-        Ok(PollEvented::new(self, handle)?)
+    pub fn into_io(self, handle: &Handle) -> io::Result<UHIDDeviceFile<Self>> {
+        Ok(UHIDDeviceFile::new(PollEvented2::new_with_handle(self, handle)?))
     }
 }
 
@@ -38,7 +40,7 @@ impl<F: AsRawFd + io::Read> CharacterDeviceFile<F> {
     /// fn into_reader(File<StdFile<StdinLock>>, &Handle) -> Result<impl AsyncRead + BufRead>;
     /// fn into_reader(File<impl AsRawFd + Read>, &Handle) -> Result<impl AsyncRead + BufRead>;
     /// ```
-    pub fn into_reader(self, handle: &Handle) -> io::Result<io::BufReader<PollEvented<Self>>> {
+    pub fn into_reader(self, handle: &Handle) -> io::Result<io::BufReader<UHIDDeviceFile<Self>>> {
         Ok(io::BufReader::new(self.into_io(handle)?))
     }
 }
