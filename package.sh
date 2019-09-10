@@ -39,7 +39,6 @@ else
     package debian debian bullseye
     package debian debian buster
     package debian debian stretch
-    package debian debian jessie
     package debian ubuntu eoan
     package debian ubuntu disco
     package debian ubuntu bionic
