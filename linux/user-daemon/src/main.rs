@@ -37,11 +37,11 @@ use tokio_uds::{UCred, UnixStream};
 use u2f_core::{SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
 
-use file_store::FileStore;
 use softu2f_system_daemon::{CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput};
+use stores::file::FileStore;
 use user_presence::NotificationUserPresence;
 
-mod file_store;
+mod stores;
 mod user_presence;
 
 quick_error! {

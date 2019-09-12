@@ -1,6 +1,3 @@
-use futures::future;
-use futures::{Future, IntoFuture};
-use serde_json;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -10,6 +7,9 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
+use futures::{Future, IntoFuture};
+use futures::future;
+use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
 macro_rules! tryf {
@@ -152,9 +152,11 @@ fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
 mod tests {
     extern crate tempdir;
 
-    use self::tempdir::TempDir;
-    use super::*;
     use u2f_core::PrivateKey;
+
+    use super::*;
+
+    use self::tempdir::TempDir;
 
     fn fake_app_id() -> AppId {
         AppId::from_bytes(&vec![0u8; 32])
