@@ -2,6 +2,8 @@
 //!
 //! A safe wrapper around the userspace API to the HID subsystem in the linux kernel.
 //!
+//! See https://www.kernel.org/doc/Documentation/hid/uhid.txt
+//!
 //! ## Example
 //! ```rust,no_run
 //!#  extern crate futures;
@@ -60,8 +62,7 @@
 //! ];
 //! 
 //! fn main() {
-//!     // All the parameters used to create the HID device
-//!     let create_params = CreateParams {
+//!     let mut uhid_device = UHIDDevice::create(CreateParams {
 //!         name: String::from("test-uhid-device"),
 //!         phys: String::from(""),
 //!         uniq: String::from(""),
@@ -72,12 +73,7 @@
 //!         country: 0,
 //!         // Most important field - HID Report Descriptor
 //!         data: RDESC.to_vec(),
-//!     };
-//! 
-//!     let runtime = tokio::runtime::Runtime::new().unwrap();
-//!     let handle = runtime.handle();
-//!     // Give the UHID device a handle to the tokio event loop and the create parameters
-//!     let mut uhid_device = UHIDDevice::create(&handle, create_params, None).unwrap();
+//!     }, None).unwrap();
 //! 
 //!     // Formulate a HID Packet
 //!     let button_flags = 0;
@@ -105,13 +101,12 @@ extern crate tokio;
 extern crate tokio_io;
 extern crate uhid_sys;
 
-pub use uhid_codec::{Bus, InputEvent, OutputEvent, StreamError};
+pub use codec::{Bus, InputEvent, OutputEvent, StreamError};
 pub use uhid_device::CreateParams;
 pub use uhid_device::UHIDDevice;
 
-mod character_device_file;
 mod character_device;
-mod uhid_device_file;
-mod uhid_codec;
+mod codec;
+mod misc_driver;
+mod transport;
 mod uhid_device;
-

@@ -70,7 +70,7 @@ fn main() {
 
     let mut runtime = Runtime::new().unwrap();
     let handle = runtime.handle();
-    let mut uhid_device = UHIDDevice::create(&handle, create_params, None).unwrap();
+    let mut uhid_device = UHIDDevice::create(create_params, None).unwrap();
 
     let button_flags = 0;
     let mouse_abs_hor = 20;

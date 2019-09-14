@@ -167,7 +167,7 @@ fn initialize(
     };
 
     info!(logger, "Creating virtual U2F device"; "name" => &create_params.name);
-    let uhid_device = UHIDDevice::create(&handle, create_params, logger.clone()).unwrap();
+    let uhid_device = UHIDDevice::create(create_params, logger.clone()).unwrap();
     // TODO chown device to self.user creds
     let uhid_transport = into_transport(uhid_device);
 
@@ -196,7 +196,7 @@ fn run(
     uhid_transport: PacketPipe,
     logger: &Logger,
 ) -> BidirectionalPipe<PacketPipe, PacketPipe, Error> {
-    info!(logger, "run");
+    debug!(logger, "run");
     let mapped_socket_transport = Box::new(
         socket_transport
             .filter_map(|event| match event {
@@ -225,7 +225,7 @@ fn into_transport<T: AsyncRead + Write + Send + 'static>(device: UHIDDevice<T>) 
     )
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 enum AsyncLoop<T> {
     Continue,
     NotReady,
@@ -246,8 +246,6 @@ impl Future for Device {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        debug!(self.logger, "poll");
-
         let mut res: Result<AsyncLoop<()>, Self::Error> = Ok(AsyncLoop::Continue);
         while let Ok(AsyncLoop::Continue) = res {
             let handle = &self.handle;
@@ -257,7 +255,7 @@ impl Future for Device {
             let device_id = &self.id;
             take(state, |state| match state {
                 DeviceState::Uninitialized(mut socket_transport) => {
-                    debug!(logger, "uninitialized");
+                    debug!(logger, "Future::poll"; "state" => "uninitialized");
                     let input = socket_transport.poll();
 
                     let input = match input {
@@ -302,9 +300,8 @@ impl Future for Device {
                     debug!(logger, "initialized");
                     match socket_future.poll() {
                         Ok(Async::Ready(socket)) => {
-                            let mut pipe = run(socket, uhid_transport, logger);
-                            debug!(logger, "poll running");
-                            res = pipe.poll().map(|async| async.into());
+                            let pipe = run(socket, uhid_transport, logger);
+                            res = Ok(AsyncLoop::Continue);
                             DeviceState::Running(pipe)
                         }
                         Ok(Async::NotReady) => {
@@ -322,17 +319,18 @@ impl Future for Device {
                     }
                 }
                 DeviceState::Running(mut pipe) => {
-                    debug!(logger, "running");
+                    debug!(logger, "Future::poll"; "state" => "running");
                     res = pipe.poll().map(AsyncLoop::from);
                     DeviceState::Running(pipe)
                 }
                 DeviceState::Closed => {
-                    debug!(logger, "closed");
+                    debug!(logger, "Future::poll"; "state" => "closed");
                     res = Ok(AsyncLoop::Done(()));
                     DeviceState::Closed
                 }
             });
         }
+        debug!(self.logger, "Future::poll"; "result" => ?res);
         match res {
             Ok(AsyncLoop::Done(())) => Ok(Async::Ready(())),
             Ok(AsyncLoop::NotReady) => Ok(Async::NotReady),
