@@ -106,8 +106,16 @@ fn systemd_socket_listener() -> io::Result<std::os::unix::net::UnixListener> {
 }
 
 fn accept(stream: tokio_uds::UnixStream, handle: &Handle, logger: &Logger,) -> Box<dyn Future<Item = (), Error = device::Error> + Send + 'static> {
-    match Device::new(stream, handle, logger) {
+    match try_accept(stream, handle, logger) {
         Ok(device) => Box::new(device),
         Err(err) => Box::new(future::err(err).from_err()),
     }
+}
+
+fn try_accept(stream: tokio_uds::UnixStream, handle: &Handle, logger: &Logger) -> io::Result<Device> {
+    debug!(logger, "accepting connection";
+        "local_addr" => ?stream.local_addr()?,
+        "peer_addr" => ?stream.peer_addr()?,
+        "peer_cred" => ?stream.peer_cred()?);
+    Device::new(stream, handle, logger)
 }
