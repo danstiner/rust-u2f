@@ -9,6 +9,7 @@ extern crate lazy_static;
 extern crate notify_rust;
 #[macro_use]
 extern crate quick_error;
+extern crate secret_service;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
@@ -39,6 +40,7 @@ use u2fhid_protocol::{Packet, U2FHID};
 
 use softu2f_system_daemon::{CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput};
 use stores::file::FileStore;
+use stores::secret_service::SecretServiceStore;
 use user_presence::NotificationUserPresence;
 
 mod stores;
@@ -172,12 +174,12 @@ fn bind_service<T>(device: DeviceDescription, transport: T, handle: Handle, logg
 
     let mut store_path = dirs::home_dir().unwrap();
     store_path.push(".softu2f-secrets.json");
-    info!(logger, "Virtual U2F device created"; "device_id" => device.id, "store_path" => store_path.to_str().unwrap());
+    info!(logger, "Virtual U2F device created"; "device_id" => device.id, "secret_service_store" => "true");
 
     let attestation = u2f_core::self_signed_attestation();
     let user_presence = Box::new(NotificationUserPresence::new(&handle, logger.new(o!())));
     let operations = Box::new(SecureCryptoOperations::new(attestation));
-    let store = match FileStore::new(store_path) {
+    let store = match SecretServiceStore::new() {
         Ok(store) => Box::new(store),
         Err(err) => return Box::new(future::err(TransportError::Io(err))),
     };
