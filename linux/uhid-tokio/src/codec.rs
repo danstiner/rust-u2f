@@ -7,7 +7,7 @@ use std::slice;
 use bytes::BytesMut;
 use slog;
 
-use character_device::{Decoder, Encoder};
+use transport::{Decoder, Encoder};
 use uhid_sys as sys;
 
 quick_error! {
@@ -143,7 +143,7 @@ impl slog::Value for OutputEvent {
 }
 
 #[derive(Debug, Default)]
-pub struct UHIDCodec;
+pub struct Codec;
 
 impl InputEvent {
     fn into_uhid_event(self) -> Result<sys::uhid_event, StreamError> {
@@ -314,7 +314,7 @@ unsafe fn as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     slice::from_raw_parts((p as *const T) as *const u8, mem::size_of::<T>())
 }
 
-impl Decoder for UHIDCodec {
+impl Decoder for Codec {
     type Item = OutputEvent;
     type Error = StreamError;
 
@@ -331,7 +331,7 @@ impl Decoder for UHIDCodec {
     }
 }
 
-impl Encoder for UHIDCodec {
+impl Encoder for Codec {
     type Item = InputEvent;
     type Error = StreamError;
 
@@ -493,7 +493,7 @@ mod tests {
         expected[364] = 0xc0;
         let mut result = BytesMut::new();
 
-        UHIDCodec
+        Codec
             .encode(
                 InputEvent::Create {
                     name: String::from("test-uhid-device"),
@@ -519,7 +519,7 @@ mod tests {
         expected[0] = 0x01;
         let mut result = BytesMut::new();
 
-        UHIDCodec.encode(InputEvent::Destroy, &mut result).unwrap();
+        Codec.encode(InputEvent::Destroy, &mut result).unwrap();
 
         assert_bytes_eq(&result[..], &expected);
     }

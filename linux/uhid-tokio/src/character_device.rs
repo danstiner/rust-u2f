@@ -1,192 +1,64 @@
-use std::fmt;
 use std::io;
-use std::io::Write;
+use std::os::unix::io::{AsRawFd, RawFd};
 
-use bytes::buf::FromBuf;
-use bytes::BytesMut;
-use futures::{Async, Poll, Stream};
-use slog;
-use tokio_io::AsyncRead;
+use mio;
 
-/// Decoding of items in buffers.
-///
-/// An implementation of `Decoder` takes a buffer of bytes and is expected
-/// to decode exactly one item. Any other result should be considered an error.
-///
-/// Implementations are able to track state on `self`.
-pub trait Decoder {
-    /// The type of decoded items.
-    type Item;
+#[derive(Debug)]
+pub struct CharacterDevice<F>(F);
 
-    /// The type of unrecoverable frame decoding errors.
-    ///
-    /// If an individual message is ill-formed but can be ignored without
-    /// interfering with the processing of future messages, it may be more
-    /// useful to report the failure as an `Item`.
-    ///
-    /// `From<io::Error>` is required in the interest of making `Error` suitable
-    /// for returning directly from a `FramedRead`, and to enable the default
-    /// implementation of `decode_eof` to yield an `io::Error` when the decoder
-    /// fails to consume all available data.
-    ///
-    /// Note that implementors of this trait can simply indicate `type Error =
-    /// io::Error` to use I/O errors as this type.
-    type Error: From<io::Error>;
-
-    /// Decode an item from the provided buffer of bytes.
-    ///
-    /// The length of the buffer will exactly match the number of bytes
-    /// returned by the last call made to `read_len`.
-    ///
-    /// If the bytes in the buffer are malformed then an error is
-    /// returned indicating why. This indicates the stream is now
-    /// corrupt and should be terminated.
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Self::Item, Self::Error>;
-
-    fn read_len(&self) -> usize;
-}
-
-/// Trait of helper objects to write out items as bytes.
-pub trait Encoder {
-    /// The type of items consumed by the `Encoder`
-    type Item;
-
-    /// The type of encoding errors.
-    ///
-    /// Required to implement `From<io::Error>` so it can be
-    /// used as the error type of a Sink that does I/O.
-    type Error: From<io::Error>;
-
-    /// Encodes an item into the buffer provided.
-    ///
-    /// This method will encode `item` into the byte buffer provided by `buf`.
-    /// The `buf` provided may be re-used for subsequent encodings.
-    fn encode(&mut self, item: Self::Item, buf: &mut BytesMut) -> Result<(), Self::Error>;
-}
-
-/// Synchronous sink for items
-pub trait SyncSink {
-    type SinkItem;
-    type SinkError;
-
-    fn send(&mut self, item: Self::SinkItem) -> Result<(), Self::SinkError>;
-
-    fn close(&mut self) -> Result<(), Self::SinkError> {
-        Ok(())
+impl<F: AsRawFd> CharacterDevice<F> {
+    /// Wraps a character device-like object so it can be used with
+    /// `tokio_core::reactor::Evented`
+    /// ```
+    pub fn new(file: F) -> Self {
+        CharacterDevice(file)
     }
 }
 
-pub struct CharacterDevice<T, E, D> {
-    inner: T,
-    encoder: E,
-    decoder: D,
-    logger: slog::Logger,
-}
-
-// ===== impl CharacterDevice =====
-
-impl<T, E, D> CharacterDevice<T, E, D>
-where
-    T: AsyncRead + Write,
-    E: Encoder,
-    D: Decoder,
-{
-    pub fn new(inner: T, encoder: E, decoder: D, logger: slog::Logger) -> CharacterDevice<T, E, D> {
-        CharacterDevice {
-            decoder,
-            encoder,
-            inner,
-            logger,
-        }
+impl<F: AsRawFd> AsRawFd for CharacterDevice<F> {
+    fn as_raw_fd(&self) -> RawFd {
+        self.0.as_raw_fd()
     }
 }
 
-impl<T: Write, E, D> Write for CharacterDevice<T, E, D> {
-    fn write(&mut self, src: &[u8]) -> io::Result<usize> {
-        self.inner.write(src)
+impl<F: AsRawFd> mio::Evented for CharacterDevice<F> {
+    fn register(
+        &self,
+        poll: &mio::Poll,
+        token: mio::Token,
+        interest: mio::Ready,
+        opts: mio::PollOpt,
+    ) -> io::Result<()> {
+        mio::unix::EventedFd(&self.as_raw_fd()).register(poll, token, interest, opts)
+    }
+
+    fn reregister(
+        &self,
+        poll: &mio::Poll,
+        token: mio::Token,
+        interest: mio::Ready,
+        opts: mio::PollOpt,
+    ) -> io::Result<()> {
+        mio::unix::EventedFd(&self.as_raw_fd()).reregister(poll, token, interest, opts)
+    }
+
+    fn deregister(&self, poll: &mio::Poll) -> io::Result<()> {
+        mio::unix::EventedFd(&self.as_raw_fd()).deregister(poll)
+    }
+}
+
+impl<F: io::Read> io::Read for CharacterDevice<F> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl<F: io::Write> io::Write for CharacterDevice<F> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
-    }
-}
-
-impl<T, E, D> Stream for CharacterDevice<T, E, D>
-where
-    T: AsyncRead,
-    D: Decoder,
-    <D as Decoder>::Item: slog::Value,
-{
-    type Item = D::Item;
-    type Error = D::Error;
-
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        let read_len = self.decoder.read_len();
-        let mut buffer = vec![0u8; read_len];
-        match self.inner.read(&mut buffer[..]) {
-            Ok(0) => {
-                trace!(self.logger, "poll => read(0)");
-                Ok(Async::Ready(None))
-            }
-            Ok(n) => {
-                if n != read_len {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, "short read").into());
-                }
-                let frame = self.decoder.decode(&mut BytesMut::from_buf(buffer))?;
-                trace!(self.logger, "poll => Ok"; "frame" => &frame);
-                Ok(Async::Ready(Some(frame)))
-            }
-            Err(ref e) if e.kind() == ::std::io::ErrorKind::WouldBlock => {
-                trace!(self.logger, "poll => WouldBlock");
-                Ok(Async::NotReady)
-            }
-            Err(e) => {
-                trace!(self.logger, "poll => Err");
-                Err(e.into())
-            }
-        }
-    }
-}
-
-impl<T, E, D> SyncSink for CharacterDevice<T, E, D>
-where
-    T: Write,
-    E: Encoder,
-{
-    type SinkItem = E::Item;
-    type SinkError = E::Error;
-
-    fn send(&mut self, item: Self::SinkItem) -> Result<(), Self::SinkError> {
-        let mut buffer = BytesMut::new();
-        self.encoder.encode(item, &mut buffer)?;
-        let bytes = buffer.take();
-
-        match self.inner.write(&bytes) {
-            Ok(0) => Err(io::Error::new(
-                io::ErrorKind::WriteZero,
-                "failed to write item to transport",
-            ).into()),
-            Ok(n) if n == bytes.len() => Ok(()),
-            Ok(_) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "failed to write entire item to transport",
-            ).into()),
-            Err(e) => Err(e.into()),
-        }
-    }
-}
-
-impl<T, E, D> fmt::Debug for CharacterDevice<T, E, D>
-where
-    T: fmt::Debug,
-    E: fmt::Debug,
-    D: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("CharacterDevice")
-            .field("inner", &self.inner)
-            .field("encoder", &self.encoder)
-            .field("decoder", &self.decoder)
-            .finish()
+        self.0.flush()
     }
 }

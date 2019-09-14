@@ -1,14 +1,9 @@
 use std::collections::HashMap;
-use std::fs;
-use std::fs::{File, OpenOptions};
 use std::io;
-use std::io::{ErrorKind, Write};
-use std::os::unix::fs::OpenOptionsExt;
-use std::path::Path;
-use std::path::PathBuf;
+use std::io::ErrorKind;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use futures::{Future, IntoFuture};
+use futures::Future;
 use futures::future;
 use secret_service::{Collection, EncryptionType, Item, SecretService};
 use serde_json;

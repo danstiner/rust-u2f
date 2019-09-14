@@ -25,8 +25,8 @@ where
         BidirectionalPipe {
             buffer_a: None,
             buffer_b: None,
-            side_a: side_a,
-            side_b: side_b,
+            side_a,
+            side_b,
             stream_a_finished: false,
             stream_b_finished: false,
             _error_type: PhantomData,

@@ -188,8 +188,8 @@ i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
         let app_key = ApplicationKey::new(app_id, handle, key);
         store.add_application_key(&app_key).wait().unwrap();
 
-        let counter0 = store.get_and_increment_counter(&app_id, &handle).wait().unwrap();
-        let counter1 = store.get_and_increment_counter(&app_id, &handle).wait().unwrap();
+        let counter0 = store.get_and_increment_counter(&app_id, &app_key.handle).wait().unwrap();
+        let counter1 = store.get_and_increment_counter(&app_id, &app_key.handle).wait().unwrap();
 
         assert_eq!(counter0 + 1, counter1);
     }
