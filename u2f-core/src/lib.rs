@@ -127,6 +127,7 @@ pub trait SecretStore {
     fn get_and_increment_counter(
         &self,
         application: &AppId,
+        handle: &KeyHandle
     ) -> Box<dyn Future<Item=Counter, Error=io::Error>>;
     fn retrieve_application_key(
         &self,
@@ -232,7 +233,7 @@ impl U2F {
             application_key_future.and_then(move |application_key_option| {
                 match application_key_option {
                     Some(application_key) => {
-                        Self::_authenticate_step2(self_rc, application, challenge, application_key)
+                        Self::_authenticate_step2(self_rc, challenge, application_key)
                     }
                     None => Box::new(future::err(AuthenticateError::InvalidKeyHandle)),
                 }
@@ -242,19 +243,17 @@ impl U2F {
 
     fn _authenticate_step2(
         self_rc: Rc<U2FInner>,
-        application: AppId,
         challenge: Challenge,
         application_key: ApplicationKey,
     ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
         Box::new(
             self_rc
                 .approval
-                .approve_authentication(&application)
+                .approve_authentication(&application_key.application)
                 .from_err()
                 .and_then(move |user_present| {
                     Self::_authenticate_step3(
                         self_rc,
-                        application,
                         challenge,
                         application_key,
                         user_present,
@@ -265,7 +264,6 @@ impl U2F {
 
     fn _authenticate_step3(
         self_rc: Rc<U2FInner>,
-        application: AppId,
         challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
@@ -277,12 +275,11 @@ impl U2F {
         Box::new(
             self_rc
                 .storage
-                .get_and_increment_counter(&application)
+                .get_and_increment_counter(&application_key.application, &application_key.handle)
                 .from_err()
                 .and_then(move |counter| {
                     Self::_authenticate_step4(
                         self_rc,
-                        application,
                         challenge,
                         application_key,
                         user_present,
@@ -294,7 +291,6 @@ impl U2F {
 
     fn _authenticate_step4(
         self_rc: Rc<U2FInner>,
-        application: AppId,
         challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
@@ -305,7 +301,7 @@ impl U2F {
         let signature = self_rc.operations.sign(
             application_key.key(),
             &message_to_sign_for_authenticate(
-                &application,
+                &application_key.application,
                 &challenge,
                 user_presence_byte,
                 counter,
@@ -687,6 +683,7 @@ mod tests {
         fn get_and_increment_counter(
             &self,
             application: &AppId,
+            handle: &KeyHandle,
         ) -> Box<Future<Item = Counter, Error = io::Error>> {
             let mut borrow = self.0.borrow_mut();
             if let Some(counter) = borrow.counters.get_mut(application) {

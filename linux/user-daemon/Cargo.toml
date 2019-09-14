@@ -4,6 +4,7 @@ name = "softu2f-user-daemon"
 version = "0.3.2"
 
 [dependencies]
+base64 = "0.10.1"
 bincode = "1.1.4"
 clap = "2.33.0"
 dirs = "2.0.2"

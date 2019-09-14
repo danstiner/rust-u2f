@@ -14,6 +14,10 @@ impl AppId {
         bytes.copy_from_slice(slice);
         AppId(bytes)
     }
+
+    pub fn to_base64(&self) -> String {
+        base64::encode(&self.0)
+    }
 }
 
 impl AsRef<[u8]> for AppId {
