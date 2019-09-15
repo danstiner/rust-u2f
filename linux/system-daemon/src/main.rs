@@ -98,7 +98,7 @@ fn systemd_socket_listener() -> io::Result<std::os::unix::net::UnixListener> {
     }
 
     let fd = systemd::daemon::LISTEN_FDS_START;
-    if !is_socket_unix(fd, Some(SocketType::Stream), Listening::IsListening, Some(SOCKET_PATH))? {
+    if !is_socket_unix(fd, Some(SocketType::Stream), Listening::IsListening, Some(DEFAULT_SOCKET_PATH))? {
         return Err(io::Error::new(io::ErrorKind::Other, "expected the softu2f socket from systemd"));
     }
 

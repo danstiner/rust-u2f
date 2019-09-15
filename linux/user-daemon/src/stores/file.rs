@@ -7,7 +7,6 @@ use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
-use std::slice::Iter;
 
 use futures::{Future, IntoFuture};
 use futures::future;
