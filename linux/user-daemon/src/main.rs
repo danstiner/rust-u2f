@@ -27,7 +27,6 @@ extern crate u2f_core;
 extern crate u2fhid_protocol;
 
 use std::io;
-use std::path::Path;
 
 use clap::{App, Arg};
 use futures::future;
@@ -115,7 +114,7 @@ fn main() {
 }
 
 fn run(socket_path: Option<&str>, logger: &Logger) -> Result<(), TransportError> {
-    let socket_path = socket_path.unwrap_or(softu2f_system_daemon::SOCKET_PATH);
+    let socket_path = socket_path.unwrap_or(softu2f_system_daemon::DEFAULT_SOCKET_PATH);
     let mut core = Core::new()?;
     let handle = core.handle();
     core.run(connect(socket_path, handle, logger))
