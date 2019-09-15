@@ -31,10 +31,9 @@ use futures::prelude::*;
 use slog::{Drain, Logger};
 use systemd::daemon::{is_socket_unix, Listening, SocketType};
 use tokio::reactor::Handle;
-use tokio::runtime::Runtime;
 
 use device::Device;
-use softu2f_system_daemon::*;
+use softu2f_system_daemon::DEFAULT_SOCKET_PATH;
 
 mod bidirectional_pipe;
 mod device;
@@ -43,6 +42,28 @@ const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const PATH_ARG: &str = "path";
+
+quick_error! {
+    #[derive(Debug)]
+    enum Error {
+        Device(err: device::Error) {
+            from()
+            cause(err)
+            display("Device error: {}", err)
+        }
+        Io(err: io::Error) {
+            from()
+            cause(err)
+            display("I/O error: {}", err)
+        }
+        WrongSocket(message: String) {
+            display("{}", message)
+        }
+        WrongListenFdCount(count: i32) {
+            display("Expected one socket from systemd, instead got {}", count)
+        }
+    }
+}
 
 fn main() {
     let args = App::new("SoftU2F System Daemon")
@@ -60,62 +81,56 @@ fn main() {
     let socket_path = args.value_of(PATH_ARG);
     let decorator = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
-    let logger = Logger::root(drain, o!());
+    let log = Logger::root(drain, o!());
 
-    info!(logger, "Starting SoftU2F system daemon"; "version" => VERSION);
+    info!(log, "starting SoftU2F system daemon"; "version" => VERSION);
 
-    run(socket_path, &logger).unwrap_or_else(|err| error!(logger, "Exiting"; "err" => err.to_string()));
+    tokio::run(listener(socket_path, &log).map_err(|err| error!(log, "failed to start"; "error" => %err)).unwrap());
 }
 
-fn run(socket_path: Option<&str>, logger: &Logger) -> Result<(), device::Error> {
-    let mut runtime = Runtime::new()?;
-    let handle = runtime.handle();
-    runtime.block_on(listen(socket_path, handle, logger))?;
-    runtime.shutdown_on_idle().wait().unwrap();
-    Ok(())
+fn listener(socket_path: Option<&str>, log: &Logger) -> Result<impl Future<Item=(), Error=()>, Error> {
+    let accept_log = log.clone();
+    let incoming_log = log.clone();
+    let accept = move |stream| accept(stream, &accept_log);
+    let listener = socket_listener(socket_path)?;
+    let incoming = listener.incoming().map_err(move |err| error!(incoming_log, "failed to poll for incoming connections"; "error" => %err));
+    Ok(incoming.for_each(accept))
 }
 
-fn listen(socket_path: Option<&str>, handle: &Handle, logger: &Logger) -> Box<dyn Future<Item=(), Error=device::Error> + Send + 'static> {
-    let handle = handle.clone();
-    let logger = logger.clone();
-    match socket_listener(socket_path, &handle) {
-        Ok(listener) => Box::new(listener.incoming().from_err().for_each(move |connection| accept(connection, &handle, &logger))),
-        Err(err) => Box::new(future::err(err).from_err()),
-    }
-}
-
-fn socket_listener(socket_path: Option<&str>, handle: &Handle) -> io::Result<tokio_uds::UnixListener> {
+fn socket_listener(socket_path: Option<&str>) -> Result<tokio_uds::UnixListener, Error> {
+    let handle = Handle::default();
     let listener = socket_path
         .map(std::os::unix::net::UnixListener::bind)
+        .map(|res| res.map_err(Error::Io))
         .unwrap_or_else(|| systemd_socket_listener())?;
-    tokio_uds::UnixListener::from_std(listener, handle)
+    tokio_uds::UnixListener::from_std(listener, &handle).map_err(Error::Io)
 }
 
-fn systemd_socket_listener() -> io::Result<std::os::unix::net::UnixListener> {
+fn systemd_socket_listener() -> Result<std::os::unix::net::UnixListener, Error> {
     let listen_fds = systemd::daemon::listen_fds(true)?;
     if listen_fds != 1 {
-        return Err(io::Error::new(io::ErrorKind::Other, "expected exactly one socket from systemd"));
+        return Err(Error::WrongListenFdCount(listen_fds));
     }
 
     let fd = systemd::daemon::LISTEN_FDS_START;
     if !is_socket_unix(fd, Some(SocketType::Stream), Listening::IsListening, Some(DEFAULT_SOCKET_PATH))? {
-        return Err(io::Error::new(io::ErrorKind::Other, "expected the softu2f socket from systemd"));
+        return Err(Error::WrongSocket(format!("Expected a stream type socket with path {}", DEFAULT_SOCKET_PATH)));
     }
 
     Ok(unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) })
 }
 
-fn accept(stream: tokio_uds::UnixStream, handle: &Handle, logger: &Logger,) -> Box<dyn Future<Item = (), Error = device::Error> + Send + 'static> {
-    match try_accept(stream, handle, logger) {
-        Ok(device) => Box::new(device),
-        Err(err) => Box::new(future::err(err).from_err()),
-    }
+fn accept(stream: tokio_uds::UnixStream, log: &Logger) -> impl Future<Item=(), Error=()> {
+    debug!(log, "accepting connection";
+        "local_addr" => ?stream.local_addr(),
+        "peer_addr" => ?stream.peer_addr(),
+        "peer_cred" => ?stream.peer_cred());
+    tokio::spawn(handle_connection(stream, log)).into_future()
 }
 
-fn try_accept(stream: tokio_uds::UnixStream, handle: &Handle, logger: &Logger) -> io::Result<Device> {
-    debug!(logger, "accepting connection";
-        "local_addr" => ?stream.local_addr()?,
-        "peer_addr" => ?stream.peer_addr()?,
-        "peer_cred" => ?stream.peer_cred()?);
-    Device::new(stream, handle, logger)
+fn handle_connection(stream: tokio_uds::UnixStream, log: &Logger) -> impl Future<Item=(), Error=()> {
+    let log = log.clone();
+    let device_created = future::result(Device::new(stream, &log).map_err(Error::Io));
+    let device_completed = device_created.and_then(|device| device.from_err());
+    device_completed.map_err(move |err| error!(log, "device failure"; "error" => %err))
 }
