@@ -6,8 +6,8 @@ use futures::prelude::*;
 use hostname::get_hostname;
 use slog::Logger;
 use take_mut::take;
-use tokio::reactor::Handle;
 use tokio_io::AsyncRead;
+#[allow(deprecated)]
 use tokio_io::codec::length_delimited;
 use tokio_serde_bincode::{ReadBincode, WriteBincode};
 use tokio_uds::{UCred, UnixStream};
@@ -110,22 +110,18 @@ enum DeviceState {
 
 pub struct Device {
     id: String,
-    handle: Handle,
+    logger: Logger,
     state: DeviceState,
     user: UCred,
-    logger: Logger,
 }
 
 impl Device {
-    pub fn new(stream: UnixStream,
-                  handle: &Handle,
-                  logger: &Logger) -> io::Result<Device>
+    pub fn new(stream: UnixStream, logger: &Logger) -> io::Result<Device>
     {
         let user = stream.peer_cred()?;
         let id = nanoid::simple();
         Ok(Device {
             id: id.clone(),
-            handle: handle.clone(),
             logger: logger.new(o!("device_id" => id)),
             state: DeviceState::Uninitialized(bind_transport(stream)),
             user,
@@ -133,7 +129,7 @@ impl Device {
     }
 }
 
-
+#[allow(deprecated)]
 fn bind_transport(stream: UnixStream) -> SocketPipe {
     let framed_write = length_delimited::FramedWrite::new(stream);
     let framed_readwrite = length_delimited::FramedRead::new(framed_write);
@@ -146,7 +142,6 @@ fn bind_transport(stream: UnixStream) -> SocketPipe {
 fn initialize(
     device_id: &str,
     socket_transport: SocketPipe,
-    handle: &Handle,
     logger: &Logger,
     _request: CreateDeviceRequest,
     user: &UCred,
@@ -248,7 +243,6 @@ impl Future for Device {
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         let mut res: Result<AsyncLoop<()>, Self::Error> = Ok(AsyncLoop::Continue);
         while let Ok(AsyncLoop::Continue) = res {
-            let handle = &self.handle;
             let logger = &self.logger;
             let state = &mut self.state;
             let user = &self.user;
@@ -280,7 +274,7 @@ impl Future for Device {
                         SocketInput::CreateDeviceRequest(request) => {
                             res = Ok(AsyncLoop::Continue);
                             let (socket_future, uhid_transport) =
-                                initialize(device_id, socket_transport, handle, logger, request, user);
+                                initialize(device_id, socket_transport, logger, request, user);
 
                             DeviceState::Initialized {
                                 socket_future,
