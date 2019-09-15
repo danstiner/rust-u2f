@@ -9,14 +9,10 @@ use secret_service::{Collection, EncryptionType, Item, SecretService};
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore, try_reverse_app_id};
 
+use stores::Secret;
+
 pub struct SecretServiceStore {
     service: SecretService,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-struct Secret {
-    application_key: ApplicationKey,
-    counter: Counter,
 }
 
 impl SecretServiceStore {
@@ -27,25 +23,29 @@ impl SecretServiceStore {
         })
     }
 
+    pub fn try_add_secret(&self, secret: Secret) -> io::Result<()> {
+        let collection = self.service.get_default_collection().map_err(|error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
+        collection.ensure_unlocked().map_err(|error| io::Error::new(ErrorKind::Other, "to_vec"))?;
+        let attributes = registration_attributes(&secret.application_key.application, &secret.application_key.handle);
+        let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        let label = match try_reverse_app_id(&secret.application_key.application) {
+            Some(app_id) => format!("Universal 2nd Factor token for {}", app_id),
+            None => format!("Universal 2nd Factor token for {}", secret.application_key.application.to_base64()),
+        };
+        let secret = serde_json::to_string(&Secret {
+            application_key: secret.application_key.clone(),
+            counter: secret.counter,
+        }).map_err(|error| io::Error::new(ErrorKind::Other, error))?;
+        let content_type = "application/json";
+        let item = collection.create_item(&label, attributes, secret.as_bytes(), false, content_type).map_err(|error| io::Error::new(ErrorKind::Other, "create_item"))?;
+        Ok(())
+    }
+
     fn try_add_application_key(
         &self,
         key: &ApplicationKey,
     ) -> io::Result<()> {
-        let collection = self.service.get_default_collection().map_err(|error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
-        collection.ensure_unlocked().map_err(|error| io::Error::new(ErrorKind::Other, "to_vec"))?;
-        let secret = serde_json::to_string(&Secret {
-            application_key: key.clone(),
-            counter: 0,
-        }).map_err(|error| io::Error::new(ErrorKind::Other, error))?;
-        let attributes = registration_attributes(&key.application, &key.handle);
-        let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        let label = match try_reverse_app_id(&key.application) {
-            Some(app_id) => format!("Universal 2nd Factor token for {}", app_id),
-            None => format!("Universal 2nd Factor token for {}", key.application.to_base64()),
-        };
-        let content_type = "application/json";
-        let item = collection.create_item(&label, attributes, secret.as_bytes(), false, content_type).map_err(|error| io::Error::new(ErrorKind::Other, "create_item"))?;
-        Ok(())
+        self.try_add_secret(Secret { application_key: key.clone(), counter: 0 })
     }
 
     fn try_increment_counter(

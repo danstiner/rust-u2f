@@ -1,3 +1,4 @@
+use alloc::vec::IntoIter;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
@@ -6,11 +7,14 @@ use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
+use std::slice::Iter;
 
 use futures::{Future, IntoFuture};
 use futures::future;
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
+
+use stores::Secret;
 
 macro_rules! tryf {
     ($e:expr) => {
@@ -34,6 +38,26 @@ pub struct FileStore {
 impl FileStore {
     pub fn new(path: PathBuf) -> io::Result<FileStore> {
         Ok(FileStore { path })
+    }
+
+    pub fn delete(self) -> io::Result<()> {
+        fs::remove_file(self.path)
+    }
+
+    pub fn exists(&self) -> bool {
+        self.path.exists()
+    }
+
+    pub fn iter(&self) -> io::Result<IntoIter<Secret>> {
+        let data = self.load()?;
+        let secrets: Vec<Secret> = data.application_keys.values().map(|application_key| {
+            let counter = data.counters.get(&application_key.application).unwrap_or(&0);
+            Secret {
+                application_key: application_key.clone(),
+                counter: *counter,
+            }
+        }).collect();
+        Ok(secrets.into_iter())
     }
 
     fn save(&self, data: &Data) -> io::Result<()> {

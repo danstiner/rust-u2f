@@ -11,11 +11,7 @@ pub struct ApplicationKey {
 
 impl ApplicationKey {
     pub fn new(application: AppId, handle: KeyHandle, key: PrivateKey) -> ApplicationKey {
-        ApplicationKey {
-            application: application,
-            handle: handle,
-            key: key,
-        }
+        ApplicationKey { application, handle, key }
     }
     pub(crate) fn key(&self) -> &PrivateKey {
         &self.key
