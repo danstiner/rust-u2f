@@ -1,3 +1,4 @@
+extern crate alloc;
 extern crate bincode;
 extern crate clap;
 extern crate core;
@@ -26,6 +27,7 @@ extern crate u2f_core;
 extern crate u2fhid_protocol;
 
 use std::io;
+use std::path::Path;
 
 use clap::{App, Arg};
 use futures::future;
@@ -35,7 +37,7 @@ use tokio_core::reactor::{Core, Handle};
 use tokio_io::codec::length_delimited;
 use tokio_serde_bincode::{ReadBincode, WriteBincode};
 use tokio_uds::{UCred, UnixStream};
-use u2f_core::{SecureCryptoOperations, U2F};
+use u2f_core::{SecretStore, SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
 
 use softu2f_system_daemon::{CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput};
@@ -166,33 +168,31 @@ fn create_device<T>(transport: T, logger: Logger) -> Box<dyn Future<Item=(Device
     Box::new(created)
 }
 
-fn bind_service<T>(device: DeviceDescription, transport: T, handle: Handle, logger: &Logger) -> Box<dyn Future<Item=(), Error=TransportError>> where T: Sink<SinkItem=SocketInput, SinkError=TransportError> + Stream<Item=SocketOutput, Error=TransportError> + 'static {
-    let packet_logger = logger.new(o!());
+fn bind_service<T>(device: DeviceDescription, transport: T, handle: Handle, log: &Logger) -> Box<dyn Future<Item=(), Error=TransportError>> where T: Sink<SinkItem=SocketInput, SinkError=TransportError> + Stream<Item=SocketOutput, Error=TransportError> + 'static {
+    let packet_logger = log.new(o!());
     let transport = transport
         .filter_map(move |output| socket_output_to_packet(&packet_logger, output))
         .with(|packet| future::ok(packet_to_socket_input(packet)));
 
-    let mut store_path = dirs::home_dir().unwrap();
-    store_path.push(".softu2f-secrets.json");
-    info!(logger, "Virtual U2F device created"; "device_id" => device.id, "secret_service_store" => "true");
-
     let attestation = u2f_core::self_signed_attestation();
-    let user_presence = Box::new(NotificationUserPresence::new(&handle, logger.new(o!())));
+    let user_presence = Box::new(NotificationUserPresence::new(&handle, log.new(o!())));
     let operations = Box::new(SecureCryptoOperations::new(attestation));
-    let store = match SecretServiceStore::new() {
-        Ok(store) => Box::new(store),
+    let storage = match build_storage(log) {
+        Ok(store) => store,
         Err(err) => return Box::new(future::err(TransportError::Io(err))),
     };
-    let service = match U2F::new(user_presence, operations, store, logger.new(o!())) {
+    let service = match U2F::new(user_presence, operations, storage, log.new(o!())) {
         Ok(service) => service,
         Err(err) => return Box::new(future::err(TransportError::Io(err))),
     };
+
+    info!(log, "Virtual U2F device created"; "device_id" => device.id);
 
     Box::new(U2FHID::bind_service(
         handle,
         transport,
         service,
-        logger.new(o!()),
+        log.new(o!()),
     ))
 }
 
@@ -212,6 +212,27 @@ fn socket_output_to_packet(logger: &Logger, event: SocketOutput) -> Option<Packe
 
 fn packet_to_socket_input(packet: Packet) -> SocketInput {
     SocketInput::Packet(softu2f_system_daemon::Packet::from_bytes(&packet.into_bytes()))
+}
+
+fn build_storage(log: &Logger) -> io::Result<Box<dyn SecretStore>> {
+    let file_store = dirs::home_dir().map(|mut path| {
+        path.push(".softu2f-secrets.json");
+        FileStore::new(path)
+    }).unwrap()?;
+
+    let secret_service = SecretServiceStore::new()?;
+
+    if file_store.exists() {
+        info!(log, "begin copying secrets from file store to more secure secret service");
+        for secret in file_store.iter()? {
+            secret_service.try_add_secret(secret)?;
+        }
+        info!(log, "finished copying secrets");
+        file_store.delete()?;
+        info!(log, "deleted secrets file store");
+    }
+
+    Ok(Box::new(secret_service))
 }
 
 fn require_root(cred: UCred) -> Result<(), TransportError> {
