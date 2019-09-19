@@ -34,6 +34,7 @@ use constants::*;
 use futures::Future;
 use futures::future;
 pub use key_handle::KeyHandle;
+use known_app_ids::BOGUS_APP_ID_HASH;
 pub use known_app_ids::try_reverse_app_id;
 pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
 pub use private_key::PrivateKey;
@@ -426,6 +427,11 @@ impl Service for U2F {
             } => {
                 let logger_clone = self.0.logger.clone();
                 debug!(logger, "Request::Register"; "app_id" => application);
+
+                if application == BOGUS_APP_ID_HASH {
+                    return Box::new(future::ok(Response::TestOfUserPresenceNotSatisfied))
+                }
+
                 Box::new(
                     self.register(application, challenge)
                         .map(move |registration| {
