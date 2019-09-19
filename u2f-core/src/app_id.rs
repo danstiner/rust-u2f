@@ -28,8 +28,8 @@ impl AsRef<[u8]> for AppId {
 
 impl Serialize for AppId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
+        where
+            S: Serializer,
     {
         to_base64(&self, serializer)
     }
@@ -37,8 +37,8 @@ impl Serialize for AppId {
 
 impl<'de> Deserialize<'de> for AppId {
     fn deserialize<D>(deserializer: D) -> Result<AppId, D::Error>
-    where
-        D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
     {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&from_base64(deserializer)?);
