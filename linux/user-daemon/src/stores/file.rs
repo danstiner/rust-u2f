@@ -79,7 +79,7 @@ impl SecretStore for FileStore {
     fn get_and_increment_counter(
         &self,
         application: &AppId,
-        handle: &KeyHandle,
+        _handle: &KeyHandle,
     ) -> io::Result<Counter> {
         let mut data = self.load()?;
 
