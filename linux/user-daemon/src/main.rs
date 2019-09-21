@@ -3,6 +3,8 @@ extern crate bincode;
 extern crate clap;
 extern crate core;
 extern crate dirs;
+#[macro_use]
+extern crate failure;
 extern crate futures;
 extern crate futures_cpupool;
 #[macro_use]
@@ -29,6 +31,7 @@ extern crate u2fhid_protocol;
 use std::io;
 
 use clap::{App, Arg};
+use failure::{Compat, Error};
 use futures::future;
 use futures::prelude::*;
 use slog::{Drain, Logger};
@@ -65,6 +68,11 @@ quick_error! {
         }
         DeviceCreateFailed(err: CreateDeviceError) {
             display("{:?}", err)
+        }
+        Failure(err: Compat<Error>) {
+            from()
+            cause(err)
+            display("{}", err)
         }
     }
 }
@@ -178,7 +186,7 @@ fn bind_service<T>(device: DeviceDescription, transport: T, handle: Handle, log:
     let operations = Box::new(SecureCryptoOperations::new(attestation));
     let storage = match build_storage(log) {
         Ok(store) => store,
-        Err(err) => return Box::new(future::err(TransportError::Io(err))),
+        Err(err) => return Box::new(future::err(TransportError::Failure(err.compat()))),
     };
     let service = match U2F::new(user_presence, operations, storage, log.new(o!())) {
         Ok(service) => service,
@@ -213,7 +221,7 @@ fn packet_to_socket_input(packet: Packet) -> SocketInput {
     SocketInput::Packet(softu2f_system_daemon::Packet::from_bytes(&packet.into_bytes()))
 }
 
-fn build_storage(log: &Logger) -> io::Result<Box<dyn SecretStore>> {
+fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, Error> {
     let file_store = dirs::home_dir().map(|mut path| {
         path.push(".softu2f-secrets.json");
         FileStore::new(path)

@@ -3,19 +3,51 @@ use std::io;
 use std::io::ErrorKind;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use failure::Error;
 use secret_service::{Collection, EncryptionType, Item, SecretService, SsError};
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore, try_reverse_app_id};
 
 use stores::Secret;
 
+#[derive(Debug, Fail)]
+pub enum SecretServiceError {
+    #[fail(display = "crypto error {}", _0)]
+    Crypto(String),
+    #[fail(display = "D-Bus error {} {}", _0, _1)]
+    DBus(String, String),
+    #[fail(display = "object locked")]
+    Locked,
+    #[fail(display = "no result found")]
+    NoResult,
+    #[fail(display = "failed to parse D-Bus output")]
+    Parse,
+    #[fail(display = "prompt dismissed")]
+    Prompt,
+}
+
+impl From<secret_service::SsError> for SecretServiceError {
+    fn from(err: SsError) -> Self {
+        match err {
+            SsError::Crypto(err) => SecretServiceError::Crypto(err),
+            SsError::Dbus(err) => SecretServiceError::DBus(
+                err.name().unwrap_or("").into(),
+                err.message().unwrap_or("").into()),
+            SsError::Locked => SecretServiceError::Locked,
+            SsError::NoResult => SecretServiceError::NoResult,
+            SsError::Parse => SecretServiceError::Parse,
+            SsError::Prompt => SecretServiceError::Prompt,
+        }
+    }
+}
+
 pub struct SecretServiceStore {
     service: SecretService,
 }
 
 impl SecretServiceStore {
-    pub fn new() -> io::Result<SecretServiceStore> {
-        let service = SecretService::new(EncryptionType::Dh).map_err(|error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
+    pub fn new() -> Result<SecretServiceStore, Error> {
+        let service = SecretService::new(EncryptionType::Dh).map_err(|err| SecretServiceError::from(err))?;
         Ok(SecretServiceStore {
             service,
         })
