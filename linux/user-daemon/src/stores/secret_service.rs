@@ -53,7 +53,7 @@ impl SecretServiceStore {
         })
     }
 
-    pub fn try_add_secret(&self, secret: Secret) -> io::Result<()> {
+    pub fn add_secret(&self, secret: Secret) -> io::Result<()> {
         let collection = self.service.get_default_collection().map_err(|error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
         collection.ensure_unlocked().map_err(|error| io::Error::new(ErrorKind::Other, "to_vec"))?;
         let attributes = registration_attributes(&secret.application_key.application, &secret.application_key.handle);
@@ -70,21 +70,23 @@ impl SecretServiceStore {
         let item = collection.create_item(&label, attributes, secret.as_bytes(), false, content_type).map_err(|error| io::Error::new(ErrorKind::Other, "create_item"))?;
         Ok(())
     }
+}
 
-    fn try_add_application_key(
+impl SecretStore for SecretServiceStore {
+    fn add_application_key(
         &self,
         key: &ApplicationKey,
     ) -> io::Result<()> {
-        self.try_add_secret(Secret { application_key: key.clone(), counter: 0 })
+        self.add_secret(Secret { application_key: key.clone(), counter: 0 })
     }
 
-    fn try_increment_counter(
+    fn get_and_increment_counter(
         &self,
-        app_id: &AppId,
+        application: &AppId,
         handle: &KeyHandle,
     ) -> io::Result<Counter> {
         let collection = self.service.get_default_collection().map_err(|error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
-        let option = find_item(&collection, app_id, handle).map_err(|error| io::Error::new(ErrorKind::Other, "find_item"))?;
+        let option = find_item(&collection, application, handle).map_err(|error| io::Error::new(ErrorKind::Other, "find_item"))?;
         if option.is_none() {
             return Err(io::Error::new(ErrorKind::Other, "not found"));
         }
@@ -107,46 +109,13 @@ impl SecretServiceStore {
         attributes.sort_by_cached_key(|(key, _)| key.to_owned());
         item.set_attributes(attributes).map_err(|error| io::Error::new(ErrorKind::Other, "get_attributes"))?;
 
-        let label = match try_reverse_app_id(app_id) {
+        let label = match try_reverse_app_id(application) {
             Some(app_id) => format!("Universal 2nd Factor token for {}", app_id),
-            None => format!("Universal 2nd Factor token for {}", app_id.to_base64()),
+            None => format!("Universal 2nd Factor token for {}", application.to_base64()),
         };
         item.set_label(&label).map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
 
         Ok(secret.counter)
-    }
-
-    fn try_retrieve_application_key(
-        &self,
-        app_id: &AppId,
-        handle: &KeyHandle,
-    ) -> io::Result<Option<ApplicationKey>> {
-        let collection = self.service.get_default_collection().map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-        let option = find_item(&collection, app_id, handle).map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-        if option.is_none() {
-            return Ok(None);
-        }
-        let item = option.unwrap();
-        let secret_bytes = item.get_secret().map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-        let secret: Secret = serde_json::from_slice(&secret_bytes).map_err(|error| io::Error::new(ErrorKind::Other, error))?;
-        Ok(Some(secret.application_key))
-    }
-}
-
-impl SecretStore for SecretServiceStore {
-    fn add_application_key(
-        &self,
-        key: &ApplicationKey,
-    ) -> io::Result<()> {
-        self.try_add_application_key(key)
-    }
-
-    fn get_and_increment_counter(
-        &self,
-        application: &AppId,
-        handle: &KeyHandle,
-    ) -> io::Result<Counter> {
-        self.try_increment_counter(application, handle)
     }
 
     fn retrieve_application_key(
@@ -154,7 +123,15 @@ impl SecretStore for SecretServiceStore {
         application: &AppId,
         handle: &KeyHandle,
     ) -> io::Result<Option<ApplicationKey>> {
-        self.try_retrieve_application_key(application, handle)
+        let collection = self.service.get_default_collection().map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
+        let option = find_item(&collection, application, handle).map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
+        if option.is_none() {
+            return Ok(None);
+        }
+        let item = option.unwrap();
+        let secret_bytes = item.get_secret().map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
+        let secret: Secret = serde_json::from_slice(&secret_bytes).map_err(|error| io::Error::new(ErrorKind::Other, error))?;
+        Ok(Some(secret.application_key))
     }
 }
 

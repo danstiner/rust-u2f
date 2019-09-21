@@ -232,7 +232,7 @@ fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, Error> {
     if file_store.exists() {
         info!(log, "begin copying secrets from file store to more secure secret service");
         for secret in file_store.iter()? {
-            secret_service.try_add_secret(secret)?;
+            secret_service.add_secret(secret)?;
         }
         info!(log, "finished copying secrets");
         file_store.delete()?;
