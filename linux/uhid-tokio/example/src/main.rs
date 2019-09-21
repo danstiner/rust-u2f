@@ -68,8 +68,6 @@ fn main() {
         data: RDESC.to_vec(),
     };
 
-    let mut runtime = Runtime::new().unwrap();
-    let handle = runtime.handle();
     let mut uhid_device = UHIDDevice::create(create_params, None).unwrap();
 
     let button_flags = 0;

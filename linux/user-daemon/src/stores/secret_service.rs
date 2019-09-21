@@ -54,8 +54,8 @@ impl SecretServiceStore {
     }
 
     pub fn add_secret(&self, secret: Secret) -> io::Result<()> {
-        let collection = self.service.get_default_collection().map_err(|error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
-        collection.ensure_unlocked().map_err(|error| io::Error::new(ErrorKind::Other, "to_vec"))?;
+        let collection = self.service.get_default_collection().map_err(|_error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
+        collection.ensure_unlocked().map_err(|_error| io::Error::new(ErrorKind::Other, "to_vec"))?;
         let attributes = registration_attributes(&secret.application_key.application, &secret.application_key.handle);
         let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
         let label = match try_reverse_app_id(&secret.application_key.application) {
@@ -67,7 +67,7 @@ impl SecretServiceStore {
             counter: secret.counter,
         }).map_err(|error| io::Error::new(ErrorKind::Other, error))?;
         let content_type = "application/json";
-        let item = collection.create_item(&label, attributes, secret.as_bytes(), false, content_type).map_err(|error| io::Error::new(ErrorKind::Other, "create_item"))?;
+        let _item = collection.create_item(&label, attributes, secret.as_bytes(), false, content_type).map_err(|_error| io::Error::new(ErrorKind::Other, "create_item"))?;
         Ok(())
     }
 }
@@ -85,19 +85,19 @@ impl SecretStore for SecretServiceStore {
         application: &AppId,
         handle: &KeyHandle,
     ) -> io::Result<Counter> {
-        let collection = self.service.get_default_collection().map_err(|error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
-        let option = find_item(&collection, application, handle).map_err(|error| io::Error::new(ErrorKind::Other, "find_item"))?;
+        let collection = self.service.get_default_collection().map_err(|_error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
+        let option = find_item(&collection, application, handle).map_err(|_error| io::Error::new(ErrorKind::Other, "find_item"))?;
         if option.is_none() {
             return Err(io::Error::new(ErrorKind::Other, "not found"));
         }
         let item = option.unwrap();
-        let secret_bytes = item.get_secret().map_err(|error| io::Error::new(ErrorKind::Other, "get_secret"))?;
-        let mut secret: Secret = serde_json::from_slice(&secret_bytes).map_err(|error| io::Error::new(ErrorKind::Other, "from_slice"))?;
+        let secret_bytes = item.get_secret().map_err(|_error| io::Error::new(ErrorKind::Other, "get_secret"))?;
+        let mut secret: Secret = serde_json::from_slice(&secret_bytes).map_err(|_error| io::Error::new(ErrorKind::Other, "from_slice"))?;
 
         secret.counter += 1;
 
         let secret_string = serde_json::to_string(&secret).map_err(|error| io::Error::new(ErrorKind::Other, error))?;
-        item.set_secret(secret_string.as_bytes(), "application/json").map_err(|error| io::Error::new(ErrorKind::Other, "get_attributes"))?;
+        item.set_secret(secret_string.as_bytes(), "application/json").map_err(|_error| io::Error::new(ErrorKind::Other, "get_attributes"))?;
 
         let attributes = item.get_attributes().map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
         let mut attributes: HashMap<_, _> = attributes.into_iter().collect();
@@ -107,7 +107,7 @@ impl SecretStore for SecretServiceStore {
         }).or_insert(0.to_string());
         let mut attributes: Vec<(&str, &str)> = attributes.iter().map(|(key, value)| (key.as_str(), value.as_str())).collect();
         attributes.sort_by_cached_key(|(key, _)| key.to_owned());
-        item.set_attributes(attributes).map_err(|error| io::Error::new(ErrorKind::Other, "get_attributes"))?;
+        item.set_attributes(attributes).map_err(|_error| io::Error::new(ErrorKind::Other, "get_attributes"))?;
 
         let label = match try_reverse_app_id(application) {
             Some(app_id) => format!("Universal 2nd Factor token for {}", app_id),
@@ -165,19 +165,15 @@ fn find_item<'a>(
     app_id: &AppId,
     handle: &KeyHandle,
 ) -> io::Result<Option<Item<'a>>> {
-    collection.ensure_unlocked().map_err(|error| io::Error::new(ErrorKind::Other, "ensure_unlocked"))?;
+    collection.ensure_unlocked().map_err(|_error| io::Error::new(ErrorKind::Other, "ensure_unlocked"))?;
     let attributes = search_attributes(app_id, handle);
     let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let mut result = collection.search_items(attributes).map_err(|error| io::Error::new(ErrorKind::Other, "search_items"))?;
+    let mut result = collection.search_items(attributes).map_err(|_error| io::Error::new(ErrorKind::Other, "search_items"))?;
     Ok(result.pop())
 }
 
 #[cfg(test)]
 mod tests {
-    use u2f_core::PrivateKey;
-
-    use super::*;
-
     #[test]
     fn todo() {}
 }
