@@ -8,21 +8,10 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 
-use futures::{Future, IntoFuture};
-use futures::future;
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
 use stores::Secret;
-
-macro_rules! tryf {
-    ($e:expr) => {
-        match $e {
-            Ok(t) => t,
-            Err(e) => return Box::new(future::err(From::from(e))),
-        }
-    };
-}
 
 #[derive(Serialize, Deserialize)]
 struct Data {
@@ -81,18 +70,18 @@ impl SecretStore for FileStore {
     fn add_application_key(
         &self,
         key: &ApplicationKey,
-    ) -> Box<dyn Future<Item = (), Error = io::Error>> {
-        let mut data = tryf!(self.load());
+    ) -> io::Result<()> {
+        let mut data = self.load()?;
         data.application_keys.insert(key.application, key.clone());
-        Box::new(self.save(&data).into_future())
+        self.save(&data)
     }
 
     fn get_and_increment_counter(
         &self,
         application: &AppId,
         handle: &KeyHandle,
-    ) -> Box<dyn Future<Item = Counter, Error = io::Error>> {
-        let mut data = tryf!(self.load());
+    ) -> io::Result<Counter> {
+        let mut data = self.load()?;
 
         if !data.counters.contains_key(application) {
             data.counters.insert(*application, 0);
@@ -107,15 +96,16 @@ impl SecretStore for FileStore {
             None => unreachable!(),
         };
 
-        Box::new(self.save(&data).into_future().map(move |_| value))
+        self.save(&data)?;
+        Ok(value)
     }
 
     fn retrieve_application_key(
         &self,
         application: &AppId,
         handle: &KeyHandle,
-    ) -> Box<dyn Future<Item = Option<ApplicationKey>, Error = io::Error>> {
-        let data = tryf!(self.load());
+    ) -> io::Result<Option<ApplicationKey>> {
+        let data = self.load()?;
         let opt_key = data.application_keys.get(application).and_then(|key| {
             if key.handle.eq_consttime(handle) {
                 Some(key.clone())
@@ -123,7 +113,7 @@ impl SecretStore for FileStore {
                 None
             }
         });
-        Box::new(future::ok(opt_key))
+        Ok(opt_key)
     }
 }
 
@@ -209,10 +199,10 @@ i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
         let handle = fake_key_handle();
         let key = fake_key();
         let app_key = ApplicationKey::new(app_id, handle, key);
-        store.add_application_key(&app_key).wait().unwrap();
+        store.add_application_key(&app_key).unwrap();
 
-        let counter0 = store.get_and_increment_counter(&app_id, &app_key.handle).wait().unwrap();
-        let counter1 = store.get_and_increment_counter(&app_id, &app_key.handle).wait().unwrap();
+        let counter0 = store.get_and_increment_counter(&app_id, &app_key.handle).unwrap();
+        let counter1 = store.get_and_increment_counter(&app_id, &app_key.handle).unwrap();
 
         assert_eq!(counter0 + 1, counter1);
     }
@@ -226,11 +216,10 @@ i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
         let handle = fake_key_handle();
         let key = fake_key();
         let app_key = ApplicationKey::new(app_id, handle, key);
-        store.add_application_key(&app_key).wait().unwrap();
+        store.add_application_key(&app_key).unwrap();
 
         let retrieved_app_key = store
             .retrieve_application_key(&app_key.application, &app_key.handle)
-            .wait()
             .unwrap()
             .unwrap();
 
@@ -247,7 +236,6 @@ i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
 
         let key = store
             .retrieve_application_key(&fake_app_id(), &fake_key_handle())
-            .wait()
             .unwrap();
 
         assert!(key.is_none());

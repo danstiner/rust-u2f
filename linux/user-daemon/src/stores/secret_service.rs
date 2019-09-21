@@ -3,9 +3,7 @@ use std::io;
 use std::io::ErrorKind;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use futures::Future;
-use futures::future;
-use secret_service::{Collection, EncryptionType, Item, SecretService};
+use secret_service::{Collection, EncryptionType, Item, SecretService, SsError};
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore, try_reverse_app_id};
 
@@ -86,7 +84,6 @@ impl SecretServiceStore {
         Ok(secret.counter)
     }
 
-
     fn try_retrieve_application_key(
         &self,
         app_id: &AppId,
@@ -104,41 +101,30 @@ impl SecretServiceStore {
     }
 }
 
-
 impl SecretStore for SecretServiceStore {
     fn add_application_key(
         &self,
         key: &ApplicationKey,
-    ) -> Box<dyn Future<Item=(), Error=io::Error>> {
-        match self.try_add_application_key(key) {
-            Ok(option) => Box::new(future::ok(option)),
-            Err(err) => Box::new(future::err(err)),
-        }
+    ) -> io::Result<()> {
+        self.try_add_application_key(key)
     }
 
     fn get_and_increment_counter(
         &self,
         application: &AppId,
         handle: &KeyHandle,
-    ) -> Box<dyn Future<Item=Counter, Error=io::Error>> {
-        match self.try_increment_counter(application, handle) {
-            Ok(option) => Box::new(future::ok(option)),
-            Err(err) => Box::new(future::err(err)),
-        }
+    ) -> io::Result<Counter> {
+        self.try_increment_counter(application, handle)
     }
 
     fn retrieve_application_key(
         &self,
         application: &AppId,
         handle: &KeyHandle,
-    ) -> Box<dyn Future<Item=Option<ApplicationKey>, Error=io::Error>> {
-        match self.try_retrieve_application_key(application, handle) {
-            Ok(option) => Box::new(future::ok(option)),
-            Err(err) => Box::new(future::err(err)),
-        }
+    ) -> io::Result<Option<ApplicationKey>> {
+        self.try_retrieve_application_key(application, handle)
     }
 }
-
 
 fn search_attributes(app_id: &AppId, handle: &KeyHandle) -> Vec<(&'static str, String)> {
     vec![

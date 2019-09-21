@@ -33,6 +33,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use constants::*;
 use futures::Future;
 use futures::future;
+use futures::IntoFuture;
 pub use key_handle::KeyHandle;
 use known_app_ids::BOGUS_APP_ID_HASH;
 pub use known_app_ids::try_reverse_app_id;
@@ -124,17 +125,17 @@ pub trait SecretStore {
     fn add_application_key(
         &self,
         key: &ApplicationKey,
-    ) -> Box<dyn Future<Item=(), Error=io::Error>>;
+    ) -> io::Result<()>;
     fn get_and_increment_counter(
         &self,
         application: &AppId,
         handle: &KeyHandle
-    ) -> Box<dyn Future<Item=Counter, Error=io::Error>>;
+    ) -> io::Result<Counter>;
     fn retrieve_application_key(
         &self,
         application: &AppId,
         handle: &KeyHandle,
-    ) -> Box<dyn Future<Item=Option<ApplicationKey>, Error=io::Error>>;
+    ) -> io::Result<Option<ApplicationKey>>;
 }
 
 #[derive(Debug)]
@@ -223,15 +224,10 @@ impl U2F {
         challenge: Challenge,
         key_handle: KeyHandle,
     ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
-        let application_key_future = {
-            self_rc
-                .storage
-                .retrieve_application_key(&application, &key_handle)
-                .from_err()
-        };
+        let application_key = self_rc.storage.retrieve_application_key(&application, &key_handle);
 
         Box::new(
-            application_key_future.and_then(move |application_key_option| {
+            application_key.into_future().from_err().and_then(move |application_key_option| {
                 match application_key_option {
                     Some(application_key) => {
                         Self::_authenticate_step2(self_rc, challenge, application_key)
@@ -277,6 +273,7 @@ impl U2F {
             self_rc
                 .storage
                 .get_and_increment_counter(&application_key.application, &application_key.handle)
+                .into_future()
                 .from_err()
                 .and_then(move |counter| {
                     Self::_authenticate_step4(
@@ -324,14 +321,9 @@ impl U2F {
         &self,
         key_handle: &KeyHandle,
         application: &AppId,
-    ) -> Box<dyn Future<Item=bool, Error=io::Error>> {
+    ) -> io::Result<bool> {
         debug!(self.0.logger, "is_valid_key_handle");
-        Box::new(
-            self.0
-                .storage
-                .retrieve_application_key(application, key_handle)
-                .map(|res| res.is_some()),
-        )
+        Ok(self.0.storage.retrieve_application_key(application, key_handle)?.is_some())
     }
 
     pub fn register(
@@ -378,6 +370,7 @@ impl U2F {
             self_rc
                 .storage
                 .add_application_key(&application_key)
+                .into_future()
                 .from_err()
                 .and_then(move |_| Self::_register_step3(self_rc, challenge, application_key)),
         )
@@ -475,7 +468,7 @@ impl Service for U2F {
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
                         debug!(logger, "ControlCode::CheckOnly");
-                        Box::new(self.is_valid_key_handle(&key_handle, &application).map(
+                        Box::new(self.is_valid_key_handle(&key_handle, &application).into_future().map(
                             move |is_valid| {
                                 info!(logger, "ControlCode::CheckOnly"; "is_valid_key_handle" => is_valid);
                                 if is_valid {
