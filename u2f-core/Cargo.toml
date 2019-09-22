@@ -1,7 +1,7 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "u2f-core"
-version = "0.3.2"
+version = "0.4.0"
 [dependencies]
 assert_matches = "1.3.0"
 base64 = "0.10.1"
