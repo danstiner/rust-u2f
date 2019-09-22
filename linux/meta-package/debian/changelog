@@ -1,9 +1,17 @@
+softu2f (0.4.0) unstable; urgency=medium
+
+  * Store secrets in secret service if available
+  * Updated file store class that handles handles correctly
+  * Add additional known app id hashes
+  * Ignore the bogus app id hash used by Chrome
+
+ -- Dan <daniel.stiner@gmail.com>  Sat, 28 Sep 2019 21:53:00 -0800
+
 softu2f (0.3.2) unstable; urgency=medium
 
   * Set user-only file mode on secrets file
 
  -- Dan <daniel.stiner@gmail.com>  Sat, 23 Mar 2019 17:08:00 -0800
-
 
 softu2f (0.3.1) unstable; urgency=medium
 
