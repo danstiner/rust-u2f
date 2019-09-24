@@ -32,7 +32,7 @@ RUN set -eux; \
 COPY . /app
 WORKDIR /app/linux
 
-RUN cargo test
+RUN cargo test --release
 
 RUN make rpm
 
