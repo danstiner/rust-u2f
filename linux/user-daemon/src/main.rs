@@ -2,6 +2,7 @@ extern crate alloc;
 extern crate bincode;
 extern crate clap;
 extern crate core;
+extern crate directories;
 extern crate dirs;
 #[macro_use]
 extern crate failure;
@@ -42,7 +43,9 @@ use tokio_uds::{UCred, UnixStream};
 use u2f_core::{SecretStore, SecureCryptoOperations, U2F};
 use u2fhid_protocol::{Packet, U2FHID};
 
-use softu2f_system_daemon::{CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput};
+use softu2f_system_daemon::{
+    CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput,
+};
 use stores::file::FileStore;
 use stores::secret_service::SecretServiceStore;
 use user_presence::NotificationUserPresence;
@@ -78,20 +81,28 @@ quick_error! {
 }
 
 impl slog::Value for TransportError {
-    fn serialize(&self, _record: &slog::Record, key: slog::Key, serializer: &mut dyn slog::Serializer) -> slog::Result {
+    fn serialize(
+        &self,
+        _record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut dyn slog::Serializer,
+    ) -> slog::Result {
         serializer.emit_arguments(key, &format_args!("{}", self))
     }
 }
 
-type Transport = Box<dyn Pipe<Item=SocketOutput, Error=TransportError, SinkItem=SocketInput, SinkError=TransportError>>;
+type Transport = Box<
+    dyn Pipe<
+        Item = SocketOutput,
+        Error = TransportError,
+        SinkItem = SocketInput,
+        SinkError = TransportError,
+    >,
+>;
 
 trait Pipe: Stream + Sink {}
 
-impl<'a, T> Pipe for T
-    where
-        T: Stream + Sink + 'a,
-{
-}
+impl<'a, T> Pipe for T where T: Stream + Sink + 'a {}
 
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
@@ -118,7 +129,8 @@ fn main() {
 
     info!(logger, "Starting SoftU2F user daemon"; "version" => VERSION);
 
-    run(socket_path, &logger).unwrap_or_else(|err| error!(logger, "Exiting"; "err" => err.to_string()));
+    run(socket_path, &logger)
+        .unwrap_or_else(|err| error!(logger, "Exiting"; "err" => err.to_string()));
 }
 
 fn run(socket_path: Option<&str>, logger: &Logger) -> Result<(), TransportError> {
@@ -128,14 +140,30 @@ fn run(socket_path: Option<&str>, logger: &Logger) -> Result<(), TransportError>
     core.run(connect(socket_path, handle, logger))
 }
 
-fn connect(socket_path: &str, handle: Handle, logger: &Logger) -> Box<dyn Future<Item=(), Error=TransportError>> {
+fn connect(
+    socket_path: &str,
+    handle: Handle,
+    logger: &Logger,
+) -> Box<dyn Future<Item = (), Error = TransportError>> {
     let logger = logger.clone();
     debug!(logger, "Opening socket"; "path" => socket_path);
-    Box::new(UnixStream::connect(socket_path).map_err(TransportError::Io).and_then(|stream| connected(stream, handle, logger)))
+    Box::new(
+        UnixStream::connect(socket_path)
+            .map_err(TransportError::Io)
+            .and_then(|stream| connected(stream, handle, logger)),
+    )
 }
 
-fn connected(stream: UnixStream, handle: Handle, logger: Logger) -> Box<dyn Future<Item = (), Error = TransportError>> {
-    match stream.peer_cred().map_err(TransportError::Io).and_then(require_root) {
+fn connected(
+    stream: UnixStream,
+    handle: Handle,
+    logger: Logger,
+) -> Box<dyn Future<Item = (), Error = TransportError>> {
+    match stream
+        .peer_cred()
+        .map_err(TransportError::Io)
+        .and_then(require_root)
+    {
         Ok(()) => (),
         Err(err) => return Box::new(future::err(err)),
     };
@@ -143,7 +171,9 @@ fn connected(stream: UnixStream, handle: Handle, logger: Logger) -> Box<dyn Futu
     let transport = bind_transport(stream);
     let created_device = create_device(transport, logger.clone());
 
-    Box::new(created_device.and_then(move |(device, transport)| bind_service(device, transport, handle, &logger.clone())))
+    Box::new(created_device.and_then(move |(device, transport)| {
+        bind_service(device, transport, handle, &logger.clone())
+    }))
 }
 
 fn bind_transport(stream: UnixStream) -> Transport {
@@ -155,27 +185,65 @@ fn bind_transport(stream: UnixStream) -> Transport {
     Box::new(bincode_readwrite)
 }
 
-fn create_device<T>(transport: T, logger: Logger) -> Box<dyn Future<Item=(DeviceDescription, T), Error=TransportError>> where T: Sink<SinkItem=SocketInput, SinkError=TransportError> + Stream<Item=SocketOutput, Error=TransportError> + 'static {
+fn create_device<T>(
+    transport: T,
+    logger: Logger,
+) -> Box<dyn Future<Item = (DeviceDescription, T), Error = TransportError>>
+where
+    T: Sink<SinkItem = SocketInput, SinkError = TransportError>
+        + Stream<Item = SocketOutput, Error = TransportError>
+        + 'static,
+{
     let request = CreateDeviceRequest;
     debug!(logger, "Sending create device request"; "request" => &request);
     let send = transport.send(SocketInput::CreateDeviceRequest(request));
     let created = send.and_then(move |transport| {
-        transport.into_future().and_then(|(output, transport)| {
-            let res = match output {
-                Some(SocketOutput::CreateDeviceResponse(Ok(device))) => future::ok((device, transport)),
-                Some(SocketOutput::CreateDeviceResponse(Err(err))) => future::err((TransportError::DeviceCreateFailed(err), transport)),
-                Some(_) => future::err((TransportError::InvalidState("Expected create device response"), transport)),
-                None => future::err((TransportError::Io(io::Error::new(io::ErrorKind::ConnectionAborted, "Socket transport closed unexpectedly")), transport)),
-            };
-            res
-        }).or_else(move |(err, mut transport)| {
-            transport.close().into_future().map_err(move |err| error!(logger, "failed to close transport"; "err" => err)).then(|_| future::err(err))
-        })
+        transport
+            .into_future()
+            .and_then(|(output, transport)| {
+                let res = match output {
+                    Some(SocketOutput::CreateDeviceResponse(Ok(device))) => {
+                        future::ok((device, transport))
+                    }
+                    Some(SocketOutput::CreateDeviceResponse(Err(err))) => {
+                        future::err((TransportError::DeviceCreateFailed(err), transport))
+                    }
+                    Some(_) => future::err((
+                        TransportError::InvalidState("Expected create device response"),
+                        transport,
+                    )),
+                    None => future::err((
+                        TransportError::Io(io::Error::new(
+                            io::ErrorKind::ConnectionAborted,
+                            "Socket transport closed unexpectedly",
+                        )),
+                        transport,
+                    )),
+                };
+                res
+            })
+            .or_else(move |(err, mut transport)| {
+                transport
+                    .close()
+                    .into_future()
+                    .map_err(move |err| error!(logger, "failed to close transport"; "err" => err))
+                    .then(|_| future::err(err))
+            })
     });
     Box::new(created)
 }
 
-fn bind_service<T>(device: DeviceDescription, transport: T, handle: Handle, log: &Logger) -> Box<dyn Future<Item=(), Error=TransportError>> where T: Sink<SinkItem=SocketInput, SinkError=TransportError> + Stream<Item=SocketOutput, Error=TransportError> + 'static {
+fn bind_service<T>(
+    device: DeviceDescription,
+    transport: T,
+    handle: Handle,
+    log: &Logger,
+) -> Box<dyn Future<Item = (), Error = TransportError>>
+where
+    T: Sink<SinkItem = SocketInput, SinkError = TransportError>
+        + Stream<Item = SocketOutput, Error = TransportError>
+        + 'static,
+{
     let packet_logger = log.new(o!());
     let transport = transport
         .filter_map(move |output| socket_output_to_packet(&packet_logger, output))
@@ -218,19 +286,26 @@ fn socket_output_to_packet(logger: &Logger, event: SocketOutput) -> Option<Packe
 }
 
 fn packet_to_socket_input(packet: Packet) -> SocketInput {
-    SocketInput::Packet(softu2f_system_daemon::Packet::from_bytes(&packet.into_bytes()))
+    SocketInput::Packet(softu2f_system_daemon::Packet::from_bytes(
+        &packet.into_bytes(),
+    ))
 }
 
 fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, Error> {
-    let file_store = dirs::home_dir().map(|mut path| {
-        path.push(".softu2f-secrets.json");
-        FileStore::new(path)
-    }).unwrap()?;
+    let file_store = dirs::home_dir()
+        .map(|mut path| {
+            path.push(".softu2f-secrets.json");
+            FileStore::new(path)
+        })
+        .unwrap()?;
 
     let secret_service = SecretServiceStore::new()?;
 
     if file_store.exists() {
-        info!(log, "begin copying secrets from file store to more secure secret service");
+        info!(
+            log,
+            "begin copying secrets from file store to more secure secret service"
+        );
         for secret in file_store.iter()? {
             secret_service.add_secret(secret)?;
         }
@@ -244,7 +319,11 @@ fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, Error> {
 
 fn require_root(cred: UCred) -> Result<(), TransportError> {
     if cred.uid != 0 {
-        Err(io::Error::new(io::ErrorKind::PermissionDenied, "Expected socket peer to be running as root user").into())
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Expected socket peer to be running as root user",
+        )
+        .into())
     } else {
         Ok(())
     }
