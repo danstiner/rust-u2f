@@ -47,7 +47,7 @@ use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput,
 };
 use stores::file_store::FileStore;
-use stores::secret_service::SecretServiceStore;
+use stores::secret_service_store::SecretServiceStore;
 use user_presence::NotificationUserPresence;
 
 mod stores;
