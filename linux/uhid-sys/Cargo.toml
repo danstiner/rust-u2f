@@ -6,6 +6,6 @@ description = "FFI bindings to Linux UHID (user-space HID transport drivers)"
 license = "MIT"
 
 [build-dependencies]
-bindgen = "0.51.0"
+bindgen = "0.51.1"
 
 [dependencies]
