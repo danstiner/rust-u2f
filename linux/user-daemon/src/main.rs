@@ -46,7 +46,7 @@ use u2fhid_protocol::{Packet, U2FHID};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput,
 };
-use stores::file::FileStore;
+use stores::file_store::FileStore;
 use stores::secret_service::SecretServiceStore;
 use user_presence::NotificationUserPresence;
 
