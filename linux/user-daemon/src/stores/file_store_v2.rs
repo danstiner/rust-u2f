@@ -1,25 +1,16 @@
-use alloc::vec::IntoIter;
-use directories::ProjectDirs;
-use failure::Error;
-use serde_json;
-use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::io::{BufReader, Seek, SeekFrom, Write};
+use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
-use stores::Secret;
+
+use directories::ProjectDirs;
+use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
-#[derive(Debug, Fail)]
-enum FileStoreError {
-    #[fail(display = "I/O error: {}", _0)]
-    Io(io::Error),
-    #[fail(display = "unable to determine directory to store data in")]
-    UnableToDetermineDataDirectory,
-}
+use stores::Secret;
 
 #[derive(Serialize, Deserialize)]
 struct Data {
@@ -49,10 +40,8 @@ pub struct FileStoreV2 {
 }
 
 impl FileStoreV2 {
-    pub fn new() -> Result<FileStoreV2, Error> {
-        let dirs = ProjectDirs::from("com.github", "danstiner", "Rust U2F")
-            .ok_or(FileStoreError::UnableToDetermineDataDirectory)?;
-        let path = dirs.data_local_dir().join("secrets.json");
+    pub fn new(projectDirs: ProjectDirs) -> io::Result<FileStoreV2> {
+        let path = projectDirs.data_local_dir().join("secrets.json");
         Ok(FileStoreV2 { path })
     }
 
