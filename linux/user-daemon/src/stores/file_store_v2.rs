@@ -40,8 +40,8 @@ pub struct FileStoreV2 {
 }
 
 impl FileStoreV2 {
-    pub fn new(projectDirs: ProjectDirs) -> io::Result<FileStoreV2> {
-        let path = projectDirs.data_local_dir().join("secrets.json");
+    pub fn new(dirs: ProjectDirs) -> io::Result<FileStoreV2> {
+        let path = dirs.data_local_dir().join("secrets.json");
         Ok(FileStoreV2 { path })
     }
 
