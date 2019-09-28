@@ -85,15 +85,24 @@ fn main() {
 
     info!(log, "starting SoftU2F system daemon"; "version" => VERSION);
 
-    tokio::run(listener(socket_path, &log).map_err(|err| error!(log, "failed to start"; "error" => %err)).unwrap());
+    tokio::run(
+        listener(socket_path, &log)
+            .map_err(|err| error!(log, "failed to start"; "error" => %err))
+            .unwrap(),
+    );
 }
 
-fn listener(socket_path: Option<&str>, log: &Logger) -> Result<impl Future<Item=(), Error=()>, Error> {
+fn listener(
+    socket_path: Option<&str>,
+    log: &Logger,
+) -> Result<impl Future<Item = (), Error = ()>, Error> {
     let accept_log = log.clone();
     let incoming_log = log.clone();
     let accept = move |stream| accept(stream, &accept_log);
     let listener = socket_listener(socket_path)?;
-    let incoming = listener.incoming().map_err(move |err| error!(incoming_log, "failed to poll for incoming connections"; "error" => %err));
+    let incoming = listener.incoming().map_err(
+        move |err| error!(incoming_log, "failed to poll for incoming connections"; "error" => %err),
+    );
     Ok(incoming.for_each(accept))
 }
 
@@ -113,14 +122,22 @@ fn systemd_socket_listener() -> Result<std::os::unix::net::UnixListener, Error> 
     }
 
     let fd = systemd::daemon::LISTEN_FDS_START;
-    if !is_socket_unix(fd, Some(SocketType::Stream), Listening::IsListening, Some(DEFAULT_SOCKET_PATH))? {
-        return Err(Error::WrongSocket(format!("Expected a stream type socket with path {}", DEFAULT_SOCKET_PATH)));
+    if !is_socket_unix(
+        fd,
+        Some(SocketType::Stream),
+        Listening::IsListening,
+        Some(DEFAULT_SOCKET_PATH),
+    )? {
+        return Err(Error::WrongSocket(format!(
+            "Expected a stream type socket with path {}",
+            DEFAULT_SOCKET_PATH
+        )));
     }
 
     Ok(unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) })
 }
 
-fn accept(stream: tokio_uds::UnixStream, log: &Logger) -> impl Future<Item=(), Error=()> {
+fn accept(stream: tokio_uds::UnixStream, log: &Logger) -> impl Future<Item = (), Error = ()> {
     debug!(log, "accepting connection";
         "local_addr" => ?stream.local_addr(),
         "peer_addr" => ?stream.peer_addr(),
@@ -128,7 +145,10 @@ fn accept(stream: tokio_uds::UnixStream, log: &Logger) -> impl Future<Item=(), E
     tokio::spawn(handle_connection(stream, log)).into_future()
 }
 
-fn handle_connection(stream: tokio_uds::UnixStream, log: &Logger) -> impl Future<Item=(), Error=()> {
+fn handle_connection(
+    stream: tokio_uds::UnixStream,
+    log: &Logger,
+) -> impl Future<Item = (), Error = ()> {
     let log = log.clone();
     let device_created = future::result(Device::new(stream, &log).map_err(Error::Io));
     let device_completed = device_created.and_then(|device| device.from_err());

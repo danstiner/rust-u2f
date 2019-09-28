@@ -115,7 +115,7 @@ const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const PATH_ARG: &str = "path";
 
-fn main() {
+fn main() -> Result<(), TransportError> {
     let args = App::new("SoftU2F System Daemon")
         .version(VERSION)
         .author(AUTHORS)
@@ -133,17 +133,12 @@ fn main() {
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let logger = Logger::root(drain, o!());
 
-    info!(logger, "Starting SoftU2F user daemon"; "version" => VERSION);
+    info!(logger, "starting SoftU2F user daemon"; "version" => VERSION);
 
-    run(socket_path, &logger)
-        .unwrap_or_else(|err| error!(logger, "Exiting"; "err" => err.to_string()));
-}
-
-fn run(socket_path: Option<&str>, logger: &Logger) -> Result<(), TransportError> {
     let socket_path = socket_path.unwrap_or(softu2f_system_daemon::DEFAULT_SOCKET_PATH);
     let mut core = Core::new()?;
     let handle = core.handle();
-    core.run(connect(socket_path, handle, logger))
+    core.run(connect(socket_path, handle, &logger))
 }
 
 fn connect(
