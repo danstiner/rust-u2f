@@ -32,6 +32,7 @@ extern crate u2fhid_protocol;
 use std::io;
 
 use clap::{App, Arg};
+use directories::ProjectDirs;
 use failure::{Compat, Error};
 use futures::future;
 use futures::prelude::*;
@@ -50,6 +51,7 @@ use stores::file_store::FileStore;
 use stores::secret_service_store::SecretServiceStore;
 use user_presence::NotificationUserPresence;
 
+mod config;
 mod stores;
 mod user_presence;
 
@@ -79,6 +81,10 @@ quick_error! {
         }
     }
 }
+
+#[derive(Debug, Fail)]
+#[fail(display = "home directory path could not be retrieved from the operating system")]
+struct HomeDirectoryNotFound;
 
 impl slog::Value for TransportError {
     fn serialize(
@@ -298,6 +304,9 @@ fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, Error> {
             FileStore::new(path)
         })
         .unwrap()?;
+
+    let dirs =
+        ProjectDirs::from("com.github", "danstiner", "Rust U2F").ok_or(HomeDirectoryNotFound)?;
 
     let secret_service = SecretServiceStore::new()?;
 
