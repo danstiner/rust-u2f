@@ -1,15 +1,12 @@
 use alloc::vec::IntoIter;
 use std::collections::HashMap;
 use std::fs;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io;
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
-use std::path::Path;
 use std::path::PathBuf;
 
 use serde_json;
-use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
+use u2f_core::{AppId, ApplicationKey, Counter};
 
 use stores::Secret;
 

@@ -51,6 +51,7 @@ use stores::file_store::FileStore;
 use stores::secret_service_store::SecretServiceStore;
 use user_presence::NotificationUserPresence;
 
+mod atomic_file;
 mod config;
 mod stores;
 mod user_presence;
