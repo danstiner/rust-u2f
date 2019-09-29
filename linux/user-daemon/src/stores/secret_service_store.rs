@@ -64,9 +64,7 @@ impl UserSecretStore for SecretServiceStore {
             .service
             .get_default_collection()
             .map_err(|_error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
-        collection
-            .ensure_unlocked()
-            .map_err(|_error| io::Error::new(ErrorKind::Other, "to_vec"))?;
+        unlock_if_locked(&collection)?;
         let attributes = registration_attributes(
             &secret.application_key.application,
             &secret.application_key.handle,
@@ -217,15 +215,25 @@ fn find_item<'a>(
     app_id: &AppId,
     handle: &KeyHandle,
 ) -> io::Result<Option<Item<'a>>> {
-    collection
-        .ensure_unlocked()
-        .map_err(|_error| io::Error::new(ErrorKind::Other, "ensure_unlocked"))?;
+    unlock_if_locked(collection)?;
     let attributes = search_attributes(app_id, handle);
     let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
     let mut result = collection
         .search_items(attributes)
         .map_err(|_error| io::Error::new(ErrorKind::Other, "search_items"))?;
     Ok(result.pop())
+}
+
+fn unlock_if_locked(collection: &Collection) -> io::Result<()> {
+    if collection
+        .is_locked()
+        .map_err(|_error| io::Error::new(ErrorKind::Other, "is_locked"))?
+    {
+        collection
+            .unlock()
+            .map_err(|_error| io::Error::new(ErrorKind::Other, "unlock"))?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
