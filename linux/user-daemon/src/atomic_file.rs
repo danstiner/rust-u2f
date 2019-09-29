@@ -11,8 +11,9 @@ where
 {
     let directory = path.parent().ok_or(io::Error::new(
         io::ErrorKind::InvalidInput,
-        "Invalid file path, does not have a parent directory",
+        "invalid file path, does not have a parent directory",
     ))?;
+    fs::create_dir_all(directory)?;
     let tmp_path = make_tmp_path(path)?;
 
     {

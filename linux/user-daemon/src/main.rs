@@ -32,7 +32,7 @@ extern crate u2fhid_protocol;
 use std::io;
 
 use clap::{App, Arg};
-use directories::ProjectDirs;
+use directories::{ProjectDirs, UserDirs};
 use failure::{Compat, Error};
 use futures::future;
 use futures::prelude::*;
@@ -47,12 +47,12 @@ use u2fhid_protocol::{Packet, U2FHID};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput,
 };
-use stores::file_store::FileStore;
-use stores::secret_service_store::SecretServiceStore;
+use storage::AppDirs;
 use user_presence::NotificationUserPresence;
 
 mod atomic_file;
 mod config;
+mod storage;
 mod stores;
 mod user_presence;
 
@@ -134,7 +134,7 @@ fn main() -> Result<(), TransportError> {
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let logger = Logger::root(drain, o!());
 
-    info!(logger, "starting SoftU2F user daemon"; "version" => VERSION);
+    info!(logger, "Starting software Universal 2nd Factor device user daemon"; "version" => VERSION);
 
     let socket_path = socket_path.unwrap_or(softu2f_system_daemon::DEFAULT_SOCKET_PATH);
     let mut core = Core::new()?;
@@ -294,32 +294,18 @@ fn packet_to_socket_input(packet: Packet) -> SocketInput {
 }
 
 fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, Error> {
-    let file_store = dirs::home_dir()
-        .map(|mut path| {
-            path.push(".softu2f-secrets.json");
-            FileStore::new(path)
-        })
-        .unwrap()?;
-
-    let dirs =
+    let user_dirs = UserDirs::new().ok_or(HomeDirectoryNotFound)?;
+    let project_dirs =
         ProjectDirs::from("com.github", "danstiner", "Rust U2F").ok_or(HomeDirectoryNotFound)?;
 
-    let secret_service = SecretServiceStore::new()?;
-
-    if file_store.exists() {
-        info!(
-            log,
-            "begin copying secrets from file store to more secure secret service"
-        );
-        for secret in file_store.iter()? {
-            secret_service.add_secret(secret)?;
-        }
-        info!(log, "finished copying secrets");
-        file_store.delete()?;
-        info!(log, "deleted secrets file store");
-    }
-
-    Ok(Box::new(secret_service))
+    storage::build(
+        &AppDirs {
+            user_home_dir: user_dirs.home_dir().to_owned(),
+            config_dir: project_dirs.config_dir().to_owned(),
+            data_local_dir: project_dirs.data_local_dir().to_owned(),
+        },
+        log,
+    )
 }
 
 fn require_root(cred: UCred) -> Result<(), TransportError> {
