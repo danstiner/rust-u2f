@@ -1,14 +1,12 @@
 use std::fs::File;
 use std::io;
-use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use directories::ProjectDirs;
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
 use atomic_file;
-use stores::Secret;
+use stores::{Secret, UserSecretStore};
 
 #[derive(Serialize, Deserialize)]
 struct Data {
@@ -38,13 +36,9 @@ pub struct FileStoreV2 {
 }
 
 impl FileStoreV2 {
-    pub fn new(dirs: ProjectDirs) -> io::Result<FileStoreV2> {
-        let path = dirs.data_local_dir().join("secrets.json");
+    pub fn new(dir: &Path) -> io::Result<FileStoreV2> {
+        let path = dir.to_owned().join("secrets.json");
         Ok(FileStoreV2 { path })
-    }
-
-    pub fn exists(&self) -> bool {
-        self.path.exists()
     }
 
     fn read(&self) -> io::Result<Data> {
@@ -61,6 +55,18 @@ impl FileStoreV2 {
         atomic_file::overwrite(&self.path, move |writer| {
             serde_json::to_writer_pretty(writer, &data).map_err(|e| e.into())
         })
+    }
+}
+
+impl UserSecretStore for FileStoreV2 {
+    fn add_secret(&self, secret: Secret) -> io::Result<()> {
+        let mut data = self.read()?;
+        data.push(secret);
+        self.write(&data)
+    }
+
+    fn into_u2f_store(self: Box<Self>) -> Box<dyn SecretStore> {
+        self
     }
 }
 

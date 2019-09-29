@@ -3,46 +3,44 @@ use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 
-use directories::ProjectDirs;
 use serde_json;
 
 use atomic_file;
 
-#[derive(Serialize, Deserialize)]
-struct Config {
-    secret_store_type: SecretStoreType,
+#[derive(Serialize, Deserialize, Clone)]
+pub(crate) struct Config {
+    pub(crate) secret_store_type: SecretStoreType,
 }
 
-#[derive(Serialize, Deserialize)]
-enum SecretStoreType {
+#[derive(Serialize, Deserialize, Copy, Clone)]
+pub(crate) enum SecretStoreType {
     File,
     SecretService,
 }
 
-struct ConfigFilePath(PathBuf);
+#[derive(Clone)]
+pub(crate) struct ConfigFilePath(PathBuf);
 
 impl ConfigFilePath {
-    pub fn from_config_dir(dirs: &ProjectDirs) -> ConfigFilePath {
-        ConfigFilePath::from_dir(dirs.config_dir())
-    }
-
     pub fn from_dir(dir: &Path) -> ConfigFilePath {
         ConfigFilePath(dir.join("config.json"))
     }
 
-    fn get(&self) -> &Path {
+    pub fn get(&self) -> &Path {
         &self.0
     }
 }
 
-struct ConfigFile {
+pub(crate) struct ConfigFile {
     config: Config,
     path: ConfigFilePath,
 }
 
 impl ConfigFile {
-    pub fn new(path: ConfigFilePath, config: Config) -> ConfigFile {
-        ConfigFile { config, path }
+    pub fn create(path: ConfigFilePath, config: Config) -> io::Result<ConfigFile> {
+        let config_file = ConfigFile { config, path };
+        config_file.save()?;
+        Ok(config_file)
     }
 
     pub fn load(path: ConfigFilePath) -> io::Result<Option<ConfigFile>> {
@@ -53,6 +51,10 @@ impl ConfigFile {
             Err(ref err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(err) => Err(err.into()),
         }
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     pub fn save(&self) -> io::Result<()> {
