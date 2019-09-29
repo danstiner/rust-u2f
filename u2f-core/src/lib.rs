@@ -31,12 +31,12 @@ pub use application_key::ApplicationKey;
 use attestation::AttestationCertificate;
 use byteorder::{BigEndian, WriteBytesExt};
 use constants::*;
-use futures::Future;
 use futures::future;
+use futures::Future;
 use futures::IntoFuture;
 pub use key_handle::KeyHandle;
-use known_app_ids::BOGUS_APP_ID_HASH;
 pub use known_app_ids::try_reverse_app_id;
+use known_app_ids::BOGUS_APP_ID_HASH;
 pub use openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
 pub use private_key::PrivateKey;
 use public_key::PublicKey;
@@ -106,12 +106,12 @@ pub trait UserPresence {
     fn approve_registration(
         &self,
         application: &AppId,
-    ) -> Box<dyn Future<Item=bool, Error=io::Error>>;
+    ) -> Box<dyn Future<Item = bool, Error = io::Error>>;
     fn approve_authentication(
         &self,
         application: &AppId,
-    ) -> Box<dyn Future<Item=bool, Error=io::Error>>;
-    fn wink(&self) -> Box<dyn Future<Item=(), Error=io::Error>>;
+    ) -> Box<dyn Future<Item = bool, Error = io::Error>>;
+    fn wink(&self) -> Box<dyn Future<Item = (), Error = io::Error>>;
 }
 
 pub trait CryptoOperations {
@@ -122,14 +122,11 @@ pub trait CryptoOperations {
 }
 
 pub trait SecretStore {
-    fn add_application_key(
-        &self,
-        key: &ApplicationKey,
-    ) -> io::Result<()>;
+    fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()>;
     fn get_and_increment_counter(
         &self,
         application: &AppId,
-        handle: &KeyHandle
+        handle: &KeyHandle,
     ) -> io::Result<Counter>;
     fn retrieve_application_key(
         &self,
@@ -213,7 +210,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
-    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
+    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
         debug!(self.0.logger, "authenticate");
         Self::_authenticate_step1(self.0.clone(), application, challenge, key_handle)
     }
@@ -223,18 +220,21 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
-    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
-        let application_key = self_rc.storage.retrieve_application_key(&application, &key_handle);
+    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
+        let application_key = self_rc
+            .storage
+            .retrieve_application_key(&application, &key_handle);
 
         Box::new(
-            application_key.into_future().from_err().and_then(move |application_key_option| {
-                match application_key_option {
+            application_key
+                .into_future()
+                .from_err()
+                .and_then(move |application_key_option| match application_key_option {
                     Some(application_key) => {
                         Self::_authenticate_step2(self_rc, challenge, application_key)
                     }
                     None => Box::new(future::err(AuthenticateError::InvalidKeyHandle)),
-                }
-            }),
+                }),
         )
     }
 
@@ -242,19 +242,14 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         challenge: Challenge,
         application_key: ApplicationKey,
-    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
+    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
         Box::new(
             self_rc
                 .approval
                 .approve_authentication(&application_key.application)
                 .from_err()
                 .and_then(move |user_present| {
-                    Self::_authenticate_step3(
-                        self_rc,
-                        challenge,
-                        application_key,
-                        user_present,
-                    )
+                    Self::_authenticate_step3(self_rc, challenge, application_key, user_present)
                 }),
         )
     }
@@ -264,7 +259,7 @@ impl U2F {
         challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
-    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
+    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
         if !user_present {
             return Box::new(future::err(AuthenticateError::ApprovalRequired));
         }
@@ -323,14 +318,18 @@ impl U2F {
         application: &AppId,
     ) -> io::Result<bool> {
         debug!(self.0.logger, "is_valid_key_handle");
-        Ok(self.0.storage.retrieve_application_key(application, key_handle)?.is_some())
+        Ok(self
+            .0
+            .storage
+            .retrieve_application_key(application, key_handle)?
+            .is_some())
     }
 
     pub fn register(
         &self,
         application: AppId,
         challenge: Challenge,
-    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
+    ) -> Box<dyn Future<Item = Registration, Error = RegisterError>> {
         debug!(self.0.logger, "register");
         Self::_register_step1(self.0.clone(), application, challenge)
     }
@@ -339,7 +338,7 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         application: AppId,
         challenge: Challenge,
-    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
+    ) -> Box<dyn Future<Item = Registration, Error = RegisterError>> {
         Box::new(
             self_rc
                 .approval
@@ -356,7 +355,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         user_present: bool,
-    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
+    ) -> Box<dyn Future<Item = Registration, Error = RegisterError>> {
         if !user_present {
             return Box::new(future::err(RegisterError::ApprovalRequired));
         }
@@ -399,7 +398,7 @@ impl U2F {
         })
     }
 
-    fn wink(&self) -> Box<dyn Future<Item=(), Error=io::Error>> {
+    fn wink(&self) -> Box<dyn Future<Item = (), Error = io::Error>> {
         self.0.approval.wink()
     }
 }
@@ -408,7 +407,7 @@ impl Service for U2F {
     type Request = Request;
     type Response = Response;
     type Error = io::Error;
-    type Future = Box<dyn Future<Item=Self::Response, Error=Self::Error>>;
+    type Future = Box<dyn Future<Item = Self::Response, Error = Self::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
         let logger = self.0.logger.clone();
@@ -422,7 +421,7 @@ impl Service for U2F {
                 debug!(logger, "Request::Register"; "app_id" => application);
 
                 if application == BOGUS_APP_ID_HASH {
-                    return Box::new(future::ok(Response::TestOfUserPresenceNotSatisfied))
+                    return Box::new(future::ok(Response::TestOfUserPresenceNotSatisfied));
                 }
 
                 Box::new(
@@ -446,11 +445,11 @@ impl Service for U2F {
                                 Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
                             RegisterError::Io(err) => {
-                                debug!(logger_clone, "Request::Register => IoError"; "error" => format!("{:?}", err));
+                                debug!(logger_clone, "Request::Register => IoError"; "error" => ?err);
                                 Err(err)
                             }
                             RegisterError::Signing(err) => {
-                                debug!(logger_clone, "Request::Register => SigningError"; "error" => format!("{:?}", err));
+                                debug!(logger_clone, "Request::Register => SigningError"; "error" => ?err);
                                 Err(io::Error::new(io::ErrorKind::Other, "Signing error"))
                             }
                         }),
@@ -462,7 +461,8 @@ impl Service for U2F {
                 application,
                 key_handle,
             } => {
-                let logger = self.0
+                let logger = self
+                    .0
                     .logger
                     .new(o!("request" => "authenticate", "app_id" => application));
                 match control_code {
@@ -610,8 +610,8 @@ mod tests {
     use rand::os::OsRng;
     use rand::Rng;
 
-    use super::*;
     use super::attestation::Attestation;
+    use super::*;
 
     fn fake_app_id() -> AppId {
         AppId([0u8; 32])
@@ -801,7 +801,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let application = fake_app_id();
         let challenge = fake_challenge();
-        let registration = u2f.register(application.clone(), challenge.clone())
+        let registration = u2f
+            .register(application.clone(), challenge.clone())
             .wait()
             .unwrap();
 
@@ -822,7 +823,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let application = fake_app_id();
         let challenge = fake_challenge();
-        let registration = u2f.register(application.clone(), challenge.clone())
+        let registration = u2f
+            .register(application.clone(), challenge.clone())
             .wait()
             .unwrap();
 
@@ -863,21 +865,23 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let application = AppId(rng.gen());
         let register_challenge = Challenge(rng.gen());
 
-        let registration = u2f.register(application.clone(), register_challenge.clone())
+        let registration = u2f
+            .register(application.clone(), register_challenge.clone())
             .wait()
             .unwrap();
 
         let authentication_challenge = Challenge(rng.gen());
-        let authentication = u2f.authenticate(
-            application.clone(),
-            authentication_challenge.clone(),
-            registration.key_handle.clone(),
-        ).wait()
+        let authentication = u2f
+            .authenticate(
+                application.clone(),
+                authentication_challenge.clone(),
+                registration.key_handle.clone(),
+            )
+            .wait()
             .unwrap();
 
         let user_presence_byte = user_presence_byte(true);
-        let user_public_key =
-            PublicKey::from_bytes(&registration.user_public_key).unwrap();
+        let user_public_key = PublicKey::from_bytes(&registration.user_public_key).unwrap();
         let user_pkey = PKey::from_ec_key(user_public_key.as_ec_key()).unwrap();
         let signed_data = message_to_sign_for_authenticate(
             &application,
@@ -903,7 +907,8 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let application = AppId(rng.gen());
         let challenge = Challenge(rng.gen());
 
-        let registration = u2f.register(application.clone(), challenge.clone())
+        let registration = u2f
+            .register(application.clone(), challenge.clone())
             .wait()
             .unwrap();
 
