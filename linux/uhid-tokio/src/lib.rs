@@ -104,6 +104,7 @@ extern crate uhid_sys;
 pub use codec::{Bus, InputEvent, OutputEvent, StreamError};
 pub use uhid_device::CreateParams;
 pub use uhid_device::UHIDDevice;
+pub use misc_driver::MiscDriver;
 
 mod character_device;
 mod codec;
