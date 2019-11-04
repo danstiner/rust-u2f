@@ -188,7 +188,7 @@ fn search_attributes(app_id: &AppId, handle: &KeyHandle) -> Vec<(&'static str, S
         ("application", "com.github.danstiner.rust-u2f".to_string()),
         ("u2f_app_id_hash", app_id.to_base64()),
         ("u2f_key_handle", handle.to_base64()),
-        ("xdg:schem", "com.github.danstiner.rust-u2f".to_string()),
+        ("xdg:schema", "com.github.danstiner.rust-u2f".to_string()),
     ]
 }
 
