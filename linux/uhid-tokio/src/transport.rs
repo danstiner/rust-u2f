@@ -84,10 +84,10 @@ pub struct Transport<T, E, D> {
 }
 
 impl<T, E, D> Transport<T, E, D>
-    where
-        T: AsyncRead + Write,
-        E: Encoder,
-        D: Decoder,
+where
+    T: AsyncRead + Write,
+    E: Encoder,
+    D: Decoder,
 {
     pub fn new(inner: T, encoder: E, decoder: D, logger: slog::Logger) -> Transport<T, E, D> {
         Transport {
@@ -110,9 +110,9 @@ impl<T: Write, E, D> Write for Transport<T, E, D> {
 }
 
 impl<T, E, D> Stream for Transport<T, E, D>
-    where
-        T: AsyncRead,
-        D: Decoder,
+where
+    T: AsyncRead,
+    D: Decoder,
 {
     type Item = D::Item;
     type Error = D::Error;
@@ -147,9 +147,9 @@ impl<T, E, D> Stream for Transport<T, E, D>
 }
 
 impl<T, E, D> SyncSink for Transport<T, E, D>
-    where
-        T: Write,
-        E: Encoder,
+where
+    T: Write,
+    E: Encoder,
 {
     type SinkItem = E::Item;
     type SinkError = E::Error;
@@ -165,22 +165,24 @@ impl<T, E, D> SyncSink for Transport<T, E, D>
             Ok(0) => Err(io::Error::new(
                 io::ErrorKind::WriteZero,
                 "failed to write item to transport",
-            ).into()),
+            )
+            .into()),
             Ok(n) if n == bytes.len() => Ok(()),
             Ok(_) => Err(io::Error::new(
                 io::ErrorKind::Other,
                 "failed to write entire item to transport",
-            ).into()),
+            )
+            .into()),
             Err(e) => Err(e.into()),
         }
     }
 }
 
 impl<T, E, D> fmt::Debug for Transport<T, E, D>
-    where
-        T: fmt::Debug,
-        E: fmt::Debug,
-        D: fmt::Debug,
+where
+    T: fmt::Debug,
+    E: fmt::Debug,
+    D: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("CharacterDevice")

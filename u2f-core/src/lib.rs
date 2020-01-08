@@ -417,18 +417,19 @@ impl Service for U2F {
                 challenge,
                 application,
             } => {
-                let logger_clone = self.0.logger.clone();
-                debug!(logger, "Request::Register"; "app_id" => application);
+                let logger = logger.new(o!("app_id" => try_reverse_app_id(&application).unwrap_or(application.to_base64())));
+                debug!(logger, "Registration request");
 
                 if application == BOGUS_APP_ID_HASH {
+                    debug!(logger, "Rejecting bogus registration request from Chrome");
                     return Box::new(future::ok(Response::TestOfUserPresenceNotSatisfied));
                 }
 
+                let logger_clone = logger.clone();
                 Box::new(
                     self.register(application, challenge)
                         .map(move |registration| {
-                            info!(logger, "registered");
-                            debug!(logger, "Request::Register => Ok");
+                            info!(logger, "Registered");
                             Response::Registration {
                                 user_public_key: registration.user_public_key,
                                 key_handle: registration.key_handle,
@@ -438,18 +439,15 @@ impl Service for U2F {
                         })
                         .or_else(move |err| match err {
                             RegisterError::ApprovalRequired => {
-                                debug!(
-                                    logger_clone,
-                                    "Request::Register => TestOfUserPresenceNotSatisfied"
-                                );
+                                info!(logger_clone, "Registration was not approved");
                                 Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
                             RegisterError::Io(err) => {
-                                debug!(logger_clone, "Request::Register => IoError"; "error" => ?err);
+                                error!(logger_clone, "Registration failed"; "error" => ?err);
                                 Err(err)
                             }
                             RegisterError::Signing(err) => {
-                                debug!(logger_clone, "Request::Register => SigningError"; "error" => ?err);
+                                error!(logger_clone, "Registration failed"; "error" => ?err);
                                 Err(io::Error::new(io::ErrorKind::Other, "Signing error"))
                             }
                         }),
@@ -461,17 +459,17 @@ impl Service for U2F {
                 application,
                 key_handle,
             } => {
-                let logger = self
-                    .0
-                    .logger
-                    .new(o!("request" => "authenticate", "app_id" => application));
+                let logger = logger.new(o!("app_id" => try_reverse_app_id(&application).unwrap_or(application.to_base64())));
+                debug!(logger, "Authenticate request");
+
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
                         debug!(logger, "ControlCode::CheckOnly");
                         Box::new(self.is_valid_key_handle(&key_handle, &application).into_future().map(
                             move |is_valid| {
-                                info!(logger, "ControlCode::CheckOnly"; "is_valid_key_handle" => is_valid);
+                                debug!(logger, "ControlCode::CheckOnly"; "is_valid_key_handle" => is_valid);
                                 if is_valid {
+                                    info!(logger, "Valid key handle");
                                     Response::TestOfUserPresenceNotSatisfied
                                 } else {
                                     Response::InvalidKeyHandle
@@ -485,7 +483,7 @@ impl Service for U2F {
                         Box::new(
                             self.authenticate(application, challenge, key_handle)
                                 .map(move |authentication| {
-                                    info!(logger, "authenticated"; "counter" => &authentication.counter, "user_present" => &authentication.user_present);
+                                    info!(logger, "Authenticated"; "user_present" => &authentication.user_present);
                                     Response::Authentication {
                                         counter: authentication.counter,
                                         signature: authentication.signature,
@@ -502,11 +500,11 @@ impl Service for U2F {
                                         Ok(Response::InvalidKeyHandle)
                                     }
                                     AuthenticateError::Io(err) => {
-                                        info!(logger_clone, "I/O error"; "error" => ?err);
+                                        error!(logger_clone, "I/O error"; "error" => ?err);
                                         Ok(Response::UnknownError)
                                     }
                                     AuthenticateError::Signing(err) => {
-                                        info!(logger_clone, "Signing error"; "error" => ?err);
+                                        error!(logger_clone, "Signing error"; "error" => ?err);
                                         Ok(Response::UnknownError)
                                     }
                                 }),
@@ -517,21 +515,20 @@ impl Service for U2F {
                             logger,
                             "Request::Authenticate::DontEnforceUserPresenceAndSign"
                         );
-                        info!(logger, "Request::Authenticate::DontEnforceUserPresenceAndSign => TestOfUserPresenceNotSatisfied (Not implemented)");
                         // TODO Implement
                         Box::new(futures::finished(Response::TestOfUserPresenceNotSatisfied))
                     }
                 }
             }
             Request::GetVersion => {
-                debug!(logger, "Request::GetVersion");
+                debug!(logger, "Get version request");
                 let response = Response::Version {
                     version_string: self.get_version_string(),
                 };
                 Box::new(future::ok(response))
             }
             Request::Wink => Box::new(self.wink().map(|_| Response::DidWink).or_else(move |err| {
-                info!(logger, "I/O error"; "error" => format!("{:?}", err));
+                error!(logger, "I/O error"; "error" => ?err);
                 Ok(Response::UnknownError)
             })),
         }

@@ -12,8 +12,8 @@ use openssl::sign::Signer;
 use private_key::PrivateKey;
 
 use super::CryptoOperations;
-use super::Signature;
 use super::SignError;
+use super::Signature;
 
 pub struct OpenSSLCryptoOperations {
     attestation: Attestation,

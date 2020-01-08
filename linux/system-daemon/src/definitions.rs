@@ -49,7 +49,7 @@ impl slog::Value for CreateDeviceRequest {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeviceDescription {
-    pub id: String
+    pub id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

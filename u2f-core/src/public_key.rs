@@ -21,10 +21,7 @@ impl PublicKey {
     pub(crate) fn from_bytes(bytes: &[u8]) -> Result<PublicKey, String> {
         let mut ctx = BigNumContext::new().unwrap();
         if bytes.len() != 65 {
-            return Err(format!(
-                "Expected 65 bytes, found {}",
-                bytes.len()
-            ));
+            return Err(format!("Expected 65 bytes, found {}", bytes.len()));
         }
         if bytes[0] != EC_POINT_FORMAT_UNCOMPRESSED {
             return Err(String::from("Expected uncompressed point"));
@@ -44,6 +41,9 @@ impl PublicKey {
     pub(crate) fn to_raw(&self) -> Vec<u8> {
         let mut ctx = BigNumContext::new().unwrap();
         let form = PointConversionForm::UNCOMPRESSED;
-        self.0.public_key().to_bytes(self.0.group(), form, &mut ctx).unwrap()
+        self.0
+            .public_key()
+            .to_bytes(self.0.group(), form, &mut ctx)
+            .unwrap()
     }
 }

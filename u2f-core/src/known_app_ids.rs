@@ -3,17 +3,13 @@ use std::collections::HashMap;
 use app_id::AppId;
 use ring::digest;
 
-// Known bogus hash. Chrome will try to register with this hash after certain failures,
-// such as the common case of authentication failing because there are no matching keys.
-//
-// This behavior is odd and I don't fully understand why Chrome does this.
+// Known bogus app id hash, Chrome does a bogus register command after certain authentication failures,
+// this "force[s] the user to tap the [key] before revealing [the authentication state to the site]"
 //
 // See https://github.com/google/u2f-ref-code/blob/b11e47c5bca093c93d802286bead3db78a4b0b9f/u2f-chrome-extension/usbsignhandler.js#L118
 pub const BOGUS_APP_ID_HASH: AppId = AppId([
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8
+    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
+    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
 ]);
 
 pub fn try_reverse_app_id(app_id: &AppId) -> Option<String> {

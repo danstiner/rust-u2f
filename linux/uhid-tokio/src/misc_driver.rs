@@ -17,8 +17,12 @@ impl MiscDriver {
         let fd = fcntl::open(
             path,
             fcntl::OFlag::from_bits(libc::O_RDWR | libc::O_CLOEXEC | libc::O_NONBLOCK).unwrap(),
-            sys::stat::Mode::from_bits(libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP).unwrap(),
-        ).map_err(|err| {
+            sys::stat::Mode::from_bits(
+                libc::S_IRUSR | libc::S_IWUSR | libc::S_IRGRP | libc::S_IWGRP,
+            )
+            .unwrap(),
+        )
+        .map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("Cannot open uhid-cdev {:?}: {}", path, err),

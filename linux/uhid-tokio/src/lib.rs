@@ -9,9 +9,9 @@
 //!#  extern crate futures;
 //!#  extern crate tokio;
 //!#  extern crate tokio_linux_uhid;
-//! 
+//!
 //! use tokio_linux_uhid::{Bus, CreateParams, UHIDDevice};
-//! 
+//!
 //! // Formulate a 'HID Report Descriptor' to describe the function of your device.
 //! // This tells the kernel how to interpret the HID packets you send to the device.
 //! const RDESC: [u8; 85] = [
@@ -60,7 +60,7 @@
 //!     0x91, 0x01,		/* Output (Cnst,Var,Abs) */
 //!     0xc0,		/* END_COLLECTION */
 //! ];
-//! 
+//!
 //! fn main() {
 //!     let mut uhid_device = UHIDDevice::create(CreateParams {
 //!         name: String::from("test-uhid-device"),
@@ -74,7 +74,7 @@
 //!         // Most important field - HID Report Descriptor
 //!         data: RDESC.to_vec(),
 //!     }, None).unwrap();
-//! 
+//!
 //!     // Formulate a HID Packet
 //!     let button_flags = 0;
 //!     let mouse_abs_hor = 20;
@@ -82,7 +82,7 @@
 //!     let wheel = 0;
 //!     let data: [u8; 5] = [1, button_flags, mouse_abs_hor, mouse_abs_ver, wheel];
 //!     
-//!     // Send the HID packet to the device. Cursor should move 20 points to the right. 
+//!     // Send the HID packet to the device. Cursor should move 20 points to the right.
 //!     uhid_device.send_input(&data).unwrap();
 //! }
 //! ```
@@ -102,9 +102,9 @@ extern crate tokio_io;
 extern crate uhid_sys;
 
 pub use codec::{Bus, InputEvent, OutputEvent, StreamError};
+pub use misc_driver::MiscDriver;
 pub use uhid_device::CreateParams;
 pub use uhid_device::UHIDDevice;
-pub use misc_driver::MiscDriver;
 
 mod character_device;
 mod codec;

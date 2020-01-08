@@ -134,7 +134,7 @@ fn main() -> Result<(), TransportError> {
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let logger = Logger::root(drain, o!());
 
-    info!(logger, "Starting software Universal 2nd Factor device user daemon"; "version" => VERSION);
+    info!(logger, "Starting virtual Universal 2nd Factor device user daemon"; "version" => VERSION);
 
     let socket_path = socket_path.unwrap_or(softu2f_system_daemon::DEFAULT_SOCKET_PATH);
     let mut core = Core::new()?;
@@ -228,7 +228,9 @@ where
                 transport
                     .close()
                     .into_future()
-                    .map_err(move |err| error!(logger, "failed to close transport"; "err" => err))
+                    .map_err(
+                        move |err| error!(logger, "failed to close transport"; "error" => ?err),
+                    )
                     .then(|_| future::err(err))
             })
     });
@@ -246,6 +248,8 @@ where
         + Stream<Item = SocketOutput, Error = TransportError>
         + 'static,
 {
+    info!(log, "Virtual U2F device created"; "device_id" => device.id);
+
     let packet_logger = log.new(o!());
     let transport = transport
         .filter_map(move |output| socket_output_to_packet(&packet_logger, output))
@@ -263,7 +267,7 @@ where
         Err(err) => return Box::new(future::err(TransportError::Io(err))),
     };
 
-    info!(log, "Virtual U2F device created"; "device_id" => device.id);
+    info!(log, "Ready to authenticate");
 
     Box::new(U2FHID::bind_service(
         handle,

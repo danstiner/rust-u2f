@@ -1,10 +1,10 @@
-use std::fmt::{self, Debug};
-use std::result::Result;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use openssl::ec::EcKey;
 use openssl::pkey::Private;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::{self, Debug};
+use std::result::Result;
 
-use serde_base64::{to_base64, from_base64};
+use serde_base64::{from_base64, to_base64};
 
 pub struct PrivateKey(pub(crate) EcKey<Private>);
 

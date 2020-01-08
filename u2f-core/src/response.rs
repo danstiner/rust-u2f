@@ -4,11 +4,11 @@ use attestation::AttestationCertificate;
 use byteorder::{BigEndian, WriteBytesExt};
 use key_handle::KeyHandle;
 
-use super::Counter;
-use super::Signature;
-use super::SignError;
-use super::StatusCode;
 use super::user_presence_byte;
+use super::Counter;
+use super::SignError;
+use super::Signature;
+use super::StatusCode;
 
 pub enum Response {
     Registration {

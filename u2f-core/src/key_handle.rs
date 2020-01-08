@@ -34,7 +34,12 @@ impl AsRef<[u8]> for KeyHandle {
 
 impl Distribution<KeyHandle> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> KeyHandle {
-        KeyHandle(Standard.sample_iter(rng).take(DEFAULT_KEY_HANDLE_LEN).collect())
+        KeyHandle(
+            Standard
+                .sample_iter(rng)
+                .take(DEFAULT_KEY_HANDLE_LEN)
+                .collect(),
+        )
     }
 }
 

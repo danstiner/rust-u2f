@@ -6,9 +6,9 @@ use futures::prelude::*;
 use hostname::get_hostname;
 use slog::Logger;
 use take_mut::take;
-use tokio_io::AsyncRead;
 #[allow(deprecated)]
 use tokio_io::codec::length_delimited;
+use tokio_io::AsyncRead;
 use tokio_serde_bincode::{ReadBincode, WriteBincode};
 use tokio_uds::{UCred, UnixStream};
 use users::get_user_by_uid;
@@ -61,15 +61,15 @@ const REPORT_DESCRIPTOR: [u8; 34] = [
 type PacketPipe =
     Box<dyn Pipe<Item = Packet, Error = Error, SinkItem = Packet, SinkError = Error> + Send>;
 
-type SocketPipe = Box<dyn Pipe<Item = SocketInput, Error = Error, SinkItem = SocketOutput, SinkError = Error> + Send + 'static>;
+type SocketPipe = Box<
+    dyn Pipe<Item = SocketInput, Error = Error, SinkItem = SocketOutput, SinkError = Error>
+        + Send
+        + 'static,
+>;
 
 trait Pipe: Stream + Sink {}
 
-impl<'a, T> Pipe for T
-where
-    T: Stream + Sink + Send + 'a,
-{
-}
+impl<'a, T> Pipe for T where T: Stream + Sink + Send + 'a {}
 
 quick_error! {
     #[derive(Debug)]
@@ -93,7 +93,12 @@ quick_error! {
 }
 
 impl slog::Value for Error {
-    fn serialize(&self, _record: &slog::Record, key: slog::Key, serializer: &mut dyn slog::Serializer) -> slog::Result {
+    fn serialize(
+        &self,
+        _record: &slog::Record,
+        key: slog::Key,
+        serializer: &mut dyn slog::Serializer,
+    ) -> slog::Result {
         serializer.emit_arguments(key, &format_args!("{}", self))
     }
 }
@@ -116,8 +121,7 @@ pub struct Device {
 }
 
 impl Device {
-    pub fn new(stream: UnixStream, logger: &Logger) -> io::Result<Device>
-    {
+    pub fn new(stream: UnixStream, logger: &Logger) -> io::Result<Device> {
         let user = stream.peer_cred()?;
         let id = nanoid::simple();
         Ok(Device {
@@ -126,6 +130,10 @@ impl Device {
             state: DeviceState::Uninitialized(bind_transport(stream)),
             user,
         })
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
     }
 }
 
@@ -166,9 +174,11 @@ fn initialize(
     // TODO chown device to self.user creds
     let uhid_transport = into_transport(uhid_device);
 
-    let socket_future = socket_transport.send(SocketOutput::CreateDeviceResponse(
-        Ok(DeviceDescription { id: device_id.to_string() }),
-    )).from_err();
+    let socket_future = socket_transport
+        .send(SocketOutput::CreateDeviceResponse(Ok(DeviceDescription {
+            id: device_id.to_string(),
+        })))
+        .from_err();
 
     (Box::new(socket_future), uhid_transport)
 }

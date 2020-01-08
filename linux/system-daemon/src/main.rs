@@ -149,8 +149,14 @@ fn handle_connection(
     stream: tokio_uds::UnixStream,
     log: &Logger,
 ) -> impl Future<Item = (), Error = ()> {
-    let log = log.clone();
-    let device_created = future::result(Device::new(stream, &log).map_err(Error::Io));
-    let device_completed = device_created.and_then(|device| device.from_err());
-    device_completed.map_err(move |err| error!(log, "device failure"; "error" => %err))
+    let log_clone = log.clone();
+    let device_future = future::result(
+        Device::new(stream, &log)
+            .map_err(move |err| error!(log_clone, "Failed to create device"; "error" => %err)),
+    );
+    let log_clone = log.clone();
+    device_future.and_then(|device| {
+        let device_id = device.id().to_string();
+        device.map_err(move |err| error!(log_clone, "Device closed"; "device_id" => device_id, "error" => %err))
+    })
 }
