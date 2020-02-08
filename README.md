@@ -19,6 +19,10 @@ If your machine is compromised by malware, the attacker could steal a copy of th
 
 ## Installation
 
+### Arch
+
+See https://aur.archlinux.org/packages/softu2f/
+
 ### Fedora
 
 ```bash
