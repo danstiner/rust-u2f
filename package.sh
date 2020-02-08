@@ -20,7 +20,7 @@ package() {
     dist_dockerfile="${dist_path}Dockerfile"
 
     mkdir -p "$dist_path"
-    sed -e "s/$baseimage:latest/$image:$tag/" < "$base_dockerfile" > "$dist_dockerfile"
+    sed -e "s|$baseimage:latest|$image:$tag|" < "$base_dockerfile" > "$dist_dockerfile"
     $docker build -f "$dist_dockerfile" -t "$build_target" .
 
     id=$($docker create "$build_target")
