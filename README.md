@@ -40,6 +40,14 @@ After installing, use your new virtual U2F device on a site supporting it such a
 
 Note on Ubuntu 16.04 LTS a reboot is required for changes from [dbus-user-session](https://launchpad.net/ubuntu/xenial/+package/dbus-user-session) to take effect.
 
+## Building
+
+See `Dockerfile.debian` or `Dockerfile.fedora` for pre-requisite packages that must be installed.
+
+Then run `cd linux && make`.
+
+To install run `cd linux && make install`. The install target uses sudo so you will be prompted for your password.
+
 ## License
 
 This project is licensed under either of
