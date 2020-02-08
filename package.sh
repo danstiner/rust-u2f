@@ -43,4 +43,5 @@ else
     package debian ubuntu disco
     package debian ubuntu bionic
     package debian ubuntu xenial
+    package debian linuxmintd/mint19.3-amd64 latest
 fi
