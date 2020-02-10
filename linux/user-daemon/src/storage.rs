@@ -5,11 +5,11 @@ use std::path::PathBuf;
 use slog::Logger;
 use u2f_core::SecretStore;
 
-use config::{Config, ConfigFile, ConfigFilePath, SecretStoreType};
-use stores::file_store::FileStore;
-use stores::file_store_v2::FileStoreV2;
-use stores::secret_service_store::SecretServiceStore;
-use stores::UserSecretStore;
+use crate::config::{Config, ConfigFile, ConfigFilePath, SecretStoreType};
+use crate::stores::file_store::FileStore;
+use crate::stores::file_store_v2::FileStoreV2;
+use crate::stores::secret_service_store::SecretServiceStore;
+use crate::stores::UserSecretStore;
 
 pub struct AppDirs {
     pub user_home_dir: PathBuf,

@@ -5,7 +5,7 @@ extern crate serde_derive;
 extern crate slog;
 extern crate u2fhid_protocol;
 
-pub use definitions::*;
+pub use crate::definitions::*;
 
 mod definitions;
 

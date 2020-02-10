@@ -101,10 +101,10 @@ extern crate tokio;
 extern crate tokio_io;
 extern crate uhid_sys;
 
-pub use codec::{Bus, InputEvent, OutputEvent, StreamError};
-pub use misc_driver::MiscDriver;
-pub use uhid_device::CreateParams;
-pub use uhid_device::UHIDDevice;
+pub use crate::codec::{Bus, InputEvent, OutputEvent, StreamError};
+pub use crate::misc_driver::MiscDriver;
+pub use crate::uhid_device::CreateParams;
+pub use crate::uhid_device::UHIDDevice;
 
 mod character_device;
 mod codec;

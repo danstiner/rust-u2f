@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde_json;
 
-use atomic_file;
+use crate::atomic_file;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Config {

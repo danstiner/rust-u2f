@@ -1,6 +1,6 @@
-use app_id::AppId;
-use key_handle::KeyHandle;
-use private_key::PrivateKey;
+use crate::app_id::AppId;
+use crate::key_handle::KeyHandle;
+use crate::private_key::PrivateKey;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ApplicationKey {

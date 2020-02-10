@@ -1,7 +1,7 @@
 use openssl::x509::X509;
 use std::fmt::{self, Debug};
 
-use private_key::PrivateKey;
+use crate::private_key::PrivateKey;
 
 #[derive(Clone)]
 pub struct Attestation {

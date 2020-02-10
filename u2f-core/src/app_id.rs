@@ -2,7 +2,7 @@ use std::result::Result;
 
 use hex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_base64::{from_base64, to_base64};
+use crate::serde_base64::{from_base64, to_base64};
 use slog;
 use subtle::ConstantTimeEq;
 

@@ -1,8 +1,8 @@
 use std::io;
 
-use attestation::AttestationCertificate;
+use crate::attestation::AttestationCertificate;
 use byteorder::{BigEndian, WriteBytesExt};
-use key_handle::KeyHandle;
+use crate::key_handle::KeyHandle;
 
 use super::user_presence_byte;
 use super::Counter;

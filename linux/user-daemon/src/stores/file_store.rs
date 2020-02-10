@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter};
 
-use stores::Secret;
+use crate::stores::Secret;
 
 #[derive(Serialize, Deserialize)]
 struct Data {

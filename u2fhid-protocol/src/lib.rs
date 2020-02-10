@@ -17,11 +17,11 @@ extern crate u2f_core;
 use std::collections::vec_deque::VecDeque;
 use std::io;
 
-use definitions::*;
-pub use definitions::Packet;
+use crate::definitions::*;
+pub use crate::definitions::Packet;
 use futures::{Async, AsyncSink, Future, Poll, Sink, Stream};
-use protocol_state_machine::StateMachine;
-use segmenting_sink::{Segmenter, SegmentingSink};
+use crate::protocol_state_machine::StateMachine;
+use crate::segmenting_sink::{Segmenter, SegmentingSink};
 use slog::Drain;
 use tokio_core::reactor::Handle;
 use u2f_core::{Service, U2F};

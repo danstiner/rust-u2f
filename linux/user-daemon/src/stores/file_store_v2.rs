@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
-use atomic_file;
-use stores::{Secret, UserSecretStore};
+use crate::atomic_file;
+use crate::stores::{Secret, UserSecretStore};
 
 #[derive(Serialize, Deserialize)]
 struct Data {

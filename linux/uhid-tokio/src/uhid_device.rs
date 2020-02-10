@@ -7,9 +7,9 @@ use slog::Drain;
 use slog_stdlog;
 use tokio_io::AsyncRead;
 
-use codec::*;
-use misc_driver::MiscDriver;
-use transport::{Decoder, Encoder, SyncSink, Transport};
+use crate::codec::*;
+use crate::misc_driver::MiscDriver;
+use crate::transport::{Decoder, Encoder, SyncSink, Transport};
 
 pub struct UHIDDevice<T> {
     inner: Transport<T, Codec, Codec>,

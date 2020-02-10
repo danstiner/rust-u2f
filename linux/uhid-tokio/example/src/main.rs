@@ -4,7 +4,7 @@ extern crate tokio_linux_uhid;
 
 use std::io;
 
-use tokio::runtime::Runtime;
+
 
 use tokio_linux_uhid::{Bus, CreateParams, UHIDDevice};
 

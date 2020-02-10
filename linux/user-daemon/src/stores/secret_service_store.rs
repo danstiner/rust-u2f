@@ -8,7 +8,7 @@ use secret_service::{Collection, EncryptionType, Item, SecretService, SsError};
 use serde_json;
 use u2f_core::{try_reverse_app_id, AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
-use stores::{Secret, UserSecretStore};
+use crate::stores::{Secret, UserSecretStore};
 
 #[derive(Debug, Fail)]
 pub enum SecretServiceError {

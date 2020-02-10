@@ -32,8 +32,9 @@ use slog::{Drain, Logger};
 use systemd::daemon::{is_socket_unix, Listening, SocketType};
 use tokio::reactor::Handle;
 
-use device::Device;
 use softu2f_system_daemon::DEFAULT_SOCKET_PATH;
+
+use crate::device::Device;
 
 mod bidirectional_pipe;
 mod device;

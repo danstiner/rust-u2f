@@ -47,8 +47,9 @@ use u2fhid_protocol::{Packet, U2FHID};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput,
 };
-use storage::AppDirs;
-use user_presence::NotificationUserPresence;
+
+use crate::storage::AppDirs;
+use crate::user_presence::NotificationUserPresence;
 
 mod atomic_file;
 mod config;

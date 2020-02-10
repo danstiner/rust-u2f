@@ -2,7 +2,7 @@ use std::io;
 use std::mem;
 use std::time::Duration;
 
-use definitions::*;
+use crate::definitions::*;
 use futures::{Async, Future};
 use futures::future;
 use slog::Logger;

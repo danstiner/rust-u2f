@@ -4,8 +4,8 @@ use openssl::nid::Nid;
 use openssl::pkey::Public;
 use std::result::Result;
 
-use constants::EC_POINT_FORMAT_UNCOMPRESSED;
-use private_key::PrivateKey;
+use crate::constants::EC_POINT_FORMAT_UNCOMPRESSED;
+use crate::private_key::PrivateKey;
 
 pub struct PublicKey(EcKey<Public>);
 

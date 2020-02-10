@@ -13,9 +13,10 @@ use tokio_serde_bincode::{ReadBincode, WriteBincode};
 use tokio_uds::{UCred, UnixStream};
 use users::get_user_by_uid;
 
-use bidirectional_pipe::BidirectionalPipe;
 use softu2f_system_daemon::*;
 use tokio_linux_uhid::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UHIDDevice};
+
+use crate::bidirectional_pipe::BidirectionalPipe;
 
 const INPUT_REPORT_LEN: u8 = 64;
 const OUTPUT_REPORT_LEN: u8 = 64;

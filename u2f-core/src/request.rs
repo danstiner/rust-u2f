@@ -2,10 +2,10 @@ use std::io::Cursor;
 use std::io::Read;
 use std::result::Result;
 
-use app_id::AppId;
+use crate::app_id::AppId;
 use byteorder::{BigEndian, ReadBytesExt};
-use constants::*;
-use key_handle::KeyHandle;
+use crate::constants::*;
+use crate::key_handle::KeyHandle;
 
 use super::Challenge;
 

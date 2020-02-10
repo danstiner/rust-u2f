@@ -7,7 +7,7 @@ use std::slice;
 use bytes::BytesMut;
 use slog;
 
-use transport::{Decoder, Encoder};
+use crate::transport::{Decoder, Encoder};
 use uhid_sys as sys;
 
 quick_error! {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use app_id::AppId;
+use crate::app_id::AppId;
 use ring::digest;
 
 // Known bogus app id hash, Chrome does a bogus register command after certain authentication failures,

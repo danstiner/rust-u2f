@@ -8,7 +8,7 @@ use tokio::prelude::Read;
 use tokio::reactor::PollEvented2;
 use tokio_io::AsyncRead;
 
-use character_device::CharacterDevice;
+use crate::character_device::CharacterDevice;
 
 pub struct MiscDriver(PollEvented2<CharacterDevice<File>>);
 

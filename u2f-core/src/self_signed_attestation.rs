@@ -1,5 +1,5 @@
-use attestation::{Attestation, AttestationCertificate};
-use private_key::PrivateKey;
+use crate::attestation::{Attestation, AttestationCertificate};
+use crate::private_key::PrivateKey;
 
 pub fn self_signed_attestation() -> Attestation {
     Attestation {
