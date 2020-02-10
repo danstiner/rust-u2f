@@ -58,7 +58,7 @@ mod user_presence;
 
 quick_error! {
     #[derive(Debug)]
-    pub enum TransportError {
+    pub enum ProgramError {
         Io(err: io::Error) {
             from()
             cause(err)
@@ -87,7 +87,7 @@ quick_error! {
 #[fail(display = "home directory path could not be retrieved from the operating system")]
 struct HomeDirectoryNotFound;
 
-impl slog::Value for TransportError {
+impl slog::Value for ProgramError {
     fn serialize(
         &self,
         _record: &slog::Record,
@@ -101,9 +101,9 @@ impl slog::Value for TransportError {
 type Transport = Box<
     dyn Pipe<
         Item = SocketOutput,
-        Error = TransportError,
+        Error = ProgramError,
         SinkItem = SocketInput,
-        SinkError = TransportError,
+        SinkError = ProgramError,
     >,
 >;
 
@@ -116,7 +116,7 @@ const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const PATH_ARG: &str = "path";
 
-fn main() -> Result<(), TransportError> {
+fn main() -> Result<(), ProgramError> {
     let args = App::new("SoftU2F System Daemon")
         .version(VERSION)
         .author(AUTHORS)
@@ -146,12 +146,12 @@ fn connect(
     socket_path: &str,
     handle: Handle,
     logger: &Logger,
-) -> Box<dyn Future<Item = (), Error = TransportError>> {
+) -> Box<dyn Future<Item = (), Error = ProgramError>> {
     let logger = logger.clone();
     debug!(logger, "Opening socket"; "path" => socket_path);
     Box::new(
         UnixStream::connect(socket_path)
-            .map_err(TransportError::Io)
+            .map_err(ProgramError::Io)
             .and_then(|stream| connected(stream, handle, logger)),
     )
 }
@@ -160,10 +160,10 @@ fn connected(
     stream: UnixStream,
     handle: Handle,
     logger: Logger,
-) -> Box<dyn Future<Item = (), Error = TransportError>> {
+) -> Box<dyn Future<Item = (), Error = ProgramError>> {
     match stream
         .peer_cred()
-        .map_err(TransportError::Io)
+        .map_err(ProgramError::Io)
         .and_then(require_root)
     {
         Ok(()) => (),
@@ -190,10 +190,10 @@ fn bind_transport(stream: UnixStream) -> Transport {
 fn create_device<T>(
     transport: T,
     logger: Logger,
-) -> Box<dyn Future<Item = (DeviceDescription, T), Error = TransportError>>
+) -> Box<dyn Future<Item = (DeviceDescription, T), Error = ProgramError>>
 where
-    T: Sink<SinkItem = SocketInput, SinkError = TransportError>
-        + Stream<Item = SocketOutput, Error = TransportError>
+    T: Sink<SinkItem = SocketInput, SinkError = ProgramError>
+        + Stream<Item = SocketOutput, Error = ProgramError>
         + 'static,
 {
     let request = CreateDeviceRequest;
@@ -208,14 +208,14 @@ where
                         future::ok((device, transport))
                     }
                     Some(SocketOutput::CreateDeviceResponse(Err(err))) => {
-                        future::err((TransportError::DeviceCreateFailed(err), transport))
+                        future::err((ProgramError::DeviceCreateFailed(err), transport))
                     }
                     Some(_) => future::err((
-                        TransportError::InvalidState("Expected create device response"),
+                        ProgramError::InvalidState("Expected create device response"),
                         transport,
                     )),
                     None => future::err((
-                        TransportError::Io(io::Error::new(
+                        ProgramError::Io(io::Error::new(
                             io::ErrorKind::ConnectionAborted,
                             "Socket transport closed unexpectedly",
                         )),
@@ -242,10 +242,10 @@ fn bind_service<T>(
     transport: T,
     handle: Handle,
     log: &Logger,
-) -> Box<dyn Future<Item = (), Error = TransportError>>
+) -> Box<dyn Future<Item = (), Error = ProgramError>>
 where
-    T: Sink<SinkItem = SocketInput, SinkError = TransportError>
-        + Stream<Item = SocketOutput, Error = TransportError>
+    T: Sink<SinkItem = SocketInput, SinkError = ProgramError>
+        + Stream<Item = SocketOutput, Error = ProgramError>
         + 'static,
 {
     info!(log, "Virtual U2F device created"; "device_id" => device.id);
@@ -260,11 +260,11 @@ where
     let operations = Box::new(SecureCryptoOperations::new(attestation));
     let storage = match build_storage(log) {
         Ok(store) => store,
-        Err(err) => return Box::new(future::err(TransportError::Failure(err.compat()))),
+        Err(err) => return Box::new(future::err(ProgramError::Failure(err.compat()))),
     };
     let service = match U2F::new(user_presence, operations, storage, log.new(o!())) {
         Ok(service) => service,
-        Err(err) => return Box::new(future::err(TransportError::Io(err))),
+        Err(err) => return Box::new(future::err(ProgramError::Io(err))),
     };
 
     info!(log, "Ready to authenticate");
@@ -312,7 +312,7 @@ fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, Error> {
     )
 }
 
-fn require_root(cred: UCred) -> Result<(), TransportError> {
+fn require_root(cred: UCred) -> Result<(), ProgramError> {
     if cred.uid != 0 {
         Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
