@@ -60,6 +60,10 @@ mod user_presence;
 quick_error! {
     #[derive(Debug)]
     pub enum ProgramError {
+        Connect(err: io::Error, socket_path: String) {
+            cause(err)
+            display("Unable to connect to socket {}, I/O error: {}", socket_path, err)
+        }
         Io(err: io::Error) {
             from()
             cause(err)
@@ -148,11 +152,12 @@ fn connect(
     handle: Handle,
     logger: &Logger,
 ) -> Box<dyn Future<Item = (), Error = ProgramError>> {
+    let socket_path_str = socket_path.to_string();
     let logger = logger.clone();
-    debug!(logger, "Opening socket"; "path" => socket_path);
+    debug!(logger, "Opening socket"; "path" => &socket_path_str);
     Box::new(
         UnixStream::connect(socket_path)
-            .map_err(ProgramError::Io)
+            .map_err(|err| ProgramError::Connect(err, socket_path_str))
             .and_then(|stream| connected(stream, handle, logger)),
     )
 }
