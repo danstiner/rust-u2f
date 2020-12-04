@@ -18,7 +18,8 @@ matrix:
     - rust: nightly
       before_install: sudo apt-get install -y build-essential clang libdbus-1-dev libssl-dev libsystemd-dev libudev-dev unzip
       script: (cd linux && cargo build --verbose --all && cargo test --verbose --all)
-    - env:
+    - if: tag IS present
+      env:
         - base=fedora
         - image=fedora
         - tag=30
@@ -101,7 +102,8 @@ matrix:
         username: danstiner
         token:
           secure: 0biLRJWDCLduK5qWfI5I1SwapD8HGaAQncsJf4lKyAwzZOLLjQAs7cIoIbcOEBXXUeqG4+3/+/eUWrjCYzMJJ0nh6ciiDFVkiibLzIQ3w25l2i9slCBW3hHDxtN18JDlI0lm19YhMU4pM3jc2Ulkmq0Ek/9625ob2MDl8apt2vUYyusWuoLck4A0iyyL7rgng510tNT3S+YzU05FwJ7cwtoqst1PIB6mhYfGsVytBx7HU2hSueZkMyR975sD4ZgSP/57yxuaSe5sASYd+xBR+w6I3zcBr2FObB2EbyE8r1aDCR25gpUMwrmnfBpw7grcn/UFKB7a+d5iB5qtY8YjJ25sWqriut20qZWilEK5OLh3vLg/H0vIkUU8+XBZC/0DC2zxITpSrTH7rhWOYkfD1o9dl3B3JmTtM4V4ah8H7t0dnLvMZQzfu6voUfkQVb9cVSDLaiu9BQqHER/7ngAC0treiPrH6gpcOVeUxkNknJqummxA5avcwqwvvvY6PXDWzoI+43Llk27fyM/o75yCUL6DuBjKhKBnIZv8XIEnov4hNFFwaKKNC6J3cvlh+I6SMCtxftUAgACDSgw1ZZAD0u9K9OMNMt+QvSpH2rN+QByCgO1oF8/lCP1mg/9ZWFnS6C+YfZPLlwsTUuYJxwur3eG4tYabmzFRMeD9DQ/3FO4=
-    - env:
+    - if: tag IS present
+      env:
         - base=debian
         - image=ubuntu
         - tag=eoan
