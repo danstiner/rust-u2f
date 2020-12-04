@@ -33,12 +33,21 @@ package() {
 if [[ $# -eq 3 ]]; then
     package "$1" "$2" "$3"
 else
+    package fedora fedora latest
+    package fedora fedora 34
+    package fedora fedora 33
+    package fedora fedora 32
+    package fedora fedora 31
     package fedora fedora 30
     package fedora fedora 29
     package fedora fedora 28
+    package debian debian latest
     package debian debian bullseye
     package debian debian buster
     package debian debian stretch
+    package debian ubuntu latest
+    package debian ubuntu groovy
+    package debian ubuntu focal
     package debian ubuntu eoan
     package debian ubuntu disco
     package debian ubuntu bionic
