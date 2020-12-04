@@ -106,7 +106,7 @@ impl<T: AsyncRead> Stream for UHIDDevice<T> {
     type Error = <Codec as Decoder>::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        debug!(self.logger, "Stream::poll");
+        trace!(self.logger, "Stream::poll");
         self.inner.poll()
     }
 }
@@ -116,19 +116,19 @@ impl<T: Write> Sink for UHIDDevice<T> {
     type SinkError = <Codec as Encoder>::Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        debug!(self.logger, "Sink::start_send");
+        trace!(self.logger, "Sink::start_send");
         self.inner.send(item)?;
         Ok(AsyncSink::Ready)
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        debug!(self.logger, "Sink::poll_complete");
+        trace!(self.logger, "Sink::poll_complete");
         self.inner.flush()?;
         Ok(Async::Ready(()))
     }
 
     fn close(&mut self) -> Result<Async<()>, Self::SinkError> {
-        debug!(self.logger, "Sink::close");
+        trace!(self.logger, "Sink::close");
         self.inner.close()?;
         Ok(Async::Ready(()))
     }

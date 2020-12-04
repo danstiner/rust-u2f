@@ -411,7 +411,7 @@ impl Service for U2F {
 
     fn call(&self, req: Self::Request) -> Self::Future {
         let logger = self.0.logger.clone();
-        debug!(logger, "call U2F service");
+        trace!(logger, "calling U2F service");
         match req {
             Request::Register {
                 challenge,

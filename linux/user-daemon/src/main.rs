@@ -289,7 +289,7 @@ fn socket_output_to_packet(logger: &Logger, event: SocketOutput) -> Option<Packe
             Ok(packet) => Some(packet),
             Err(error) => {
                 info!(logger, "Bad packet"; "parse_error" => error);
-                debug!(logger, "Packet"; "raw_packet" => raw_packet);
+                trace!(logger, "Packet"; "raw_packet" => raw_packet);
                 None
             }
         },
