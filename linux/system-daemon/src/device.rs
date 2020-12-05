@@ -202,7 +202,7 @@ fn run(
     uhid_transport: PacketPipe,
     logger: &Logger,
 ) -> BidirectionalPipe<PacketPipe, PacketPipe, Error> {
-    debug!(logger, "run");
+    trace!(logger, "run");
     let mapped_socket_transport = Box::new(
         socket_transport
             .filter_map(|event| match event {
@@ -260,7 +260,7 @@ impl Future for Device {
             let device_id = &self.id;
             take(state, |state| match state {
                 DeviceState::Uninitialized(mut socket_transport) => {
-                    debug!(logger, "Future::poll"; "state" => "uninitialized");
+                    trace!(logger, "Future::poll"; "state" => "uninitialized");
                     let input = socket_transport.poll();
 
                     let input = match input {
@@ -302,7 +302,7 @@ impl Future for Device {
                     mut socket_future,
                     uhid_transport,
                 } => {
-                    debug!(logger, "initialized");
+                    trace!(logger, "initialized");
                     match socket_future.poll() {
                         Ok(Async::Ready(socket)) => {
                             let pipe = run(socket, uhid_transport, logger);
@@ -324,12 +324,12 @@ impl Future for Device {
                     }
                 }
                 DeviceState::Running(mut pipe) => {
-                    debug!(logger, "Future::poll"; "state" => "running");
+                    trace!(logger, "Future::poll"; "state" => "running");
                     res = pipe.poll().map(AsyncLoop::from);
                     DeviceState::Running(pipe)
                 }
                 DeviceState::Closed => {
-                    debug!(logger, "Future::poll"; "state" => "closed");
+                    trace!(logger, "Future::poll"; "state" => "closed");
                     res = Ok(AsyncLoop::Done(()));
                     DeviceState::Closed
                 }

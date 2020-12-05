@@ -94,7 +94,7 @@ where
             try_ready!(self.transport.poll_complete());
 
             if let Some(response) = self.state_machine.step()? {
-                debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
+                trace!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
                 send(&mut self.transport, response)?;
                 continue;
             }
@@ -103,7 +103,7 @@ where
                 Some(packet) => {
                     trace!(self.logger, "Got packet from transport"; "packet" => &packet);
                     if let Some(response) = self.state_machine.accept_packet(packet)? {
-                        debug!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
+                        trace!(self.logger, "Send response"; "channel_id" => &response.channel_id, "message" => &response.message);
                         send(&mut self.transport, response)?;
                     }
                 }
