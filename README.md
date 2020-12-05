@@ -52,6 +52,19 @@ Then run `cd linux && make`.
 
 To install run `cd linux && make install`. The install target uses sudo so you will be prompted for your password.
 
+## Developing
+
+### Version Bump
+
+Start with a clean working directory on the master branch.
+
+```
+pip3 install --upgrade bumpversion
+bumpversion patch
+```
+
+Amend the commit created by bumpversion with an updated [debian package changelog file](linux/meta-package/debian/changelog). Then validate packages can be generated for each platform by running `./package.sh`. Finally, push to master.
+
 ## License
 
 This project is licensed under either of
