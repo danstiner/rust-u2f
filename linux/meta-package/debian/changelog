@@ -1,3 +1,9 @@
+softu2f (0.4.1) unstable; urgency=low
+
+  * Update dependencies
+
+ -- Dan <daniel.stiner@gmail.com>  Sat, 05 Dec 2020 13:20:00 -0800
+
 softu2f (0.4.0) unstable; urgency=medium
 
   * Store secrets in secret service if available
