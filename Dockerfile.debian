@@ -1,9 +1,5 @@
 FROM debian:latest
 
-ENV RUSTUP_HOME=/usr/local/rustup \
-    CARGO_HOME=/usr/local/cargo \
-    PATH=/usr/local/cargo/bin:$PATH
-
 RUN apt-get update && apt-get install -y \
       build-essential \
       clang \
@@ -13,22 +9,18 @@ RUN apt-get update && apt-get install -y \
       libssl-dev \
       libsystemd-dev \
       libudev-dev \
+      protobuf-compiler \
       systemd \
-      unzip
+      unzip \
+      wget
 
-ARG protoc_version=3.6.1
-
-RUN set -eux; \
-    url="https://github.com/google/protobuf/releases/download/v${protoc_version}/protoc-${protoc_version}-linux-x86_64.zip"; \
-    curl -sSfOL "$url"; \
-    unzip "protoc-${protoc_version}-linux-x86_64.zip" -d protoc3; \
-    mv protoc3/bin/* /usr/local/bin/; \
-    mv protoc3/include/* /usr/local/include/;
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
 
 RUN set -eux; \
-    url="https://sh.rustup.rs"; \
-    curl -sSf -o rustup-init "$url"; \
-    sha256sum rustup-init; \
+    url="https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init"; \
+    wget "$url"; \
     chmod +x rustup-init; \
     ./rustup-init -y --no-modify-path --default-toolchain stable; \
     rm rustup-init; \
