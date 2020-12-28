@@ -47,8 +47,6 @@ else
     package debian ubuntu latest
     package debian ubuntu groovy
     package debian ubuntu focal
-    package debian ubuntu eoan
-    package debian ubuntu disco
     package debian ubuntu bionic
     package debian ubuntu xenial
     package debian linuxmintd/mint19.3-amd64 latest
