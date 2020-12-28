@@ -34,7 +34,6 @@ if [[ $# -eq 3 ]]; then
     package "$1" "$2" "$3"
 else
     package fedora fedora latest
-    package fedora fedora 34
     package fedora fedora 33
     package fedora fedora 32
     package fedora fedora 31
