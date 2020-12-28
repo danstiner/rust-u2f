@@ -19,6 +19,7 @@ package() {
     dist_path="dist/$image/$tag/"
     dist_dockerfile="${dist_path}Dockerfile"
 
+    [[ -d "$dist_path" ]] && rm -r "$dist_path"
     mkdir -p "$dist_path"
     sed -e "s|$baseimage:latest|$image:$tag|" < "$base_dockerfile" > "$dist_dockerfile"
     $docker build -f "$dist_dockerfile" -t "$build_target" .
@@ -27,8 +28,6 @@ package() {
     $docker cp "$id":/app/linux/dist/. "$dist_path"
     $docker rm -v $id
 }
-
-[[ -d dist/ ]] && rm -r dist/
 
 if [[ $# -eq 3 ]]; then
     package "$1" "$2" "$3"
