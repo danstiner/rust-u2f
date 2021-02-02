@@ -31,6 +31,7 @@ lazy_static! {
         map.insert(from_url("https://dashboard.stripe.com"), "dashboard.stripe.com");
         map.insert(from_url("https://id.fedoraproject.org/u2f-origins.json"), "id.fedoraproject.org");
         map.insert(from_url("https://lastpass.com"), "lastpass.com");
+        map.insert(from_url("https://u2f.aws.amazon.com/app-id.json"), "aws.amazon.com");
 
         // Additional known app IDs not yet in KnownFacets.swift
         map.insert(from_url("bin.coffee"), "bin.coffee");
