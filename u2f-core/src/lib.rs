@@ -26,25 +26,26 @@ use std::io;
 use std::rc::Rc;
 use std::result::Result;
 
-pub use crate::app_id::AppId;
-pub use crate::application_key::ApplicationKey;
-use crate::attestation::AttestationCertificate;
 use byteorder::{BigEndian, WriteBytesExt};
-use crate::constants::*;
 use futures::future;
 use futures::Future;
 use futures::IntoFuture;
+use slog::Drain;
+pub use tokio_service::Service;
+
+pub use crate::app_id::AppId;
+pub use crate::application_key::ApplicationKey;
+use crate::attestation::AttestationCertificate;
+use crate::constants::*;
 pub use crate::key_handle::KeyHandle;
-pub use crate::known_app_ids::try_reverse_app_id;
 use crate::known_app_ids::BOGUS_APP_ID_HASH;
+pub use crate::known_app_ids::try_reverse_app_id;
 pub use crate::openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
 pub use crate::private_key::PrivateKey;
 use crate::public_key::PublicKey;
 pub use crate::request::{AuthenticateControlCode, Request};
 pub use crate::response::Response;
 pub use crate::self_signed_attestation::self_signed_attestation;
-use slog::Drain;
-pub use tokio_service::Service;
 
 mod app_id;
 mod application_key;
@@ -106,12 +107,12 @@ pub trait UserPresence {
     fn approve_registration(
         &self,
         application: &AppId,
-    ) -> Box<dyn Future<Item = bool, Error = io::Error>>;
+    ) -> Box<dyn Future<Item=bool, Error=io::Error>>;
     fn approve_authentication(
         &self,
         application: &AppId,
-    ) -> Box<dyn Future<Item = bool, Error = io::Error>>;
-    fn wink(&self) -> Box<dyn Future<Item = (), Error = io::Error>>;
+    ) -> Box<dyn Future<Item=bool, Error=io::Error>>;
+    fn wink(&self) -> Box<dyn Future<Item=(), Error=io::Error>>;
 }
 
 pub trait CryptoOperations {
@@ -210,7 +211,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
-    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
+    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
         debug!(self.0.logger, "authenticate");
         Self::_authenticate_step1(self.0.clone(), application, challenge, key_handle)
     }
@@ -220,7 +221,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
-    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
+    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
         let application_key = self_rc
             .storage
             .retrieve_application_key(&application, &key_handle);
@@ -242,7 +243,7 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         challenge: Challenge,
         application_key: ApplicationKey,
-    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
+    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
         Box::new(
             self_rc
                 .approval
@@ -259,7 +260,7 @@ impl U2F {
         challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
-    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
+    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
         if !user_present {
             return Box::new(future::err(AuthenticateError::ApprovalRequired));
         }
@@ -329,7 +330,7 @@ impl U2F {
         &self,
         application: AppId,
         challenge: Challenge,
-    ) -> Box<dyn Future<Item = Registration, Error = RegisterError>> {
+    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
         debug!(self.0.logger, "register");
         Self::_register_step1(self.0.clone(), application, challenge)
     }
@@ -338,7 +339,7 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         application: AppId,
         challenge: Challenge,
-    ) -> Box<dyn Future<Item = Registration, Error = RegisterError>> {
+    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
         Box::new(
             self_rc
                 .approval
@@ -355,7 +356,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         user_present: bool,
-    ) -> Box<dyn Future<Item = Registration, Error = RegisterError>> {
+    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
         if !user_present {
             return Box::new(future::err(RegisterError::ApprovalRequired));
         }
@@ -398,7 +399,7 @@ impl U2F {
         })
     }
 
-    fn wink(&self) -> Box<dyn Future<Item = (), Error = io::Error>> {
+    fn wink(&self) -> Box<dyn Future<Item=(), Error=io::Error>> {
         self.0.approval.wink()
     }
 }
@@ -407,7 +408,7 @@ impl Service for U2F {
     type Request = Request;
     type Response = Response;
     type Error = io::Error;
-    type Future = Box<dyn Future<Item = Self::Response, Error = Self::Error>>;
+    type Future = Box<dyn Future<Item=Self::Response, Error=Self::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
         let logger = self.0.logger.clone();
@@ -417,7 +418,7 @@ impl Service for U2F {
                 challenge,
                 application,
             } => {
-                let logger = logger.new(o!("app_id" => try_reverse_app_id(&application).unwrap_or(application.to_base64())));
+                let logger = logger.new(o!("app" => try_reverse_app_id(&application).unwrap_or(application.to_base64())));
                 debug!(logger, "Registration request");
 
                 if application == BOGUS_APP_ID_HASH {
@@ -439,15 +440,15 @@ impl Service for U2F {
                         })
                         .or_else(move |err| match err {
                             RegisterError::ApprovalRequired => {
-                                info!(logger_clone, "Registration was not approved");
+                                info!(logger_clone, "Registration was not approved by user");
                                 Ok(Response::TestOfUserPresenceNotSatisfied)
                             }
                             RegisterError::Io(err) => {
-                                error!(logger_clone, "Registration failed"; "error" => ?err);
+                                error!(logger_clone, "I/O error"; "error" => ?err);
                                 Err(err)
                             }
                             RegisterError::Signing(err) => {
-                                error!(logger_clone, "Registration failed"; "error" => ?err);
+                                error!(logger_clone, "Signing error"; "error" => ?err);
                                 Err(io::Error::new(io::ErrorKind::Other, "Signing error"))
                             }
                         }),
@@ -459,12 +460,14 @@ impl Service for U2F {
                 application,
                 key_handle,
             } => {
-                let logger = logger.new(o!("app_id" => try_reverse_app_id(&application).unwrap_or(application.to_base64())));
+                let logger = logger.new(o!(
+                    "app" => try_reverse_app_id(&application).unwrap_or(application.to_base64()),
+                    "control_code" => format!("{:?}", control_code),
+                ));
                 debug!(logger, "Authenticate request");
 
                 match control_code {
                     AuthenticateControlCode::CheckOnly => {
-                        debug!(logger, "ControlCode::CheckOnly");
                         Box::new(self.is_valid_key_handle(&key_handle, &application).into_future().map(
                             move |is_valid| {
                                 debug!(logger, "ControlCode::CheckOnly"; "is_valid_key_handle" => is_valid);
@@ -478,7 +481,6 @@ impl Service for U2F {
                         ))
                     }
                     AuthenticateControlCode::EnforceUserPresenceAndSign => {
-                        debug!(logger, "ControlCode::EnforceUserPresenceAndSign");
                         let logger_clone = logger.clone();
                         Box::new(
                             self.authenticate(application, challenge, key_handle)
@@ -511,10 +513,6 @@ impl Service for U2F {
                         )
                     }
                     AuthenticateControlCode::DontEnforceUserPresenceAndSign => {
-                        debug!(
-                            logger,
-                            "Request::Authenticate::DontEnforceUserPresenceAndSign"
-                        );
                         // TODO Implement
                         Box::new(futures::finished(Response::TestOfUserPresenceNotSatisfied))
                     }
@@ -607,8 +605,8 @@ mod tests {
     use rand::os::OsRng;
     use rand::Rng;
 
-    use super::attestation::Attestation;
     use super::*;
+    use super::attestation::Attestation;
 
     fn fake_app_id() -> AppId {
         AppId([0u8; 32])
@@ -637,13 +635,13 @@ mod tests {
     }
 
     impl UserPresence for FakeUserPresence {
-        fn approve_registration(&self, _: &AppId) -> Box<Future<Item = bool, Error = io::Error>> {
+        fn approve_registration(&self, _: &AppId) -> Box<Future<Item=bool, Error=io::Error>> {
             Box::new(future::ok(self.should_approve_registration))
         }
-        fn approve_authentication(&self, _: &AppId) -> Box<Future<Item = bool, Error = io::Error>> {
+        fn approve_authentication(&self, _: &AppId) -> Box<Future<Item=bool, Error=io::Error>> {
             Box::new(future::ok(self.should_approve_authentication))
         }
-        fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
+        fn wink(&self) -> Box<Future<Item=(), Error=io::Error>> {
             Box::new(future::ok(()))
         }
     }
@@ -668,7 +666,7 @@ mod tests {
         fn add_application_key(
             &self,
             key: &ApplicationKey,
-        ) -> Box<Future<Item = (), Error = io::Error>> {
+        ) -> Box<Future<Item=(), Error=io::Error>> {
             self.0
                 .borrow_mut()
                 .application_keys
@@ -680,7 +678,7 @@ mod tests {
             &self,
             application: &AppId,
             handle: &KeyHandle,
-        ) -> Box<Future<Item = Counter, Error = io::Error>> {
+        ) -> Box<Future<Item=Counter, Error=io::Error>> {
             let mut borrow = self.0.borrow_mut();
             if let Some(counter) = borrow.counters.get_mut(application) {
                 let counter_value = *counter;
@@ -697,7 +695,7 @@ mod tests {
             &self,
             application: &AppId,
             handle: &KeyHandle,
-        ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>> {
+        ) -> Box<Future<Item=Option<ApplicationKey>, Error=io::Error>> {
             Box::new(future::ok(
                 match self.0.borrow().application_keys.get(application) {
                     Some(key) => {
