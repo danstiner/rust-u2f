@@ -1,4 +1,5 @@
 use std::io;
+use std::collections::HashMap;
 
 use futures::future;
 use futures::prelude::*;
@@ -19,6 +20,13 @@ const URGENCY: NotificationUrgency = NotificationUrgency::Critical;
 
 lazy_static! {
     static ref TIMEOUT: Duration = Duration::seconds(10);
+    static ref WORKAROUND_SERVERS: HashMap<&'static str, &'static str> = {
+        let mut ws = HashMap::new();
+        // See https://github.com/danstiner/softu2f-linux/issues/12
+        ws.insert("notify-osd", "1.0");
+        ws.insert("mako", "0.0.0");
+        ws
+    };
 }
 
 pub struct NotificationUserPresence {
@@ -53,11 +61,17 @@ impl NotificationUserPresence {
                 .urgency(URGENCY)
                 .timeout(TIMEOUT.num_milliseconds() as i32);
 
-            let mut default_means_user_present = false;
+            let mut apply_workaround = false;
             let server_info = notify_rust::get_server_information().unwrap();
-            if server_info.name == "notify-osd" && server_info.version == "1.0" {
-                // See https://github.com/danstiner/softu2f-linux/issues/12
-                debug!(logger, "Detected notify-osd server, applying workaround"; "server_info" => ?server_info);
+            if let Some(version) = WORKAROUND_SERVERS.get(server_info.name.as_str()) {
+                if version == &server_info.version {
+                    debug!(logger, "Detected server that require workaround, applying"; "server_info" => ?server_info);
+                    apply_workaround = true;
+                }
+            }
+
+            let mut default_means_user_present = false;
+            if apply_workaround {
                 notification.action("default", "");
                 default_means_user_present = true;
             } else {
