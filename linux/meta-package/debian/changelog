@@ -1,3 +1,10 @@
+softu2f (0.4.1) unstable; urgency=medium
+
+  * Logging improvements
+  * Add additional known app id hashes
+
+ -- Dan <daniel.stiner@gmail.com>  Fri, 14 May 2021 19:55:00 -0800
+
 softu2f (0.4.0) unstable; urgency=medium
 
   * Store secrets in secret service if available

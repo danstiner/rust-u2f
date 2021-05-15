@@ -1631,7 +1631,7 @@ dependencies = [
 
 [[package]]
 name = "softu2f-system-daemon"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bincode",
  "bytes",
@@ -1661,7 +1661,7 @@ dependencies = [
 
 [[package]]
 name = "softu2f-user-daemon"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "base64 0.10.1",
  "bincode",
@@ -1925,7 +1925,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-linux-uhid"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bitflags",
  "bytes",
@@ -2104,7 +2104,7 @@ checksum = "6d2783fe2d6b8c1101136184eb41be8b1ad379e4657050b8aaff0c79ee7575f9"
 
 [[package]]
 name = "u2f-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "assert_matches",
  "base64 0.10.1",
@@ -2126,7 +2126,7 @@ dependencies = [
 
 [[package]]
 name = "u2fhid-protocol"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bitflags",
  "byteorder",
