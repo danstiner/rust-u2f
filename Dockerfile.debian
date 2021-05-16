@@ -17,7 +17,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
       unzip
 
 RUN set -eux; \
-    url="https://sh.rustup.rs"; \
+    url="https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init"; \
     curl -sSf -o rustup-init "$url"; \
     sha256sum rustup-init; \
     chmod +x rustup-init; \
