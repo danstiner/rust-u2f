@@ -11,6 +11,7 @@ pub struct AppId(pub(crate) [u8; 32]);
 
 impl AppId {
     pub fn from_bytes(slice: &[u8]) -> AppId {
+        assert_eq!(slice.len(), 32);
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(slice);
         AppId(bytes)
