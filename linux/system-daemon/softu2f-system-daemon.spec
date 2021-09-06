@@ -1,7 +1,7 @@
 # vim: sw=4:ts=4:et
 
 Name:           softu2f-system-daemon
-Version:        0.4.1
+Version:        0.4.2
 Release:        1%{?dist}
 Summary:        System daemon for SoftU2F 
 
