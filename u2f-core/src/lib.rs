@@ -38,7 +38,7 @@ pub use crate::application_key::ApplicationKey;
 use crate::attestation::AttestationCertificate;
 use crate::constants::*;
 pub use crate::key_handle::KeyHandle;
-use crate::known_app_ids::BOGUS_APP_ID_HASH;
+use crate::known_app_ids::{BOGUS_APP_ID_HASH_CHROME, BOGUS_APP_ID_HASH_FIREFOX};
 pub use crate::known_app_ids::try_reverse_app_id;
 pub use crate::openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
 pub use crate::private_key::PrivateKey;
@@ -212,7 +212,7 @@ impl U2F {
         challenge: Challenge,
         key_handle: KeyHandle,
     ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
-        debug!(self.0.logger, "authenticate");
+        debug!(self.0.logger, "authenticate"; "appid" => application.to_base64());
         Self::_authenticate_step1(self.0.clone(), application, challenge, key_handle)
     }
 
@@ -421,9 +421,14 @@ impl Service for U2F {
                 let logger = logger.new(o!("app" => try_reverse_app_id(&application).unwrap_or(application.to_base64())));
                 debug!(logger, "Registration request");
 
-                if application == BOGUS_APP_ID_HASH {
+                if application == BOGUS_APP_ID_HASH_CHROME {
                     debug!(logger, "Rejecting bogus registration request from Chrome");
-                    return Box::new(future::ok(Response::TestOfUserPresenceNotSatisfied));
+                    return Box::new(future::ok(Response::Bogus));
+                }
+
+                if application == BOGUS_APP_ID_HASH_FIREFOX {
+                    debug!(logger, "Rejecting bogus registration request from Firefox");
+                    return Box::new(future::ok(Response::Bogus));
                 }
 
                 let logger_clone = logger.clone();
@@ -513,6 +518,7 @@ impl Service for U2F {
                         )
                     }
                     AuthenticateControlCode::DontEnforceUserPresenceAndSign => {
+                        info!(logger, "DontEnforceUserPresenceAndSign");
                         // TODO Implement
                         Box::new(futures::finished(Response::TestOfUserPresenceNotSatisfied))
                     }

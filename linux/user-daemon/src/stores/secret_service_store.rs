@@ -188,12 +188,12 @@ fn search_attributes(app_id: &AppId, handle: &KeyHandle) -> Vec<(&'static str, S
         ("application", "com.github.danstiner.rust-u2f".to_string()),
         ("u2f_app_id_hash", app_id.to_base64()),
         ("u2f_key_handle", handle.to_base64()),
-        ("xdg:schema", "com.github.danstiner.rust-u2f".to_string()),
     ]
 }
 
 fn registration_attributes(app_id: &AppId, handle: &KeyHandle) -> Vec<(&'static str, String)> {
     let mut attributes = search_attributes(app_id, handle);
+    attributes.push(("xdg:schema", "com.github.danstiner.rust-u2f".to_string()));
     attributes.push(("times_used", 0.to_string()));
 
     let start = SystemTime::now();

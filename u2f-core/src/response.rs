@@ -29,6 +29,7 @@ pub enum Response {
     TestOfUserPresenceNotSatisfied,
     InvalidKeyHandle,
     UnknownError,
+    Bogus,
 }
 
 impl Response {
@@ -107,6 +108,10 @@ impl Response {
             Response::UnknownError => {
                 // Status word [2 bytes]
                 StatusCode::UnknownError.write(&mut bytes);
+            }
+            Response::Bogus => {
+                // Status word [2 bytes]
+                StatusCode::NoError.write(&mut bytes);
             }
         }
         bytes
