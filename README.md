@@ -58,6 +58,13 @@ Then run `cd linux && make`.
 
 To install run `cd linux && make install`. The install target uses sudo so you will be prompted for your password.
 
+### Bump version
+
+* Run `bumpversion --no-tag patch`
+* Update `linux/meta-package/debian/changelog` and amend the commit
+* Push and manually tag the release
+* Package for all platforms and upload package files
+
 ## License
 
 This project is licensed under either of
