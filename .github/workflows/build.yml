@@ -41,3 +41,21 @@ jobs:
       #   with:
       #     command: clippy
       #     args: --manifest-path linux/Cargo.toml -- -D warnings
+
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+       include:
+         - base: fedora
+           image: fedora
+           tag: latest
+         - base: debian
+           image: debian
+           tag: latest
+         - base: debian
+           image: ubuntu
+           tag: latest
+    steps:
+      - name: Run package.sh script
+        run: ./package.sh ${{base}} ${{image}} ${{tag}}
