@@ -1,11 +1,11 @@
 use std::collections::vec_deque::VecDeque;
 use std::fmt;
 
-use futures::{Async, Poll};
-use futures::{AsyncSink, StartSend};
 use futures::sink::Sink;
 use futures::stream::Stream;
 use futures::task::{self, Task};
+use futures::{Async, Poll};
+use futures::{AsyncSink, StartSend};
 
 pub trait Segmenter {
     type Item;

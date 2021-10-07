@@ -17,11 +17,11 @@ extern crate u2f_core;
 use std::collections::vec_deque::VecDeque;
 use std::io;
 
-use crate::definitions::*;
 pub use crate::definitions::Packet;
-use futures::{Async, AsyncSink, Future, Poll, Sink, Stream};
+use crate::definitions::*;
 use crate::protocol_state_machine::StateMachine;
 use crate::segmenting_sink::{Segmenter, SegmentingSink};
+use futures::{Async, AsyncSink, Future, Poll, Sink, Stream};
 use slog::Drain;
 use tokio_core::reactor::Handle;
 use u2f_core::{Service, U2F};
@@ -79,7 +79,7 @@ where
         Error = io::Error,
         Future = Box<dyn Future<Item = u2f_core::Response, Error = io::Error>>,
     >,
-    E: From<io::Error>
+    E: From<io::Error>,
 {
     type Item = ();
     type Error = E;

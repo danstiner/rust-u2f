@@ -4,12 +4,12 @@ use crate::app_id::AppId;
 use crate::application_key::ApplicationKey;
 use crate::attestation::{Attestation, AttestationCertificate};
 use crate::key_handle::KeyHandle;
+use crate::private_key::PrivateKey;
 use openssl::ec::{EcGroup, EcKey};
 use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
-use crate::private_key::PrivateKey;
 
 use super::CryptoOperations;
 use super::SignError;
