@@ -1,5 +1,5 @@
-use std::io;
 use std::collections::HashMap;
+use std::io;
 
 use futures::future;
 use futures::prelude::*;
