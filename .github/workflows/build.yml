@@ -9,8 +9,6 @@ jobs:
       matrix:
         rust:
           - stable
-          - beta
-          - nightly
           - 1.38.0 # Minimum supported Rust version
     steps:
       - name: Install dependencies
