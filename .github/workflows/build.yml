@@ -59,4 +59,6 @@ jobs:
            tag: latest
     steps:
       - name: Run package.sh script
-        run: bash package.sh ${{matrix.base}} ${{matrix.image}} ${{matrix.tag}}
+        shell: bash
+        working-directory: .
+        run: ./package.sh ${{matrix.base}} ${{matrix.image}} ${{matrix.tag}}
