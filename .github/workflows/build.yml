@@ -11,7 +11,7 @@ jobs:
           - stable
           - beta
           - nightly
-          - 1.36.0  # MSRV
+          - 1.38.0 # Minimum supported Rust version
     steps:
       - name: Install dependencies
         run: sudo apt install -y libdbus-1-dev libssl-dev libsystemd-dev libudev-dev
