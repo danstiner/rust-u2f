@@ -58,7 +58,7 @@ jobs:
            image: ubuntu
            tag: latest
     steps:
+      - uses: actions/checkout@v2
+
       - name: Run package.sh script
-        shell: bash
-        working-directory: .
         run: ./package.sh ${{matrix.base}} ${{matrix.image}} ${{matrix.tag}}
