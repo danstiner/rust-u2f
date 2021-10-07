@@ -3,19 +3,21 @@ use std::mem;
 use std::time::Duration;
 
 use crate::definitions::*;
-use futures::{Async, Future};
 use futures::future;
+use futures::{Async, Future};
 use slog::Logger;
 use tokio_core::reactor::Handle;
 use tokio_core::reactor::Timeout;
 use u2f_core::{self, Service};
 
 macro_rules! try_some {
-    ($e:expr) => (match $e {
-        Ok(Some(t)) => return Ok(Some(t)),
-        Ok(None) => {},
-        Err(e) => return Err(From::from(e)),
-    })
+    ($e:expr) => {
+        match $e {
+            Ok(Some(t)) => return Ok(Some(t)),
+            Ok(None) => {}
+            Err(e) => return Err(From::from(e)),
+        }
+    };
 }
 
 struct ReceiveState {
@@ -372,7 +374,9 @@ where
                     let bytes = &receive.buffer[0..receive.payload_len];
                     debug!(self.logger, "Received payload"; "len" => receive.payload_len);
                     match RequestMessage::decode(&receive.command, bytes) {
-                        Err(RequestMessageDecodeError::UnsupportedCommand(Command::Unknown { .. })) => {
+                        Err(RequestMessageDecodeError::UnsupportedCommand(Command::Unknown {
+                            ..
+                        })) => {
                             info!(self.logger, "Unknown command. Responding with InvalidCommand error to encourage fallback to U2F protocol");
                             StateTransition {
                                 new_state: State::Idle,
@@ -383,7 +387,7 @@ where
                                     },
                                 }),
                             }
-                        },
+                        }
                         Err(error) => {
                             debug!(self.logger, "Unable to decode request message"; "error" => error);
                             StateTransition {
@@ -395,7 +399,7 @@ where
                                     },
                                 }),
                             }
-                        },
+                        }
                         Ok(message) => {
                             let response_future = self.handle_request(Request {
                                 channel_id: receive.channel_id,
@@ -477,7 +481,8 @@ where
             RequestMessage::Init { nonce } => {
                 // TODO Check what channnel message came in on
                 // TODO check unwrap
-                let new_channel_id = self.channels
+                let new_channel_id = self
+                    .channels
                     .allocate()
                     .expect("Failed to allocate new channel");
                 debug!(self.logger, "RequestMessage::Init"; "new_channel_id" => new_channel_id);

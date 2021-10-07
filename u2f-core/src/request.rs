@@ -3,9 +3,9 @@ use std::io::Read;
 use std::result::Result;
 
 use crate::app_id::AppId;
-use byteorder::{BigEndian, ReadBytesExt};
 use crate::constants::*;
 use crate::key_handle::KeyHandle;
+use byteorder::{BigEndian, ReadBytesExt};
 
 use super::Challenge;
 

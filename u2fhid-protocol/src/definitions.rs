@@ -138,7 +138,8 @@ impl slog::Value for Command {
             &Command::Sync => "Sync",
             &Command::Unknown { .. } => "Unknown",
             &Command::Vendor { .. } => "Vendor",
-        }.serialize(record, key, serializer)
+        }
+        .serialize(record, key, serializer)
     }
 }
 
@@ -167,7 +168,8 @@ impl slog::Value for Packet {
         match self {
             &Packet::Initialization { .. } => "Initialization",
             &Packet::Continuation { .. } => "Continuation",
-        }.serialize(record, key, serializer)
+        }
+        .serialize(record, key, serializer)
     }
 }
 
@@ -197,7 +199,7 @@ impl Packet {
                 id if id >= U2FHID_VENDOR_FIRST && id <= U2FHID_VENDOR_LAST => {
                     Command::Vendor { identifier: id }
                 }
-                id => Command::Unknown { identifier: id }
+                id => Command::Unknown { identifier: id },
             };
             let payload_len = reader.read_u16::<BigEndian>().unwrap();
             let mut packet_data = vec![0u8; INITIAL_PACKET_DATA_LEN];
@@ -299,7 +301,10 @@ pub enum RequestMessage {
 }
 
 impl RequestMessage {
-    pub fn decode(command: &Command, data: &[u8]) -> Result<RequestMessage, RequestMessageDecodeError> {
+    pub fn decode(
+        command: &Command,
+        data: &[u8],
+    ) -> Result<RequestMessage, RequestMessageDecodeError> {
         match command {
             &Command::Msg => Ok(RequestMessage::EncapsulatedRequest {
                 data: data.to_vec(),
@@ -309,26 +314,30 @@ impl RequestMessage {
             }),
             &Command::Init => {
                 if data.len() != COMMAND_INIT_DATA_LEN {
-                    Err(RequestMessageDecodeError::PayloadLength(COMMAND_INIT_DATA_LEN, data.len()))
+                    Err(RequestMessageDecodeError::PayloadLength(
+                        COMMAND_INIT_DATA_LEN,
+                        data.len(),
+                    ))
                 } else {
                     let mut nonce = [0u8; COMMAND_INIT_DATA_LEN];
                     nonce.copy_from_slice(&data[..]);
                     Ok(RequestMessage::Init { nonce })
                 }
-            },
+            }
             &Command::Wink => Ok(RequestMessage::Wink),
             &Command::Lock => {
                 if data.len() != COMMAND_WINK_DATA_LEN {
-                    Err(RequestMessageDecodeError::PayloadLength(COMMAND_WINK_DATA_LEN, data.len()))
+                    Err(RequestMessageDecodeError::PayloadLength(
+                        COMMAND_WINK_DATA_LEN,
+                        data.len(),
+                    ))
                 } else {
                     Ok(RequestMessage::Lock {
                         lock_time: Duration::from_secs(data[0].into()),
                     })
                 }
-            },
-            &Command::Sync => {
-                Err(RequestMessageDecodeError::UnsupportedCommand(*command))
-            },
+            }
+            &Command::Sync => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
             &Command::Error => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
             &Command::Vendor { .. } => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
 
@@ -338,7 +347,7 @@ impl RequestMessage {
                 // the error message InvalidCommand (0x01).
                 // https://fidoalliance.org/specs/fido-v2.0-rd-20170927/fido-client-to-authenticator-protocol-v2.0-rd-20170927.html#interoperating-with-ctap1-u2f-authenticators
                 Err(RequestMessageDecodeError::UnsupportedCommand(*command))
-            },
+            }
         }
     }
 }
@@ -444,7 +453,8 @@ impl slog::Value for ResponseMessage {
             ResponseMessage::Error { .. } => "Error",
             ResponseMessage::Wink => "Wink",
             ResponseMessage::Lock => "Lock",
-        }.serialize(record, key, serializer)
+        }
+        .serialize(record, key, serializer)
     }
 }
 

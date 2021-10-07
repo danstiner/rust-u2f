@@ -38,8 +38,8 @@ pub use crate::application_key::ApplicationKey;
 use crate::attestation::AttestationCertificate;
 use crate::constants::*;
 pub use crate::key_handle::KeyHandle;
-use crate::known_app_ids::{BOGUS_APP_ID_HASH_CHROME, BOGUS_APP_ID_HASH_FIREFOX};
 pub use crate::known_app_ids::try_reverse_app_id;
+use crate::known_app_ids::{BOGUS_APP_ID_HASH_CHROME, BOGUS_APP_ID_HASH_FIREFOX};
 pub use crate::openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
 pub use crate::private_key::PrivateKey;
 use crate::public_key::PublicKey;
@@ -107,12 +107,12 @@ pub trait UserPresence {
     fn approve_registration(
         &self,
         application: &AppId,
-    ) -> Box<dyn Future<Item=bool, Error=io::Error>>;
+    ) -> Box<dyn Future<Item = bool, Error = io::Error>>;
     fn approve_authentication(
         &self,
         application: &AppId,
-    ) -> Box<dyn Future<Item=bool, Error=io::Error>>;
-    fn wink(&self) -> Box<dyn Future<Item=(), Error=io::Error>>;
+    ) -> Box<dyn Future<Item = bool, Error = io::Error>>;
+    fn wink(&self) -> Box<dyn Future<Item = (), Error = io::Error>>;
 }
 
 pub trait CryptoOperations {
@@ -211,7 +211,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
-    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
+    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
         debug!(self.0.logger, "authenticate"; "appid" => application.to_base64());
         Self::_authenticate_step1(self.0.clone(), application, challenge, key_handle)
     }
@@ -221,7 +221,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         key_handle: KeyHandle,
-    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
+    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
         let application_key = self_rc
             .storage
             .retrieve_application_key(&application, &key_handle);
@@ -243,7 +243,7 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         challenge: Challenge,
         application_key: ApplicationKey,
-    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
+    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
         Box::new(
             self_rc
                 .approval
@@ -260,7 +260,7 @@ impl U2F {
         challenge: Challenge,
         application_key: ApplicationKey,
         user_present: bool,
-    ) -> Box<dyn Future<Item=Authentication, Error=AuthenticateError>> {
+    ) -> Box<dyn Future<Item = Authentication, Error = AuthenticateError>> {
         if !user_present {
             return Box::new(future::err(AuthenticateError::ApprovalRequired));
         }
@@ -330,7 +330,7 @@ impl U2F {
         &self,
         application: AppId,
         challenge: Challenge,
-    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
+    ) -> Box<dyn Future<Item = Registration, Error = RegisterError>> {
         debug!(self.0.logger, "register");
         Self::_register_step1(self.0.clone(), application, challenge)
     }
@@ -339,7 +339,7 @@ impl U2F {
         self_rc: Rc<U2FInner>,
         application: AppId,
         challenge: Challenge,
-    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
+    ) -> Box<dyn Future<Item = Registration, Error = RegisterError>> {
         Box::new(
             self_rc
                 .approval
@@ -356,7 +356,7 @@ impl U2F {
         application: AppId,
         challenge: Challenge,
         user_present: bool,
-    ) -> Box<dyn Future<Item=Registration, Error=RegisterError>> {
+    ) -> Box<dyn Future<Item = Registration, Error = RegisterError>> {
         if !user_present {
             return Box::new(future::err(RegisterError::ApprovalRequired));
         }
@@ -399,7 +399,7 @@ impl U2F {
         })
     }
 
-    fn wink(&self) -> Box<dyn Future<Item=(), Error=io::Error>> {
+    fn wink(&self) -> Box<dyn Future<Item = (), Error = io::Error>> {
         self.0.approval.wink()
     }
 }
@@ -408,7 +408,7 @@ impl Service for U2F {
     type Request = Request;
     type Response = Response;
     type Error = io::Error;
-    type Future = Box<dyn Future<Item=Self::Response, Error=Self::Error>>;
+    type Future = Box<dyn Future<Item = Self::Response, Error = Self::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
         let logger = self.0.logger.clone();
@@ -611,8 +611,8 @@ mod tests {
     use rand::os::OsRng;
     use rand::Rng;
 
-    use super::*;
     use super::attestation::Attestation;
+    use super::*;
 
     fn fake_app_id() -> AppId {
         AppId([0u8; 32])
@@ -641,13 +641,13 @@ mod tests {
     }
 
     impl UserPresence for FakeUserPresence {
-        fn approve_registration(&self, _: &AppId) -> Box<Future<Item=bool, Error=io::Error>> {
+        fn approve_registration(&self, _: &AppId) -> Box<Future<Item = bool, Error = io::Error>> {
             Box::new(future::ok(self.should_approve_registration))
         }
-        fn approve_authentication(&self, _: &AppId) -> Box<Future<Item=bool, Error=io::Error>> {
+        fn approve_authentication(&self, _: &AppId) -> Box<Future<Item = bool, Error = io::Error>> {
             Box::new(future::ok(self.should_approve_authentication))
         }
-        fn wink(&self) -> Box<Future<Item=(), Error=io::Error>> {
+        fn wink(&self) -> Box<Future<Item = (), Error = io::Error>> {
             Box::new(future::ok(()))
         }
     }
@@ -672,7 +672,7 @@ mod tests {
         fn add_application_key(
             &self,
             key: &ApplicationKey,
-        ) -> Box<Future<Item=(), Error=io::Error>> {
+        ) -> Box<Future<Item = (), Error = io::Error>> {
             self.0
                 .borrow_mut()
                 .application_keys
@@ -684,7 +684,7 @@ mod tests {
             &self,
             application: &AppId,
             handle: &KeyHandle,
-        ) -> Box<Future<Item=Counter, Error=io::Error>> {
+        ) -> Box<Future<Item = Counter, Error = io::Error>> {
             let mut borrow = self.0.borrow_mut();
             if let Some(counter) = borrow.counters.get_mut(application) {
                 let counter_value = *counter;
@@ -701,7 +701,7 @@ mod tests {
             &self,
             application: &AppId,
             handle: &KeyHandle,
-        ) -> Box<Future<Item=Option<ApplicationKey>, Error=io::Error>> {
+        ) -> Box<Future<Item = Option<ApplicationKey>, Error = io::Error>> {
             Box::new(future::ok(
                 match self.0.borrow().application_keys.get(application) {
                     Some(key) => {

@@ -4,8 +4,6 @@ extern crate tokio_linux_uhid;
 
 use std::io;
 
-
-
 use tokio_linux_uhid::{Bus, CreateParams, UHIDDevice};
 
 const RDESC: [u8; 85] = [
