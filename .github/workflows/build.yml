@@ -2,10 +2,6 @@ on: [push]
 
 name: Build
 
-defaults:
-  run:
-    working-directory: linux
-
 jobs:
   build_and_test:
     name: rust-u2f project
@@ -18,4 +14,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --all-features
+          args: --release --all-features --manifest-path linux/Cargo.toml
