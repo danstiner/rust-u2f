@@ -2,6 +2,10 @@ on: [push]
 
 name: Build
 
+defaults:
+  run:
+    working-directory: linux
+
 jobs:
   build_and_test:
     name: rust-u2f project
