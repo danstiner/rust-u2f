@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
-        run: sudo apt install -y libsystemd-dev
+        run: sudo apt install -y libdbus-1-dev libssl-dev libsystemd-dev libudev-dev
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
