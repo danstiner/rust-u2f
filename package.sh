@@ -46,8 +46,8 @@ else
     package debian debian buster
     package debian debian stretch
     package debian ubuntu latest
+    package debian ubuntu impish
     package debian ubuntu hirsute
-    package debian ubuntu groovy
     package debian ubuntu focal
     package debian ubuntu bionic
     package debian ubuntu xenial
