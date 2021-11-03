@@ -36,11 +36,6 @@ else
     package fedora fedora 35
     package fedora fedora 34
     package fedora fedora 33
-    package fedora fedora 32
-    package fedora fedora 31
-    package fedora fedora 30
-    package fedora fedora 29
-    package fedora fedora 28
     package debian debian latest
     package debian debian bullseye
     package debian debian buster
