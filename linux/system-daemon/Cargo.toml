@@ -6,7 +6,7 @@ version = "0.4.2"
 
 [dependencies]
 bincode = "1.1.4"
-bytes = "0.4.12"
+bytes = "1.1.0"
 clap = "2.33.0"
 futures = "0.1.28"
 hostname = "0.1.5"
@@ -25,7 +25,7 @@ tokio-core = "0.1.17"
 tokio-io = "0.1.12"
 tokio-serde-bincode = "0.2.1"
 tokio-uds = "0.2.5"
-users = "0.9.1"
+users = "0.11.0"
 quick-error = "1.2.1"
 
 [dependencies.tokio-linux-uhid]
