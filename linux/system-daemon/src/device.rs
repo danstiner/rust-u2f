@@ -3,7 +3,6 @@ use std::io::Write;
 
 use futures::future;
 use futures::prelude::*;
-use hostname::get_hostname;
 use slog::Logger;
 use take_mut::take;
 #[allow(deprecated)]
@@ -90,6 +89,9 @@ quick_error! {
             cause(err)
             display("Stream error: {}", err)
         }
+        InvalidUnicodeString {
+            display("Invalid Unicode string")
+        }
     }
 }
 
@@ -151,7 +153,7 @@ fn bind_transport(stream: UnixStream) -> SocketPipe {
 fn initialize(
     device_id: &str,
     socket_transport: SocketPipe,
-    logger: &Logger,
+    log: &Logger,
     _request: CreateDeviceRequest,
     user: &UCred,
 ) -> (
@@ -159,7 +161,7 @@ fn initialize(
     PacketPipe,
 ) {
     let create_params = CreateParams {
-        name: get_device_name(user),
+        name: get_device_name(user, log),
         phys: String::from(""),
         uniq: String::from(""),
         bus: Bus::USB,
@@ -170,8 +172,8 @@ fn initialize(
         data: REPORT_DESCRIPTOR.to_vec(),
     };
 
-    info!(logger, "Creating virtual U2F device"; "name" => &create_params.name);
-    let uhid_device = UHIDDevice::create(create_params, logger.clone()).unwrap();
+    info!(log, "Creating virtual U2F device"; "name" => &create_params.name);
+    let uhid_device = UHIDDevice::create(create_params, log.clone()).unwrap();
     // TODO chown device to self.user creds
     let uhid_transport = into_transport(uhid_device);
 
@@ -184,17 +186,28 @@ fn initialize(
     (Box::new(socket_future), uhid_transport)
 }
 
-fn get_device_name(ucred: &UCred) -> String {
-    if let Some(hostname) = get_hostname() {
-        if let Some(user) = get_user_by_uid(ucred.uid) {
-            let username = user.name().to_str().unwrap_or("<unknown>");
-            format!("SoftU2F Linux ({}@{})", username, hostname)
-        } else {
-            format!("SoftU2F Linux ({})", hostname)
+fn get_device_name(ucred: &UCred, log: &Logger) -> String {
+    match get_hostname() {
+        Ok(hostname) => {
+            if let Some(user) = get_user_by_uid(ucred.uid) {
+                let username = user.name().to_str().unwrap_or("<unknown>");
+                format!("SoftU2F Linux ({}@{})", username, hostname)
+            } else {
+                format!("SoftU2F Linux ({})", hostname)
+            }
         }
-    } else {
-        format!("SoftU2F Linux")
+        Err(err) => {
+            warn!(log, "Unable to determine hostname, defaulting to generic device name"; "err" => err);
+            format!("SoftU2F Linux")
+        }
     }
+}
+
+fn get_hostname() -> Result<String, Error> {
+    let hostname = hostname::get().map_err(Error::Io)?;
+    hostname
+        .into_string()
+        .map_err(|_| Error::InvalidUnicodeString)
 }
 
 fn run(
