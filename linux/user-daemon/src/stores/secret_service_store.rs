@@ -3,54 +3,21 @@ use std::io;
 use std::io::ErrorKind;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use failure::Error;
-use secret_service::{Collection, EncryptionType, Item, SecretService, SsError};
+use secret_service::{Collection, EncryptionType, Error, Item, SecretService};
 use serde_json;
 use u2f_core::{try_reverse_app_id, AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
 use crate::stores::{Secret, UserSecretStore};
 
-#[derive(Debug, Fail)]
-pub enum SecretServiceError {
-    #[fail(display = "crypto error {}", _0)]
-    Crypto(String),
-    #[fail(display = "D-Bus error {} {}", _0, _1)]
-    DBus(String, String),
-    #[fail(display = "object locked")]
-    Locked,
-    #[fail(display = "no result found")]
-    NoResult,
-    #[fail(display = "failed to parse D-Bus output")]
-    Parse,
-    #[fail(display = "prompt dismissed")]
-    Prompt,
+pub struct SecretServiceStore<'a> {
+    service: SecretService<'a>,
 }
 
-impl From<secret_service::SsError> for SecretServiceError {
-    fn from(err: SsError) -> Self {
-        match err {
-            SsError::Crypto(err) => SecretServiceError::Crypto(err),
-            SsError::Dbus(err) => SecretServiceError::DBus(
-                err.name().unwrap_or("").into(),
-                err.message().unwrap_or("").into(),
-            ),
-            SsError::Locked => SecretServiceError::Locked,
-            SsError::NoResult => SecretServiceError::NoResult,
-            SsError::Parse => SecretServiceError::Parse,
-            SsError::Prompt => SecretServiceError::Prompt,
-        }
-    }
-}
-
-pub struct SecretServiceStore {
-    service: SecretService,
-}
-
-impl SecretServiceStore {
-    pub fn new() -> Result<SecretServiceStore, Error> {
-        let service =
-            SecretService::new(EncryptionType::Dh).map_err(|err| SecretServiceError::from(err))?;
-        Ok(SecretServiceStore { service })
+impl SecretServiceStore<'_> {
+    pub fn new() -> Result<Self, Error> {
+        Ok(Self {
+            service: SecretService::new(EncryptionType::Dh)?,
+        })
     }
 
     pub fn is_supported() -> bool {
@@ -58,7 +25,7 @@ impl SecretServiceStore {
     }
 }
 
-impl UserSecretStore for SecretServiceStore {
+impl<'a> UserSecretStore for SecretServiceStore<'a> {
     fn add_secret(&self, secret: Secret) -> io::Result<()> {
         let collection = self
             .service
@@ -88,13 +55,9 @@ impl UserSecretStore for SecretServiceStore {
             .map_err(|_error| io::Error::new(ErrorKind::Other, "create_item"))?;
         Ok(())
     }
-
-    fn into_u2f_store(self: Box<Self>) -> Box<dyn SecretStore> {
-        self
-    }
 }
 
-impl SecretStore for SecretServiceStore {
+impl<'a> SecretStore for SecretServiceStore<'a> {
     fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
         self.add_secret(Secret {
             application_key: key.clone(),
@@ -137,17 +100,16 @@ impl SecretStore for SecretServiceStore {
         attributes
             .entry("times_used".to_string())
             .and_modify(|value| {
-                let count = value.parse::<u32>().unwrap_or(0);
+                let count = value.parse::<u64>().unwrap_or(0);
                 *value = (count + 1).to_string();
             })
             .or_insert(0.to_string());
-        let mut attributes: Vec<(&str, &str)> = attributes
+        let attributes = attributes
             .iter()
             .map(|(key, value)| (key.as_str(), value.as_str()))
             .collect();
-        attributes.sort_by_cached_key(|(key, _)| key.to_owned());
         item.set_attributes(attributes)
-            .map_err(|_error| io::Error::new(ErrorKind::Other, "get_attributes"))?;
+            .map_err(|_error| io::Error::new(ErrorKind::Other, "set_attributes"))?;
 
         let label = match try_reverse_app_id(application) {
             Some(app_id) => format!("Universal 2nd Factor token for {}", app_id),

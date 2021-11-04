@@ -4,8 +4,6 @@ extern crate clap;
 extern crate core;
 extern crate directories;
 extern crate dirs;
-#[macro_use]
-extern crate failure;
 extern crate futures;
 extern crate futures_cpupool;
 #[macro_use]
@@ -33,7 +31,6 @@ use std::io;
 
 use clap::{App, Arg};
 use directories::{ProjectDirs, UserDirs};
-use failure::{Compat, Error};
 use futures::future;
 use futures::prelude::*;
 use slog::{Drain, Logger};
@@ -80,17 +77,11 @@ quick_error! {
         DeviceCreateFailed(err: CreateDeviceError) {
             display("{:?}", err)
         }
-        Failure(err: Compat<Error>) {
-            from()
-            source(err)
-            display("{}", err)
+        HomeDirectoryNotFound {
+            display("Home directory path could not be retrieved from the operating system")
         }
     }
 }
-
-#[derive(Debug, Fail)]
-#[fail(display = "home directory path could not be retrieved from the operating system")]
-struct HomeDirectoryNotFound;
 
 impl slog::Value for ProgramError {
     fn serialize(
@@ -266,7 +257,7 @@ where
     let operations = Box::new(SecureCryptoOperations::new(attestation));
     let storage = match build_storage(log) {
         Ok(store) => store,
-        Err(err) => return Box::new(future::err(ProgramError::Failure(err.compat()))),
+        Err(err) => return Box::new(future::err(err)),
     };
     let service = match U2F::new(user_presence, operations, storage, log.new(o!())) {
         Ok(service) => service,
@@ -303,10 +294,10 @@ fn packet_to_socket_input(packet: Packet) -> SocketInput {
     ))
 }
 
-fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, Error> {
-    let user_dirs = UserDirs::new().ok_or(HomeDirectoryNotFound)?;
-    let project_dirs =
-        ProjectDirs::from("com.github", "danstiner", "Rust U2F").ok_or(HomeDirectoryNotFound)?;
+fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, ProgramError> {
+    let user_dirs = UserDirs::new().ok_or(ProgramError::HomeDirectoryNotFound)?;
+    let project_dirs = ProjectDirs::from("com.github", "danstiner", "Rust U2F")
+        .ok_or(ProgramError::HomeDirectoryNotFound)?;
 
     storage::build(
         &AppDirs {
@@ -315,7 +306,7 @@ fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, Error> {
             data_local_dir: project_dirs.data_local_dir().to_owned(),
         },
         log,
-    )
+    ).map_err(ProgramError::Io)
 }
 
 fn require_root(cred: UCred) -> Result<(), ProgramError> {
