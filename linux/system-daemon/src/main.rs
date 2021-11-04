@@ -2,6 +2,7 @@ extern crate clap;
 extern crate futures;
 extern crate hostname;
 extern crate libc;
+extern crate libsystemd;
 extern crate nanoid;
 #[macro_use]
 extern crate quick_error;
@@ -10,7 +11,6 @@ extern crate slog;
 extern crate slog_journald;
 extern crate slog_term;
 extern crate softu2f_system_daemon;
-extern crate systemd;
 extern crate take_mut;
 extern crate tokio;
 extern crate tokio_codec;
@@ -22,14 +22,16 @@ extern crate tokio_uds;
 extern crate u2fhid_protocol;
 extern crate users;
 
+use std::convert::TryInto;
 use std::io;
 use std::os::unix::io::FromRawFd;
+use std::os::unix::prelude::IntoRawFd;
 
 use clap::{App, Arg};
 use futures::future;
 use futures::prelude::*;
+use libsystemd::activation::IsType;
 use slog::{Drain, Logger};
-use systemd::daemon::{is_socket_unix, Listening, SocketType};
 use tokio::reactor::Handle;
 
 use softu2f_system_daemon::DEFAULT_SOCKET_PATH;
@@ -57,10 +59,15 @@ quick_error! {
             source(err)
             display("I/O error: {}", err)
         }
+        Systemd(err: libsystemd::errors::SdError) {
+            from()
+            source(err)
+            display("Systemd error: {}", err)
+        }
         WrongSocket(message: String) {
             display("{}", message)
         }
-        WrongListenFdCount(count: i32) {
+        WrongListenFdCount(count: usize) {
             display("Expected one socket from systemd, instead got {}", count)
         }
     }
@@ -117,25 +124,21 @@ fn socket_listener(socket_path: Option<&str>) -> Result<tokio_uds::UnixListener,
 }
 
 fn systemd_socket_listener() -> Result<std::os::unix::net::UnixListener, Error> {
-    let listen_fds = systemd::daemon::listen_fds(true)?;
-    if listen_fds != 1 {
-        return Err(Error::WrongListenFdCount(listen_fds));
+    let descriptors = libsystemd::activation::receive_descriptors(true)?;
+
+    if descriptors.len() != 1 {
+        return Err(Error::WrongListenFdCount(descriptors.len()));
     }
 
-    let fd = systemd::daemon::LISTEN_FDS_START;
-    if !is_socket_unix(
-        fd,
-        Some(SocketType::Stream),
-        Listening::IsListening,
-        Some(DEFAULT_SOCKET_PATH),
-    )? {
+    let descriptor = descriptors.into_iter().next().unwrap();
+
+    if !descriptor.is_unix() {
         return Err(Error::WrongSocket(format!(
             "Expected a stream type socket with path {}",
             DEFAULT_SOCKET_PATH
         )));
     }
-
-    Ok(unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) })
+    Ok(unsafe { std::os::unix::net::UnixListener::from_raw_fd(descriptor.into_raw_fd()) })
 }
 
 fn accept(stream: tokio_uds::UnixStream, log: &Logger) -> impl Future<Item = (), Error = ()> {
