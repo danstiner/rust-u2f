@@ -3,6 +3,7 @@ use std::io::Write;
 
 use futures::future;
 use futures::prelude::*;
+use nanoid::nanoid;
 use slog::Logger;
 use take_mut::take;
 #[allow(deprecated)]
@@ -126,7 +127,7 @@ pub struct Device {
 impl Device {
     pub fn new(stream: UnixStream, logger: &Logger) -> io::Result<Device> {
         let user = stream.peer_cred()?;
-        let id = nanoid::simple();
+        let id = nanoid!();
         Ok(Device {
             id: id.clone(),
             logger: logger.new(o!("device_id" => id)),
