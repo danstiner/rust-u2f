@@ -25,7 +25,7 @@ tokio-core = "0.1.17"
 tokio-io = "0.1.12"
 tokio-serde-bincode = "0.2.1"
 tokio-uds = "0.2.5"
-quick-error = "1.2.1"
+quick-error = "2.0.1"
 
 [dependencies.softu2f-system-daemon]
 path = "../system-daemon"

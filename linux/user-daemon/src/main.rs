@@ -61,17 +61,17 @@ quick_error! {
     #[derive(Debug)]
     pub enum ProgramError {
         Connect(err: io::Error, socket_path: String) {
-            cause(err)
+            source(err)
             display("Unable to connect to socket {}, I/O error: {}", socket_path, err)
         }
         Io(err: io::Error) {
             from()
-            cause(err)
+            source(err)
             display("I/O error: {}", err)
         }
         Bincode(err: Box<bincode::ErrorKind>) {
             from()
-            cause(err)
+            source(err)
             display("Bincode error: {}", err)
         }
         InvalidState(message: &'static str) {
@@ -82,7 +82,7 @@ quick_error! {
         }
         Failure(err: Compat<Error>) {
             from()
-            cause(err)
+            source(err)
             display("{}", err)
         }
     }

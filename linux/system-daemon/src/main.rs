@@ -49,12 +49,12 @@ quick_error! {
     enum Error {
         Device(err: device::Error) {
             from()
-            cause(err)
+            source(err)
             display("Device error: {}", err)
         }
         Io(err: io::Error) {
             from()
-            cause(err)
+            source(err)
             display("I/O error: {}", err)
         }
         WrongSocket(message: String) {

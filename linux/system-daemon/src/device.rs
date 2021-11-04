@@ -76,17 +76,17 @@ quick_error! {
     pub enum Error {
         Io(err: io::Error) {
             from()
-            cause(err)
+            source(err)
             display("I/O error: {}", err)
         }
         Bincode(err: Box<bincode::ErrorKind>) {
             from()
-            cause(err)
+            source(err)
             display("Bincode error: {}", err)
         }
         StreamError(err: StreamError) {
             from()
-            cause(err)
+            source(err)
             display("Stream error: {}", err)
         }
         InvalidUnicodeString {
