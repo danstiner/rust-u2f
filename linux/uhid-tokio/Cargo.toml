@@ -7,7 +7,7 @@ license = "MIT"
 
 [dependencies]
 bitflags = "1.1.0"
-bytes = "0.4.12"
+bytes = "1.1.0"
 futures = "0.1.28"
 mio = "0.6.19"
 nix = "0.23.0"

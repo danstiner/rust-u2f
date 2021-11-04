@@ -2,7 +2,6 @@ use std::fmt;
 use std::io;
 use std::io::Write;
 
-use bytes::buf::FromBuf;
 use bytes::BytesMut;
 use futures::{Async, Poll, Stream};
 use slog;
@@ -119,8 +118,8 @@ where
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let read_len = self.decoder.read_len();
-        let mut buffer = vec![0u8; read_len];
-        match self.inner.read(&mut buffer[..]) {
+        let mut buffer = BytesMut::with_capacity(read_len);
+        match self.inner.read(&mut buffer) {
             Ok(0) => {
                 trace!(self.logger, "CharacterDevice::Stream::poll => Ok");
                 Ok(Async::Ready(None))
@@ -129,9 +128,8 @@ where
                 if n != read_len {
                     return Err(io::Error::new(io::ErrorKind::InvalidData, "short read").into());
                 }
-                let bytes = &mut BytesMut::from_buf(buffer);
-                trace!(self.logger, "CharacterDevice::Stream::poll => Ok"; "bytes" => ?&bytes);
-                let frame = self.decoder.decode(bytes)?;
+                trace!(self.logger, "CharacterDevice::Stream::poll => Ok"; "bytes" => ?&buffer);
+                let frame = self.decoder.decode(&mut buffer)?;
                 Ok(Async::Ready(Some(frame)))
             }
             Err(ref e) if e.kind() == ::std::io::ErrorKind::WouldBlock => {
@@ -157,17 +155,16 @@ where
     fn send(&mut self, item: Self::SinkItem) -> Result<(), Self::SinkError> {
         let mut buffer = BytesMut::new();
         self.encoder.encode(item, &mut buffer)?;
-        let bytes = buffer.take();
 
-        trace!(self.logger, "CharacterDevice::SyncSink::send"; "bytes" => ?&bytes);
+        trace!(self.logger, "CharacterDevice::SyncSink::send"; "bytes" => ?&buffer);
 
-        match self.inner.write(&bytes) {
+        match self.inner.write(&buffer) {
             Ok(0) => Err(io::Error::new(
                 io::ErrorKind::WriteZero,
                 "failed to write item to transport",
             )
             .into()),
-            Ok(n) if n == bytes.len() => Ok(()),
+            Ok(n) if n == buffer.len() => Ok(()),
             Ok(_) => Err(io::Error::new(
                 io::ErrorKind::Other,
                 "failed to write entire item to transport",
