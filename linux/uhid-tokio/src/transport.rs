@@ -1,11 +1,13 @@
 use std::fmt;
 use std::io;
 use std::io::Write;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
 
 use bytes::BytesMut;
-use futures::{Async, Poll, Stream};
-use slog;
-use tokio_io::AsyncRead;
+use futures::prelude::*;
+use tracing::trace;
 
 /// Decoding of items in buffers.
 ///
@@ -17,30 +19,11 @@ pub trait Decoder {
     /// The type of decoded items.
     type Item;
 
-    /// The type of unrecoverable frame decoding errors.
-    ///
-    /// If an individual message is ill-formed but can be ignored without
-    /// interfering with the processing of future messages, it may be more
-    /// useful to report the failure as an `Item`.
-    ///
-    /// `From<io::Error>` is required in the interest of making `Error` suitable
-    /// for returning directly from a `FramedRead`, and to enable the default
-    /// implementation of `decode_eof` to yield an `io::Error` when the decoder
-    /// fails to consume all available data.
-    ///
-    /// Note that implementors of this trait can simply indicate `type Error =
-    /// io::Error` to use I/O errors as this type.
-    type Error: From<io::Error>;
-
     /// Decode an item from the provided buffer of bytes.
     ///
     /// The length of the buffer will exactly match the number of bytes
     /// returned by the last call made to `read_len`.
-    ///
-    /// If the bytes in the buffer are malformed then an error is
-    /// returned indicating why. This indicates the stream is now
-    /// corrupt and should be terminated.
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Self::Item, Self::Error>;
+    fn decode(&mut self, src: &mut BytesMut) -> Self::Item;
 
     fn read_len(&self) -> usize;
 }
@@ -79,7 +62,6 @@ pub struct Transport<T, E, D> {
     inner: T,
     encoder: E,
     decoder: D,
-    logger: slog::Logger,
 }
 
 impl<T, E, D> Transport<T, E, D>
@@ -88,12 +70,11 @@ where
     E: Encoder,
     D: Decoder,
 {
-    pub fn new(inner: T, encoder: E, decoder: D, logger: slog::Logger) -> Transport<T, E, D> {
+    pub fn new(inner: T, encoder: E, decoder: D) -> Transport<T, E, D> {
         Transport {
             decoder,
             encoder,
             inner,
-            logger,
         }
     }
 }
@@ -114,32 +95,31 @@ where
     D: Decoder,
 {
     type Item = D::Item;
-    type Error = D::Error;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let read_len = self.decoder.read_len();
         let mut buffer = BytesMut::with_capacity(read_len);
         buffer.resize(read_len, 0u8);
         match self.inner.read(&mut buffer) {
             Ok(0) => {
-                trace!(self.logger, "CharacterDevice::Stream::poll => Ok");
-                Ok(Async::Ready(None))
+                trace!("Transport::poll_next => Ok");
+                Ok(Poll::Ready(None))
             }
             Ok(n) => {
                 if n != read_len {
                     return Err(io::Error::new(io::ErrorKind::InvalidData, "short read").into());
                 }
                 buffer.resize(n, 0u8);
-                trace!(self.logger, "CharacterDevice::Stream::poll => Ok"; "bytes" => ?&buffer);
+                trace!(bytes = ?buffer, "Transport::poll_next => Ok");
                 let frame = self.decoder.decode(&mut buffer)?;
-                Ok(Async::Ready(Some(frame)))
+                Ok(Poll::Ready(Some(frame)))
             }
             Err(ref e) if e.kind() == ::std::io::ErrorKind::WouldBlock => {
-                trace!(self.logger, "CharacterDevice::Stream::poll => WouldBlock");
-                Ok(Async::NotReady)
+                trace!("Transport::poll_next => WouldBlock");
+                Ok(Poll::NotReady)
             }
             Err(e) => {
-                trace!(self.logger, "CharacterDevice::Stream::poll => Err");
+                trace!("Transport::poll_next => Err");
                 Err(e.into())
             }
         }
@@ -158,7 +138,7 @@ where
         let mut buffer = BytesMut::new();
         self.encoder.encode(item, &mut buffer)?;
 
-        trace!(self.logger, "CharacterDevice::SyncSink::send"; "bytes" => ?&buffer);
+        trace!(bytes = ?buffer, "Transport::send");
 
         match self.inner.write(&buffer) {
             Ok(0) => Err(io::Error::new(

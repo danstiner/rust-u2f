@@ -3,6 +3,7 @@ use std::io;
 use crate::attestation::AttestationCertificate;
 use crate::key_handle::KeyHandle;
 use byteorder::{BigEndian, WriteBytesExt};
+use thiserror::Error;
 
 use super::user_presence_byte;
 use super::Counter;
@@ -118,16 +119,13 @@ impl Response {
     }
 }
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum ResponseError {
-        Io(err: io::Error) {
-            from()
-        }
-        Signing(err: SignError) {
-            from()
-        }
-    }
+#[derive(Debug, Error)]
+pub enum ResponseError {
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("Signing error: {0}")]
+    Signing(#[from] SignError),
 }
 
 impl Into<io::Error> for ResponseError {

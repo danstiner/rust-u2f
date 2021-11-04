@@ -534,8 +534,6 @@ mod tests {
 
     use super::*;
 
-    use self::rand::{OsRng, Rng};
-
     struct FakeU2FService;
 
     impl Service for FakeU2FService {
@@ -579,8 +577,7 @@ mod tests {
             Future = Box<dyn Future<Item = u2f_core::Response, Error = io::Error>>,
         >,
     {
-        let mut os_rng = OsRng::new().unwrap();
-        let request_nonce: [u8; 8] = os_rng.gen();
+        let request_nonce: [u8; 8] = rand::random();
         let data = request_nonce.to_vec();
         let data_len = data.len();
 
@@ -616,9 +613,8 @@ mod tests {
     fn ping() {
         let logger = slog::Logger::root(slog_stdlog::StdLog.fuse(), o!());
         let core = Core::new().unwrap();
-        let mut os_rng = OsRng::new().unwrap();
         let mut state_machine = StateMachine::new(FakeU2FService, core.handle(), logger);
-        let ping_data: [u8; 8] = os_rng.gen();
+        let ping_data: [u8; 8] = rand::random();
         let packet_data = ping_data.to_vec();
         let packet_data_len = packet_data.len();
 

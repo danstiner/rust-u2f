@@ -6,117 +6,75 @@ extern crate directories;
 extern crate dirs;
 extern crate futures;
 extern crate futures_cpupool;
-#[macro_use]
 extern crate lazy_static;
 extern crate notify_rust;
-#[macro_use]
-extern crate quick_error;
 extern crate secret_service;
-#[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
-#[macro_use]
-extern crate slog;
-extern crate slog_term;
 extern crate softu2f_system_daemon;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate tokio_serde_bincode;
-extern crate tokio_uds;
+extern crate thiserror;
+extern crate tokio;
+extern crate tracing;
+extern crate tracing_subscriber;
 extern crate u2f_core;
-extern crate u2fhid_protocol;
+// extern crate u2fhid_protocol;
 
-use std::io;
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use clap::{App, Arg};
-use directories::{ProjectDirs, UserDirs};
-use futures::future;
-use futures::prelude::*;
-use slog::{Drain, Logger};
-use tokio_core::reactor::{Core, Handle};
-use tokio_io::codec::length_delimited;
-use tokio_serde_bincode::{ReadBincode, WriteBincode};
-use tokio_uds::{UCred, UnixStream};
-use u2f_core::{SecretStore, SecureCryptoOperations, U2F};
-use u2fhid_protocol::{Packet, U2FHID};
+use thiserror::Error;
+use tokio::net::{unix::UCred, UnixStream};
+use tracing::{debug, error, info};
+use tracing_subscriber::prelude::*;
 
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput,
 };
 
-use crate::storage::AppDirs;
-use crate::user_presence::NotificationUserPresence;
-
 mod atomic_file;
 mod config;
-mod storage;
-mod stores;
+mod secret_store;
 mod user_presence;
-
-quick_error! {
-    #[derive(Debug)]
-    pub enum ProgramError {
-        Connect(err: io::Error, socket_path: String) {
-            source(err)
-            display("Unable to connect to socket {}, I/O error: {}", socket_path, err)
-        }
-        Io(err: io::Error) {
-            from()
-            source(err)
-            display("I/O error: {}", err)
-        }
-        Bincode(err: Box<bincode::ErrorKind>) {
-            from()
-            source(err)
-            display("Bincode error: {}", err)
-        }
-        InvalidState(message: &'static str) {
-            display("{}", message)
-        }
-        DeviceCreateFailed(err: CreateDeviceError) {
-            display("{:?}", err)
-        }
-        HomeDirectoryNotFound {
-            display("Home directory path could not be retrieved from the operating system")
-        }
-    }
-}
-
-impl slog::Value for ProgramError {
-    fn serialize(
-        &self,
-        _record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        serializer.emit_arguments(key, &format_args!("{}", self))
-    }
-}
-
-type Transport = Box<
-    dyn Pipe<
-        Item = SocketOutput,
-        Error = ProgramError,
-        SinkItem = SocketInput,
-        SinkError = ProgramError,
-    >,
->;
-
-trait Pipe: Stream + Sink {}
-
-impl<'a, T> Pipe for T where T: Stream + Sink + 'a {}
 
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const PATH_ARG: &str = "path";
+const SOCKET_PATH_ARG: &str = "socket_path";
 
-fn main() -> Result<(), ProgramError> {
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Unable to connect to socket {socket_path}, I/O error: {error}")]
+    Connect {
+        error: io::Error,
+        socket_path: PathBuf,
+    },
+
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("Bincode error: {0}")]
+    Bincode(bincode::ErrorKind),
+
+    #[error("{0}")]
+    InvalidState(&'static str),
+
+    #[error("{0}")]
+    DeviceCreateFailed(#[from] CreateDeviceError),
+
+    #[error("Home directory path could not be retrieved from the operating system")]
+    HomeDirectoryNotFound,
+}
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     let args = App::new("SoftU2F System Daemon")
         .version(VERSION)
         .author(AUTHORS)
         .about(DESCRIPTION)
-        .arg(Arg::with_name(PATH_ARG)
+        .arg(Arg::with_name(SOCKET_PATH_ARG)
             .short("s")
             .long("socket")
             .takes_value(true)
@@ -124,193 +82,70 @@ fn main() -> Result<(), ProgramError> {
         .after_help("By default expects to be run via systemd as root and passed a socket file-descriptor to listen on.")
         .get_matches();
 
-    let socket_path = args.value_of(PATH_ARG);
-    let decorator = slog_term::PlainSyncDecorator::new(std::io::stdout());
-    let drain = slog_term::FullFormat::new(decorator).build().fuse();
-    let logger = Logger::root(drain, o!());
+    let system_daemon_socket = Path::new(
+        args.value_of(SOCKET_PATH_ARG)
+            .unwrap_or(softu2f_system_daemon::DEFAULT_SOCKET_PATH),
+    );
 
-    info!(logger, "Starting virtual Universal 2nd Factor device user daemon"; "version" => VERSION);
+    if libsystemd::logging::connected_to_journal() {
+        tracing_subscriber::registry()
+            .with(tracing_journald::layer().expect("Unable to connect to journald socket"))
+            .init();
+    } else {
+        tracing_subscriber::fmt::init();
+    }
 
-    let socket_path = socket_path.unwrap_or(softu2f_system_daemon::DEFAULT_SOCKET_PATH);
-    let mut core = Core::new()?;
-    let handle = core.handle();
-    core.run(connect(socket_path, handle, &logger))
-}
+    info!(version = VERSION, "Starting rust-u2f user daemon");
 
-fn connect(
-    socket_path: &str,
-    handle: Handle,
-    logger: &Logger,
-) -> Box<dyn Future<Item = (), Error = ProgramError>> {
-    let socket_path_str = socket_path.to_string();
-    let logger = logger.clone();
-    debug!(logger, "Opening socket"; "path" => &socket_path_str);
-    Box::new(
-        UnixStream::connect(socket_path)
-            .map_err(|err| ProgramError::Connect(err, socket_path_str))
-            .and_then(|stream| connected(stream, handle, logger)),
-    )
-}
-
-fn connected(
-    stream: UnixStream,
-    handle: Handle,
-    logger: Logger,
-) -> Box<dyn Future<Item = (), Error = ProgramError>> {
-    match stream
-        .peer_cred()
-        .map_err(ProgramError::Io)
-        .and_then(require_root)
-    {
-        Ok(()) => (),
-        Err(err) => return Box::new(future::err(err)),
-    };
-
-    let transport = bind_transport(stream);
-    let created_device = create_device(transport, logger.clone());
-
-    Box::new(created_device.and_then(move |(device, transport)| {
-        bind_service(device, transport, handle, &logger.clone())
-    }))
-}
-
-fn bind_transport(stream: UnixStream) -> Transport {
-    let framed_write = length_delimited::FramedWrite::new(stream);
-    let framed_readwrite = length_delimited::FramedRead::new(framed_write);
-    let mapped_err = framed_readwrite.sink_from_err().from_err();
-    let bincode_read = ReadBincode::new(mapped_err);
-    let bincode_readwrite = WriteBincode::<_, SocketInput>::new(bincode_read);
-    Box::new(bincode_readwrite)
-}
-
-fn create_device<T>(
-    transport: T,
-    logger: Logger,
-) -> Box<dyn Future<Item = (DeviceDescription, T), Error = ProgramError>>
-where
-    T: Sink<SinkItem = SocketInput, SinkError = ProgramError>
-        + Stream<Item = SocketOutput, Error = ProgramError>
-        + 'static,
-{
-    let request = CreateDeviceRequest;
-    debug!(logger, "Sending create device request"; "request" => &request);
-    let send = transport.send(SocketInput::CreateDeviceRequest(request));
-    let created = send.and_then(move |transport| {
-        transport
-            .into_future()
-            .and_then(|(output, transport)| {
-                let res = match output {
-                    Some(SocketOutput::CreateDeviceResponse(Ok(device))) => {
-                        future::ok((device, transport))
-                    }
-                    Some(SocketOutput::CreateDeviceResponse(Err(err))) => {
-                        future::err((ProgramError::DeviceCreateFailed(err), transport))
-                    }
-                    Some(_) => future::err((
-                        ProgramError::InvalidState("Expected create device response"),
-                        transport,
-                    )),
-                    None => future::err((
-                        ProgramError::Io(io::Error::new(
-                            io::ErrorKind::ConnectionAborted,
-                            "Socket transport closed unexpectedly",
-                        )),
-                        transport,
-                    )),
-                };
-                res
-            })
-            .or_else(move |(err, mut transport)| {
-                transport
-                    .close()
-                    .into_future()
-                    .map_err(
-                        move |err| error!(logger, "failed to close transport"; "error" => ?err),
-                    )
-                    .then(|_| future::err(err))
-            })
-    });
-    Box::new(created)
-}
-
-fn bind_service<T>(
-    device: DeviceDescription,
-    transport: T,
-    handle: Handle,
-    log: &Logger,
-) -> Box<dyn Future<Item = (), Error = ProgramError>>
-where
-    T: Sink<SinkItem = SocketInput, SinkError = ProgramError>
-        + Stream<Item = SocketOutput, Error = ProgramError>
-        + 'static,
-{
-    info!(log, "Virtual U2F device created"; "device_id" => device.id);
-
-    let packet_logger = log.new(o!());
-    let transport = transport
-        .filter_map(move |output| socket_output_to_packet(&packet_logger, output))
-        .with(|packet| future::ok(packet_to_socket_input(packet)));
-
-    let attestation = u2f_core::self_signed_attestation();
-    let user_presence = Box::new(NotificationUserPresence::new(&handle, log.new(o!())));
-    let operations = Box::new(SecureCryptoOperations::new(attestation));
-    let storage = match build_storage(log) {
-        Ok(store) => store,
-        Err(err) => return Box::new(future::err(err)),
-    };
-    let service = match U2F::new(user_presence, operations, storage, log.new(o!())) {
-        Ok(service) => service,
-        Err(err) => return Box::new(future::err(ProgramError::Io(err))),
-    };
-
-    info!(log, "Ready to authenticate");
-
-    Box::new(U2FHID::bind_service(
-        handle,
-        transport,
-        service,
-        log.new(o!()),
-    ))
-}
-
-fn socket_output_to_packet(logger: &Logger, event: SocketOutput) -> Option<Packet> {
-    match event {
-        SocketOutput::Packet(raw_packet) => match Packet::from_bytes(&raw_packet.to_bytes()) {
-            Ok(packet) => Some(packet),
-            Err(error) => {
-                info!(logger, "Bad packet"; "parse_error" => error);
-                trace!(logger, "Packet"; "raw_packet" => raw_packet);
-                None
-            }
-        },
-        _ => None,
+    if let Err(ref err) = run(system_daemon_socket).await {
+        error!(error = ?err, "Error encountered, exiting");
     }
 }
 
-fn packet_to_socket_input(packet: Packet) -> SocketInput {
-    SocketInput::Packet(softu2f_system_daemon::Packet::from_bytes(
-        &packet.into_bytes(),
-    ))
+async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
+    let u2f = VirtualU2fDevice::create(system_daemon_socket).await?;
+    u2f.run_loop().await
 }
 
-fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, ProgramError> {
-    let user_dirs = UserDirs::new().ok_or(ProgramError::HomeDirectoryNotFound)?;
-    let project_dirs = ProjectDirs::from("com.github", "danstiner", "Rust U2F")
-        .ok_or(ProgramError::HomeDirectoryNotFound)?;
+#[must_use]
+struct VirtualU2fDevice {}
 
-    storage::build(
-        &AppDirs {
-            user_home_dir: user_dirs.home_dir().to_owned(),
-            config_dir: project_dirs.config_dir().to_owned(),
-            data_local_dir: project_dirs.data_local_dir().to_owned(),
-        },
-        log,
-    )
-    .map_err(ProgramError::Io)
+impl VirtualU2fDevice {
+    pub async fn create(system_daemon_socket: &Path) -> Result<Self, Error> {
+        let attestation = u2f_core::self_signed_attestation();
+        let config = config::Config::load()?;
+        let secret_store = secret_store::build(&config)?;
+
+        //  let user_presence = Box::new(NotificationUserPresence::new(&handle, log.new(o!())));
+        //     let u2f = match U2F::new(user_presence, operations, storage, log.new(o!())) {
+        //         Ok(service) => service,
+        //         Err(err) => return Box::new(future::err(ProgramError::Io(err))),
+        //     };
+
+        let system_daemon_socket =
+            UnixStream::connect(system_daemon_socket)
+                .await
+                .map_err(|error| Error::Connect {
+                    error,
+                    socket_path: system_daemon_socket.to_owned(),
+                })?;
+
+        require_root(system_daemon_socket.peer_cred()?)?;
+
+        let uhid_device = create_uhid_device();
+
+        todo!()
+    }
+
+    pub async fn run_loop(self) -> Result<(), Error> {
+        loop {
+            todo!()
+        }
+    }
 }
 
-fn require_root(cred: UCred) -> Result<(), ProgramError> {
-    if cred.uid != 0 {
+fn require_root(peer: UCred) -> Result<(), Error> {
+    if peer.uid() != 0 {
         Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "Expected socket peer to be running as root user",
@@ -320,3 +155,136 @@ fn require_root(cred: UCred) -> Result<(), ProgramError> {
         Ok(())
     }
 }
+
+// fn connected(
+//     stream: UnixStream,
+//     handle: Handle,
+//     logger: Logger,
+// ) -> Box<dyn Future<Item = (), Error = ProgramError>> {
+//     match stream
+//         .peer_cred()
+//         .map_err(ProgramError::Io)
+//         .and_then(require_root)
+//     {
+//         Ok(()) => (),
+//         Err(err) => return Box::new(future::err(err)),
+//     };
+
+//     let transport = bind_transport(stream);
+//     let created_device = create_device(transport, logger.clone());
+
+//     Box::new(created_device.and_then(move |(device, transport)| {
+//         bind_service(device, transport, handle, &logger.clone())
+//     }))
+// }
+
+// fn bind_transport(stream: UnixStream) -> Transport {
+//     let framed_write = length_delimited::FramedWrite::new(stream);
+//     let framed_readwrite = length_delimited::FramedRead::new(framed_write);
+//     let mapped_err = framed_readwrite.sink_from_err().from_err();
+//     let bincode_read = ReadBincode::new(mapped_err);
+//     let bincode_readwrite = WriteBincode::<_, SocketInput>::new(bincode_read);
+//     Box::new(bincode_readwrite)
+// }
+
+async fn create_uhid_device() -> Result<DeviceDescription, Error> {
+    let request = CreateDeviceRequest;
+    debug!(?request, "Sending create device request");
+    todo!()
+    // let send = transport.send(SocketInput::CreateDeviceRequest(request));
+    // let created = send.and_then(move |transport| {
+    //     transport
+    //         .into_future()
+    //         .and_then(|(output, transport)| {
+    //             let res = match output {
+    //                 Some(SocketOutput::CreateDeviceResponse(Ok(device))) => {
+    //                     future::ok((device, transport))
+    //                 }
+    //                 Some(SocketOutput::CreateDeviceResponse(Err(err))) => {
+    //                     future::err((ProgramError::DeviceCreateFailed(err), transport))
+    //                 }
+    //                 Some(_) => future::err((
+    //                     ProgramError::InvalidState("Expected create device response"),
+    //                     transport,
+    //                 )),
+    //                 None => future::err((
+    //                     ProgramError::Io(io::Error::new(
+    //                         io::ErrorKind::ConnectionAborted,
+    //                         "Socket transport closed unexpectedly",
+    //                     )),
+    //                     transport,
+    //                 )),
+    //             };
+    //             res
+    //         })
+    //         .or_else(move |(err, mut transport)| {
+    //             transport
+    //                 .close()
+    //                 .into_future()
+    //                 .map_err(
+    //                     move |err| error!(logger, "failed to close transport"; "error" => ?err),
+    //                 )
+    //                 .then(|_| future::err(err))
+    //         })
+    // });
+}
+
+// fn bind_service<T>(
+//     device: DeviceDescription,
+//     transport: T,
+//     handle: Handle,
+//     log: &Logger,
+// ) -> Box<dyn Future<Item = (), Error = ProgramError>>
+// where
+//     T: Sink<SinkItem = SocketInput, SinkError = ProgramError>
+//         + Stream<Item = SocketOutput, Error = ProgramError>
+//         + 'static,
+// {
+//     info!(log, "Virtual U2F device created"; "device_id" => device.id);
+
+//     let packet_logger = log.new(o!());
+//     let transport = transport
+//         .filter_map(move |output| socket_output_to_packet(&packet_logger, output))
+//         .with(|packet| future::ok(packet_to_socket_input(packet)));
+
+//     let attestation = u2f_core::self_signed_attestation();
+//     let user_presence = Box::new(NotificationUserPresence::new(&handle, log.new(o!())));
+//     let operations = Box::new(SecureCryptoOperations::new(attestation));
+//     let storage = match build_storage(log) {
+//         Ok(store) => store,
+//         Err(err) => return Box::new(future::err(err)),
+//     };
+//     let service = match U2F::new(user_presence, operations, storage, log.new(o!())) {
+//         Ok(service) => service,
+//         Err(err) => return Box::new(future::err(ProgramError::Io(err))),
+//     };
+
+//     info!(log, "Ready to authenticate");
+
+//     Box::new(U2FHID::bind_service(
+//         handle,
+//         transport,
+//         service,
+//         log.new(o!()),
+//     ))
+// }
+
+// fn socket_output_to_packet(logger: &Logger, event: SocketOutput) -> Option<Packet> {
+//     match event {
+//         SocketOutput::Packet(raw_packet) => match Packet::from_bytes(&raw_packet.to_bytes()) {
+//             Ok(packet) => Some(packet),
+//             Err(error) => {
+//                 info!(logger, "Bad packet"; "parse_error" => error);
+//                 trace!(logger, "Packet"; "raw_packet" => raw_packet);
+//                 None
+//             }
+//         },
+//         _ => None,
+//     }
+// }
+
+// fn packet_to_socket_input(packet: Packet) -> SocketInput {
+//     SocketInput::Packet(softu2f_system_daemon::Packet::from_bytes(
+//         &packet.into_bytes(),
+//     ))
+// }

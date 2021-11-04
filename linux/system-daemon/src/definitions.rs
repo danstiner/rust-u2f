@@ -1,72 +1,76 @@
-use slog;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Serialize, Deserialize)]
 pub enum SocketInput {
     CreateDeviceRequest(CreateDeviceRequest),
-    Packet(Packet),
+    Report(Report),
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum SocketOutput {
     CreateDeviceResponse(Result<DeviceDescription, CreateDeviceError>),
-    Packet(Packet),
+    Report(Report),
 }
 
-impl slog::Value for SocketOutput {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        match self {
-            &SocketOutput::CreateDeviceResponse(ref response) => slog::Value::serialize(
-                &format!("CreateDeviceResponse({:?})", response),
-                record,
-                key,
-                serializer,
-            ),
-            &SocketOutput::Packet { .. } => {
-                slog::Value::serialize(&"Packet", record, key, serializer)
-            }
-        }
-    }
-}
+// impl slog::Value for SocketOutput {
+//     fn serialize(
+//         &self,
+//         record: &slog::Record,
+//         key: slog::Key,
+//         serializer: &mut dyn slog::Serializer,
+//     ) -> slog::Result {
+//         match self {
+//             &SocketOutput::CreateDeviceResponse(ref response) => slog::Value::serialize(
+//                 &format!("CreateDeviceResponse({:?})", response),
+//                 record,
+//                 key,
+//                 serializer,
+//             ),
+//             &SocketOutput::Report { .. } => {
+//                 slog::Value::serialize(&"Packet", record, key, serializer)
+//             }
+//         }
+//     }
+// }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CreateDeviceRequest;
 
-impl slog::Value for CreateDeviceRequest {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        slog::Value::serialize(&format!("{:?}", self), record, key, serializer)
-    }
-}
+// impl slog::Value for CreateDeviceRequest {
+//     fn serialize(
+//         &self,
+//         record: &slog::Record,
+//         key: slog::Key,
+//         serializer: &mut dyn slog::Serializer,
+//     ) -> slog::Result {
+//         slog::Value::serialize(&format!("{:?}", self), record, key, serializer)
+//     }
+// }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeviceDescription {
     pub id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Error)]
 pub enum CreateDeviceError {
+    #[error("I/O Error")]
     IOError,
+    #[error("Already exists")]
     AlreadyExists,
+    #[error("closed")]
     Closed,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Packet {
+pub struct Report {
     bytes: Vec<u8>,
 }
 
-impl Packet {
-    pub fn from_bytes(bytes: &[u8]) -> Packet {
-        Packet {
+impl Report {
+    pub fn from_bytes(bytes: &[u8]) -> Report {
+        Report {
             bytes: bytes.to_vec(),
         }
     }
@@ -78,13 +82,13 @@ impl Packet {
     }
 }
 
-impl slog::Value for Packet {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        slog::Value::serialize(&format!("{:?}", self), record, key, serializer)
-    }
-}
+// impl slog::Value for Report {
+//     fn serialize(
+//         &self,
+//         record: &slog::Record,
+//         key: slog::Key,
+//         serializer: &mut dyn slog::Serializer,
+//     ) -> slog::Result {
+//         slog::Value::serialize(&format!("{:?}", self), record, key, serializer)
+//     }
+// }

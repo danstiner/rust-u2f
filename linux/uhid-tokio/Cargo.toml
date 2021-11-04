@@ -2,19 +2,20 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "tokio-linux-uhid"
 version = "0.4.2"
+edition = "2021"
 description = "Tokio-based interface to Linux UHID (user-space HID transport drivers)"
 license = "MIT"
 
 [dependencies]
 bitflags = "1.1.0"
 bytes = "1.1.0"
-futures = "0.1.28"
-mio = "0.6.19"
+char-device = "0.7.1"
+futures = "0.3.17"
+mio = "0.7.14"
 nix = "0.23.0"
-quick-error = "2.0.1"
-slog = "2.5.2"
-slog-stdlog = "4.0.0"
-tokio = "0.1.22"
-tokio-io = "0.1.12"
+thiserror = "1.0"
+tokio = { version = "1.13.0", features = ["fs", "net", "io-util"] }
+tokio-compat = "0.1.6"
 tokio-proto = "0.1.1"
 uhid-sys = { path = "../uhid-sys", version = "1.0.0" }
+tracing = "0.1"

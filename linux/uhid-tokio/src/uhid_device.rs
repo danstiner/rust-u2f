@@ -1,19 +1,17 @@
-use std::io::{self, Write};
+use std::io;
 use std::path::Path;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
-use futures::{Async, AsyncSink, Poll, Sink, StartSend, Stream};
-use slog;
-use slog::Drain;
-use slog_stdlog;
-use tokio_io::AsyncRead;
+use futures::{Sink, Stream};
+use tokio::io::AsyncWriteExt;
+use tracing::{debug, trace};
 
 use crate::codec::*;
-use crate::misc_driver::MiscDriver;
 use crate::transport::{Decoder, Encoder, SyncSink, Transport};
 
-pub struct UHIDDevice<T> {
-    inner: Transport<T, Codec, Codec>,
-    logger: slog::Logger,
+pub struct UhidDevice {
+    file: tokio::fs::File,
 }
 
 /// Parameters used to create UHID devices
@@ -29,13 +27,13 @@ pub struct CreateParams {
     pub data: Vec<u8>,
 }
 
-impl UHIDDevice<MiscDriver> {
+impl UhidDevice {
     /// Create a UHID device using '/dev/uhid'
     pub fn create<L: Into<Option<slog::Logger>>>(
         params: CreateParams,
         logger: L,
     ) -> io::Result<UHIDDevice<MiscDriver>> {
-        Self::create_with_path(Path::new("/dev/uhid"), params, logger)
+        Self::create_with_path(Path::new("/dev/uhid"), params)
     }
 
     /// Create a UHID device using the specified character misc-device file path
@@ -44,28 +42,20 @@ impl UHIDDevice<MiscDriver> {
         params: CreateParams,
         logger: L,
     ) -> io::Result<UHIDDevice<MiscDriver>> {
-        Ok(Self::create_with(MiscDriver::open(path)?, params, logger))
+        Ok(Self::create_with(CharDevice::open(path)?, params))
     }
 }
 
-impl<T> UHIDDevice<T>
-where
-    T: AsyncRead + Write,
-{
-    fn create_with<L: Into<Option<slog::Logger>>>(
-        inner: T,
-        params: CreateParams,
-        logger: L,
-    ) -> UHIDDevice<T> {
-        let logger = logger
-            .into()
-            .unwrap_or(slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
-        let logger = logger.new(o!("uhid_device" => params.name.to_string()));
-        let mut device = UHIDDevice {
-            inner: Transport::new(inner, Codec, Codec, logger.clone()),
-            logger: logger.clone(),
+impl UhidDevice {
+    fn create_with(inner: T, params: CreateParams) -> Self {
+        // let log = log
+        //     .into()
+        //     .unwrap_or(slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
+        // let log = log.new(o!("uhid_device" => params.name.to_string()));
+        let mut device = UhidDevice {
+            inner: Transport::new(inner, Codec, Codec),
         };
-        debug!(logger, "Sending create device event");
+        debug!("Sending create device event");
         device
             .inner
             .send(InputEvent::Create {
@@ -80,56 +70,52 @@ where
                 data: params.data,
             })
             .unwrap();
-        debug!(logger, "Sent create device event");
+        debug!("Sent create device event");
         device
     }
 
     /// Send a HID packet to the UHID device
     pub fn send_input(&mut self, data: &[u8]) -> Result<(), <Codec as Encoder>::Error> {
-        debug!(self.logger, "send input");
+        debug!("send input");
         self.inner.send(InputEvent::Input {
             data: data.to_vec(),
         })
     }
 
-    /// Send a 'destroy' to the UHID device and close it
-    pub fn destroy(mut self) -> Result<(), <Codec as Encoder>::Error> {
-        debug!(self.logger, "destroy");
-        self.inner.send(InputEvent::Destroy)?;
-        self.inner.close()?;
+    /// Sends a 'destroy' event to the UHID device and then close it
+    pub async fn destroy(mut self) -> Result<(), io::Error> {
+        debug!("destroy");
+        self.file.send(InputEvent::Destroy)?;
+        self.file.flush().await?;
         Ok(())
     }
 }
 
-impl<T: AsyncRead> Stream for UHIDDevice<T> {
-    type Item = <Codec as Decoder>::Item;
-    type Error = <Codec as Decoder>::Error;
+impl Stream for UhidDevice {
+    type Item = InputEvent;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        trace!(self.logger, "Stream::poll");
-        self.inner.poll()
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        trace!("UhidDevice.poll_next");
+        self.inner.poll_next(cx)
     }
 }
 
-impl<T: Write> Sink for UHIDDevice<T> {
-    type SinkItem = <Codec as Encoder>::Item;
-    type SinkError = <Codec as Encoder>::Error;
+impl Sink<OutputEvent> for UhidDevice {
+    type Error = io::Error;
 
-    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        trace!(self.logger, "Sink::start_send");
-        self.inner.send(item)?;
-        Ok(AsyncSink::Ready)
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
     }
 
-    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        trace!(self.logger, "Sink::poll_complete");
-        self.inner.flush()?;
-        Ok(Async::Ready(()))
+    fn start_send(self: Pin<&mut Self>, item: OutputEvent) -> Result<(), Self::Error> {
+        self.inner.start_send(item)
     }
 
-    fn close(&mut self) -> Result<Async<()>, Self::SinkError> {
-        trace!(self.logger, "Sink::close");
-        self.inner.close()?;
-        Ok(Async::Ready(()))
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_close(cx)
     }
 }

@@ -92,22 +92,14 @@ extern crate bytes;
 extern crate futures;
 extern crate mio;
 extern crate nix;
-#[macro_use]
-extern crate quick_error;
-#[macro_use]
-extern crate slog;
-extern crate slog_stdlog;
 extern crate tokio;
-extern crate tokio_io;
+extern crate tokio_compat;
 extern crate uhid_sys;
 
 pub use crate::codec::{Bus, InputEvent, OutputEvent, StreamError};
-pub use crate::misc_driver::MiscDriver;
 pub use crate::uhid_device::CreateParams;
 pub use crate::uhid_device::UHIDDevice;
 
-mod character_device;
 mod codec;
-mod misc_driver;
 mod transport;
 mod uhid_device;

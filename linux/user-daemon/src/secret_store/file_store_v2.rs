@@ -2,11 +2,12 @@ use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
 use crate::atomic_file;
-use crate::stores::{Secret, UserSecretStore};
+use crate::secret_store::{MutableSecretStore, Secret};
 
 #[derive(Serialize, Deserialize)]
 struct Data {
@@ -41,6 +42,10 @@ impl FileStoreV2 {
         Ok(FileStoreV2 { path })
     }
 
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     fn read(&self) -> io::Result<Data> {
         match File::open(&self.path) {
             Ok(file) => serde_json::from_reader(file).map_err(|e| e.into()),
@@ -58,7 +63,7 @@ impl FileStoreV2 {
     }
 }
 
-impl UserSecretStore for FileStoreV2 {
+impl MutableSecretStore for FileStoreV2 {
     fn add_secret(&self, secret: Secret) -> io::Result<()> {
         let mut data = self.read()?;
         data.push(secret);

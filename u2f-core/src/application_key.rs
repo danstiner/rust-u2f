@@ -1,3 +1,5 @@
+use serde_derive::{Deserialize, Serialize};
+
 use crate::app_id::AppId;
 use crate::key_handle::KeyHandle;
 use crate::private_key::PrivateKey;

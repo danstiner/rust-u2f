@@ -2,29 +2,30 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "softu2f-user-daemon"
 version = "0.4.2"
+edition = "2021"
 
 [dependencies]
+async-trait = "0.1.51"
 base64 = "0.13.0"
 bincode = "1.1.4"
 clap = "2.33.0"
 dirs = "4.0.0"
 directories = "4.0.1"
-futures = "0.1.28"
+futures = "0.3.17"
 futures-cpupool = "0.1.8"
 lazy_static = "1.3.0"
+libsystemd = "0.4.0"
 notify-rust = "4.5.5"
 serde = "1.0.99"
 serde_derive = "1.0.99"
 serde_json = "1.0.40"
-slog = { version = "2.5.2", features = ["max_level_debug", "release_max_level_info" ] }
-slog-term = "2.4.1"
 secret-service = "2.0.1"
 thiserror = "1.0"
-tokio-core = "0.1.17"
-tokio-io = "0.1.12"
-tokio-serde-bincode = "0.2.1"
-tokio-uds = "0.2.5"
-quick-error = "2.0.1"
+tokio = { version = "1.13.0", features = ["full"] }
+tokio-serde = "0.8"
+tracing = "0.1"
+tracing-journald = "0.2"
+tracing-subscriber = "0.3"
 
 [dependencies.softu2f-system-daemon]
 path = "../system-daemon"
@@ -32,8 +33,8 @@ path = "../system-daemon"
 [dependencies.u2f-core]
 path = "../../u2f-core"
 
-[dependencies.u2fhid-protocol]
-path = "../../u2fhid-protocol"
+# [dependencies.u2fhid-protocol]
+# path = "../../u2fhid-protocol"
 
 [dev-dependencies]
 tempdir = "0.3.7"

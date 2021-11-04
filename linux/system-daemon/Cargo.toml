@@ -3,36 +3,34 @@ authors = ["Daniel Stiner <danstiner@gmail.com>"]
 description = "System daemon for emulating U2F devices"
 name = "softu2f-system-daemon"
 version = "0.4.2"
+edition = "2021"
 
 [dependencies]
 bincode = "1.1.4"
 bytes = "1.1.0"
 clap = "2.33.0"
-futures = "0.1.28"
+futures = "0.3.17"
 hostname = "0.3.1"
 libc = "0.2.62"
 libsystemd = "0.4.0"
 nanoid = "0.4.0"
 serde = "1.0.99"
 serde_derive = "1.0.99"
-slog = { version = "2.5.2", features = ["max_level_debug", "release_max_level_info" ] }
-slog-journald = "2.0.0"
-slog-term = "2.4.1"
 take_mut = "0.2.2"
-tokio = "0.1.22"
+thiserror = "1.0"
+tokio = { version = "1.13.0", features = ["full"] }
 tokio-codec = "0.1"
-tokio-core = "0.1.17"
-tokio-io = "0.1.12"
-tokio-serde-bincode = "0.2.1"
-tokio-uds = "0.2.5"
-users = "0.11.0"
-quick-error = "2.0.1"
+tokio-serde = "0.8"
+tower = { version = "0.4", features = ["make"] }
+tracing = "0.1"
+tracing-journald = "0.2"
+tracing-subscriber = "0.3"
 
-[dependencies.tokio-linux-uhid]
-path = "../uhid-tokio"
+# [dependencies.tokio-linux-uhid]
+# path = "../uhid-tokio"
 
-[dependencies.u2fhid-protocol]
-path = "../../u2fhid-protocol/"
+# [dependencies.u2fhid-protocol]
+# path = "../../u2fhid-protocol/"
 
 [[bin]]
 doc = false

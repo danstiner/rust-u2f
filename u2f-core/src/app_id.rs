@@ -1,12 +1,10 @@
 use std::result::Result;
 
 use crate::serde_base64::{from_base64, to_base64};
-use hex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use slog;
 use subtle::ConstantTimeEq;
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Copy, Clone, Eq, Hash, PartialEq)]
 pub struct AppId(pub(crate) [u8; 32]);
 
 impl AppId {
@@ -52,18 +50,8 @@ impl<'de> Deserialize<'de> for AppId {
     }
 }
 
-impl slog::Value for AppId {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        slog::Value::serialize(
-            &format!("0x{}", hex::encode_upper(self.0)),
-            record,
-            key,
-            serializer,
-        )
+impl std::fmt::Debug for AppId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("AppId").field(&base64::encode(&self.0)).finish()
     }
 }

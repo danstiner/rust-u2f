@@ -1,11 +1,10 @@
 use std::collections::vec_deque::VecDeque;
 use std::fmt;
+use std::pin::Pin;
 
 use futures::sink::Sink;
 use futures::stream::Stream;
-use futures::task::{self, Task};
-use futures::{Async, Poll};
-use futures::{AsyncSink, StartSend};
+use futures::task::Poll;
 
 pub trait Segmenter {
     type Item;
@@ -77,12 +76,11 @@ where
 // Forwarding impl of Stream from the underlying sink
 impl<S, G> Stream for SegmentingSink<S, G>
 where
-    S: Sink + Stream,
+    S: Sink<Self::Item> + Stream,
 {
     type Item = S::Item;
-    type Error = S::Error;
 
-    fn poll(&mut self) -> Poll<Option<S::Item>, S::Error> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.sink.poll()
     }
 }
@@ -116,7 +114,7 @@ where
         }
     }
 
-    fn close(&mut self) -> Poll<(), Self::SinkError> {
+    fn close(&mut self) -> Poll<Result<(), Self::SinkError>> {
         try_ready!(self.poll_complete());
         self.sink.close()
     }

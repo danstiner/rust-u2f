@@ -5,28 +5,27 @@ use std::mem;
 use std::slice;
 
 use bytes::BytesMut;
-use slog;
+use thiserror::Error;
 
 use crate::transport::{Decoder, Encoder};
 use uhid_sys as sys;
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum StreamError {
-        Io(err: io::Error) {
-            from()
-        }
-        UnknownEventType(event_type_value: u32) {
-            display(r#"Unknown/Unsupported event type: "{}""#, event_type_value)
-        }
-        BufferOverflow(data_size: usize, max_size: usize) {
-            display(r#"Size "{}" exceeds available space "{}""#, data_size, max_size)
-        }
-        Nul(err: ffi::NulError) {
-            from()
-        }
-        Unknown
-    }
+#[derive(Debug, Error)]
+pub enum StreamError {
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("Unknown/Unsupported event type: {0}")]
+    UnknownEventType(u32),
+
+    #[error("Buffer overflow, size {data_size} exceeds max size {max_size}")]
+    BufferOverflow { data_size: usize, max_size: usize },
+
+    #[error("FFI Null Pointer: {0}")]
+    Nul(#[from] ffi::NulError),
+
+    #[error("Unkown error")]
+    Unknown,
 }
 
 bitflags! {
@@ -121,26 +120,6 @@ pub enum OutputEvent {
     },
 }
 
-impl slog::Value for OutputEvent {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        match self {
-            &OutputEvent::Start { .. } => "Start",
-            &OutputEvent::Stop => "Stop",
-            &OutputEvent::Open => "Open",
-            &OutputEvent::Close => "Close",
-            &OutputEvent::Output { .. } => "Output",
-            &OutputEvent::GetReport { .. } => "GetReport",
-            &OutputEvent::SetReport { .. } => "SetReport",
-        }
-        .serialize(record, key, serializer)
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct Codec;
 
@@ -210,7 +189,10 @@ fn copy_bytes_sized(src: Vec<u8>, dst: &mut [u8]) -> Result<usize, StreamError> 
     let dst_size = dst.len();
 
     if src_size > dst_size {
-        return Err(StreamError::BufferOverflow(src_size, dst_size));
+        return Err(StreamError::BufferOverflow {
+            data_size: src_size,
+            max_size: dst_size,
+        });
     }
 
     dst.get_mut(0..src_size)
@@ -225,7 +207,10 @@ fn copy_as_cstr(string: String, dst: &mut [u8]) -> Result<(), StreamError> {
     let dst_size = dst.len();
 
     if src_size >= dst_size {
-        return Err(StreamError::BufferOverflow(src_size, dst_size));
+        return Err(StreamError::BufferOverflow {
+            data_size: src_size,
+            max_size: dst_size,
+        });
     }
 
     src.extend(repeat(0).take(dst_size - src_size));
@@ -316,10 +301,9 @@ unsafe fn as_u8_slice<T: Sized>(p: &T) -> &[u8] {
 }
 
 impl Decoder for Codec {
-    type Item = OutputEvent;
-    type Error = StreamError;
+    type Item = Result<OutputEvent, StreamError>;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Self::Item, Self::Error> {
+    fn decode(&mut self, src: &mut BytesMut) -> Self::Item {
         if let Some(event) = read_event(src) {
             Ok(decode_event(event)?)
         } else {

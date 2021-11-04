@@ -31,10 +31,6 @@ impl PublicKey {
         Ok(PublicKey(EcKey::from_public_key(&group, &point).unwrap()))
     }
 
-    pub(crate) fn as_ec_key(&self) -> &EcKey<Public> {
-        &self.0
-    }
-
     /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
     /// I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
     /// uncompressed point compression method.
@@ -45,5 +41,11 @@ impl PublicKey {
             .public_key()
             .to_bytes(self.0.group(), form, &mut ctx)
             .unwrap()
+    }
+}
+
+impl From<PublicKey> for EcKey<Public> {
+    fn from(key: PublicKey) -> Self {
+        key.0
     }
 }
