@@ -8,7 +8,7 @@ selinux-policy:
 	@$(MAKE) -C $@
 
 install:
-	install -m 755 ../target/release/softu2f-system-daemon /usr/libexec/softu2f/system-daemon
+	install -m 755 ../target/release/softu2f-system-daemon /usr/lib/softu2f/system-daemon
 	install -m 644 softu2f.service /etc/systemd/system/softu2f.service
 	install -m 644 softu2f.socket /etc/systemd/system/softu2f.socket
 	install -m 644 softu2f-tmpfiles.conf /etc/tmpfiles.d/softu2f.conf
@@ -19,7 +19,7 @@ install:
 uninstall:
 	systemctl --system disable softu2f.socket
 	systemctl --system stop softu2f.service
-	rm /usr/libexec/softu2f/system-daemon
+	rm /usr/lib/softu2f/system-daemon
 	rm /etc/systemd/system/softu2f.service
 	rm /etc/systemd/system/softu2f.socket
 	rm /etc/tmpfiles.d/softu2f.conf
