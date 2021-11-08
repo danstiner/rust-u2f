@@ -19,7 +19,6 @@ extern crate serde_json;
 extern crate slog;
 extern crate slog_term;
 extern crate softu2f_system_daemon;
-extern crate time;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_serde_bincode;

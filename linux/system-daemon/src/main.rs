@@ -22,7 +22,6 @@ extern crate tokio_uds;
 extern crate u2fhid_protocol;
 extern crate users;
 
-use std::convert::TryInto;
 use std::io;
 use std::os::unix::io::FromRawFd;
 use std::os::unix::prelude::IntoRawFd;
