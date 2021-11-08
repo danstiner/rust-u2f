@@ -5,7 +5,7 @@ use futures::future;
 use futures::prelude::*;
 use futures_cpupool::CpuPool;
 use notify_rust::Timeout;
-use notify_rust::{self, Notification, Hint, Urgency};
+use notify_rust::{self, Hint, Notification, Urgency};
 use slog::Logger;
 use tokio_core::reactor::Handle;
 use u2f_core::{try_reverse_app_id, AppId, UserPresence};

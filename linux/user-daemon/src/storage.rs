@@ -55,9 +55,8 @@ fn build_user_secret_store(
                 log,
                 "Storing secrets in your keychain using the D-Bus Secret Service API"
             );
-            let store = SecretServiceStore::new().map_err(|err| {
-                io::Error::new(io::ErrorKind::Other, err)
-            })?;
+            let store = SecretServiceStore::new()
+                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
             migrate_legacy_file_store(dirs, &store, log)?;
             Ok(Box::new(store))
         }
@@ -71,11 +70,10 @@ fn build_user_secret_store(
     }
 }
 
-fn migrate_legacy_file_store<S>(
-    dirs: &AppDirs,
-    store: &S,
-    log: &Logger,
-) -> io::Result<()> where S: UserSecretStore {
+fn migrate_legacy_file_store<S>(dirs: &AppDirs, store: &S, log: &Logger) -> io::Result<()>
+where
+    S: UserSecretStore,
+{
     let legacy_file_store = FileStore::new(dirs.user_home_dir.join(".softu2f-secrets.json"))?;
     if legacy_file_store.exists() {
         info!(

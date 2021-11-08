@@ -305,7 +305,8 @@ fn build_storage(log: &Logger) -> Result<Box<dyn SecretStore>, ProgramError> {
             data_local_dir: project_dirs.data_local_dir().to_owned(),
         },
         log,
-    ).map_err(ProgramError::Io)
+    )
+    .map_err(ProgramError::Io)
 }
 
 fn require_root(cred: UCred) -> Result<(), ProgramError> {
