@@ -17,11 +17,9 @@ quick_error! {
             from()
         }
         UnknownEventType(event_type_value: u32) {
-            description("Unknown/Unsupported event type")
             display(r#"Unknown/Unsupported event type: "{}""#, event_type_value)
         }
         BufferOverflow(data_size: usize, max_size: usize) {
-            description("Size exceeds available space.")
             display(r#"Size "{}" exceeds available space "{}""#, data_size, max_size)
         }
         Nul(err: ffi::NulError) {

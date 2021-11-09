@@ -64,10 +64,6 @@ impl UserSecretStore for FileStoreV2 {
         data.push(secret);
         self.write(&data)
     }
-
-    fn into_u2f_store(self: Box<Self>) -> Box<dyn SecretStore> {
-        self
-    }
 }
 
 impl SecretStore for FileStoreV2 {

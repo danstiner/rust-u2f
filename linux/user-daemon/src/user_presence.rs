@@ -4,9 +4,9 @@ use std::io;
 use futures::future;
 use futures::prelude::*;
 use futures_cpupool::CpuPool;
-use notify_rust::{self, Notification, NotificationHint, NotificationUrgency};
+use notify_rust::Timeout;
+use notify_rust::{self, Hint, Notification, Urgency};
 use slog::Logger;
-use time::Duration;
 use tokio_core::reactor::Handle;
 use u2f_core::{try_reverse_app_id, AppId, UserPresence};
 
@@ -16,10 +16,10 @@ const ICON: &str = "security-high-symbolic";
 const MAX_CONCURRENT_NOTIFICATIONS: usize = 1;
 const NOTIFICATION_CLOSE_ACTION: &str = "__closed";
 const SUMMARY: &str = "Security Key Request";
-const URGENCY: NotificationUrgency = NotificationUrgency::Critical;
+const URGENCY: Urgency = Urgency::Critical;
 
 lazy_static! {
-    static ref TIMEOUT: Duration = Duration::seconds(10);
+    static ref TIMEOUT: Timeout = Timeout::Milliseconds(10_000);
     static ref WORKAROUND_SERVERS: HashMap<&'static str, &'static str> = {
         let mut ws = HashMap::new();
         // See https://github.com/danstiner/softu2f-linux/issues/12
@@ -55,11 +55,11 @@ impl NotificationUserPresence {
                 .summary(SUMMARY)
                 .body(&body)
                 .icon(ICON)
-                .hint(NotificationHint::Category(String::from(HINT_CATEGORY)))
-                .hint(NotificationHint::Transient(true))
-                .hint(NotificationHint::Urgency(URGENCY))
+                .hint(Hint::Category(String::from(HINT_CATEGORY)))
+                .hint(Hint::Transient(true))
+                .hint(Hint::Urgency(URGENCY))
                 .urgency(URGENCY)
-                .timeout(TIMEOUT.num_milliseconds() as i32);
+                .timeout(TIMEOUT.clone());
 
             let mut apply_workaround = false;
             let server_info = notify_rust::get_server_information().unwrap();
@@ -125,11 +125,11 @@ impl UserPresence for NotificationUserPresence {
             .summary(SUMMARY)
             .body(&message)
             .icon(ICON)
-            .hint(NotificationHint::Category(String::from(HINT_CATEGORY)))
-            .hint(NotificationHint::Transient(true))
-            .hint(NotificationHint::Urgency(URGENCY))
+            .hint(Hint::Category(String::from(HINT_CATEGORY)))
+            .hint(Hint::Transient(true))
+            .hint(Hint::Urgency(URGENCY))
             .urgency(URGENCY)
-            .timeout(TIMEOUT.num_milliseconds() as i32);
+            .timeout(TIMEOUT.clone());
         Box::new(future::ok(()))
     }
 }
