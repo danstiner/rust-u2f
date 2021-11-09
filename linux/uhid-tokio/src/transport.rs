@@ -119,6 +119,7 @@ where
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let read_len = self.decoder.read_len();
         let mut buffer = BytesMut::with_capacity(read_len);
+        buffer.resize(read_len, 0u8);
         match self.inner.read(&mut buffer) {
             Ok(0) => {
                 trace!(self.logger, "CharacterDevice::Stream::poll => Ok");
@@ -128,6 +129,7 @@ where
                 if n != read_len {
                     return Err(io::Error::new(io::ErrorKind::InvalidData, "short read").into());
                 }
+                buffer.resize(n, 0u8);
                 trace!(self.logger, "CharacterDevice::Stream::poll => Ok"; "bytes" => ?&buffer);
                 let frame = self.decoder.decode(&mut buffer)?;
                 Ok(Async::Ready(Some(frame)))
