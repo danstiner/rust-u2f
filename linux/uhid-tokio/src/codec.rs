@@ -7,7 +7,8 @@ use std::slice;
 use bytes::BytesMut;
 use thiserror::Error;
 
-use crate::transport::{Decoder, Encoder};
+use tokio_util::codec::Decoder;
+use tokio_util::codec::Encoder;
 use uhid_sys as sys;
 
 #[derive(Debug, Error)]
@@ -301,26 +302,22 @@ unsafe fn as_u8_slice<T: Sized>(p: &T) -> &[u8] {
 }
 
 impl Decoder for Codec {
-    type Item = Result<OutputEvent, StreamError>;
+    type Item = OutputEvent;
+    type Error = StreamError;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Self::Item {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if let Some(event) = read_event(src) {
-            Ok(decode_event(event)?)
+            Ok(Some(decode_event(event)?))
         } else {
             Err(StreamError::Unknown)
         }
     }
-
-    fn read_len(&self) -> usize {
-        mem::size_of::<sys::uhid_event>()
-    }
 }
 
-impl Encoder for Codec {
-    type Item = InputEvent;
+impl Encoder<InputEvent> for Codec {
     type Error = StreamError;
 
-    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: InputEvent, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let event = item.into_uhid_event()?;
         dst.extend_from_slice(encode_event(&event));
         Ok(())

@@ -118,11 +118,7 @@ impl ConfigFile {
         }
     }
 
-    pub fn data(&self) -> &ConfigFileData {
-        &self.data
-    }
-
-    pub fn save(&self) -> io::Result<()> {
+    fn save(&self) -> io::Result<()> {
         atomic_file::overwrite(&self.path, move |writer| {
             serde_json::to_writer_pretty(writer, &self.data).map_err(|e| e.into())
         })

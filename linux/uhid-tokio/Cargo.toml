@@ -9,13 +9,9 @@ license = "MIT"
 [dependencies]
 bitflags = "1.1.0"
 bytes = "1.1.0"
-char-device = "0.7.1"
 futures = "0.3.17"
-mio = "0.7.14"
-nix = "0.23.0"
 thiserror = "1.0"
 tokio = { version = "1.13.0", features = ["fs", "net", "io-util"] }
-tokio-compat = "0.1.6"
-tokio-proto = "0.1.1"
-uhid-sys = { path = "../uhid-sys", version = "1.0.0" }
+tokio-util = { version = "0.6", features = ["codec"] }
+uhid-sys = { path = "../uhid-sys" }
 tracing = "0.1"

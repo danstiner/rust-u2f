@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::io;
 
 use async_trait::async_trait;
-use futures_cpupool::CpuPool;
 use lazy_static::lazy_static;
 use notify_rust::Timeout;
 use notify_rust::{self, Hint, Notification, Urgency};
@@ -12,7 +11,6 @@ use u2f_core::{try_reverse_app_id, AppId, UserPresence};
 const APPNAME: &str = "SoftU2F";
 const HINT_CATEGORY: &str = "device";
 const ICON: &str = "security-high-symbolic";
-const MAX_CONCURRENT_NOTIFICATIONS: usize = 1;
 const NOTIFICATION_CLOSE_ACTION: &str = "__closed";
 const SUMMARY: &str = "Security Key Request";
 const URGENCY: Urgency = Urgency::Critical;
@@ -28,15 +26,11 @@ lazy_static! {
     };
 }
 
-pub struct NotificationUserPresence {
-    executor: CpuPool,
-}
+pub struct NotificationUserPresence;
 
 impl NotificationUserPresence {
-    pub fn new() -> NotificationUserPresence {
-        NotificationUserPresence {
-            executor: CpuPool::new(MAX_CONCURRENT_NOTIFICATIONS),
-        }
+    pub fn new() -> Self {
+        NotificationUserPresence
     }
 
     async fn test_user_presence(&self, message: String) -> Result<bool, io::Error> {

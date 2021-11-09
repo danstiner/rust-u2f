@@ -2,10 +2,11 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 name = "example"
 version = "0.1.0"
+edition = "2021"
 
 [dependencies]
-futures = "0.1.28"
-tokio = "0.1.22"
+futures = "0.3.17"
+tokio = "1.13.0"
 
 [dependencies.tokio-linux-uhid]
 path = "../"

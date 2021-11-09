@@ -90,16 +90,13 @@
 extern crate bitflags;
 extern crate bytes;
 extern crate futures;
-extern crate mio;
-extern crate nix;
 extern crate tokio;
-extern crate tokio_compat;
 extern crate uhid_sys;
 
 pub use crate::codec::{Bus, InputEvent, OutputEvent, StreamError};
 pub use crate::uhid_device::CreateParams;
-pub use crate::uhid_device::UHIDDevice;
+pub use crate::uhid_device::UhidDevice;
 
 mod codec;
-mod transport;
+// mod transport;
 mod uhid_device;

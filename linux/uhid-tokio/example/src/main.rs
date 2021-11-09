@@ -4,7 +4,7 @@ extern crate tokio_linux_uhid;
 
 use std::io;
 
-use tokio_linux_uhid::{Bus, CreateParams, UHIDDevice};
+use tokio_linux_uhid::{Bus, CreateParams, UhidDevice};
 
 const RDESC: [u8; 85] = [
     0x05, 0x01, /* USAGE_PAGE (Generic Desktop) */
@@ -53,7 +53,8 @@ const RDESC: [u8; 85] = [
     0xc0, /* END_COLLECTION */
 ];
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     let create_params = CreateParams {
         name: String::from("test-uhid-device"),
         phys: String::from(""),
@@ -66,7 +67,7 @@ fn main() {
         data: RDESC.to_vec(),
     };
 
-    let mut uhid_device = UHIDDevice::create(create_params, None).unwrap();
+    let mut uhid_device = UhidDevice::create(create_params).await.unwrap();
 
     let button_flags = 0;
     let mouse_abs_hor = 20;
@@ -77,6 +78,6 @@ fn main() {
     let mut input = String::new();
     loop {
         io::stdin().read_line(&mut input).unwrap();
-        uhid_device.send_input(&data).unwrap();
+        // uhid_device.send_input(&data).unwrap();
     }
 }

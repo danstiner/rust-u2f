@@ -30,9 +30,8 @@ use tokio::net::{unix::UCred, UnixStream};
 use tracing::{debug, error, info};
 use tracing_subscriber::prelude::*;
 
-use softu2f_system_daemon::{
-    CreateDeviceError, CreateDeviceRequest, DeviceDescription, SocketInput, SocketOutput,
-};
+use softu2f_system_daemon::{CreateDeviceError, CreateDeviceRequest, DeviceDescription};
+use user_presence::NotificationUserPresence;
 
 mod atomic_file;
 mod config;
@@ -112,11 +111,11 @@ struct VirtualU2fDevice {}
 
 impl VirtualU2fDevice {
     pub async fn create(system_daemon_socket: &Path) -> Result<Self, Error> {
-        let attestation = u2f_core::self_signed_attestation();
+        let _attestation = u2f_core::self_signed_attestation();
         let config = config::Config::load()?;
-        let secret_store = secret_store::build(&config)?;
+        let _secret_store = secret_store::build(&config)?;
+        let _user_presence = NotificationUserPresence::new();
 
-        //  let user_presence = Box::new(NotificationUserPresence::new(&handle, log.new(o!())));
         //     let u2f = match U2F::new(user_presence, operations, storage, log.new(o!())) {
         //         Ok(service) => service,
         //         Err(err) => return Box::new(future::err(ProgramError::Io(err))),
@@ -132,7 +131,7 @@ impl VirtualU2fDevice {
 
         require_root(system_daemon_socket.peer_cred()?)?;
 
-        let uhid_device = create_uhid_device();
+        let _uhid_device = create_uhid_device();
 
         todo!()
     }
