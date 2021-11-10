@@ -89,13 +89,13 @@ async fn main() {
 
         match event {
             Event::Key(Key::Up) | Event::Key(Key::Char('w')) => {
-                mouse_abs_ver = 20;
+                mouse_abs_ver = -20;
             }
             Event::Key(Key::Left) | Event::Key(Key::Char('a')) => {
                 mouse_abs_hor = -20;
             }
             Event::Key(Key::Down) | Event::Key(Key::Char('s')) => {
-                mouse_abs_ver = -20;
+                mouse_abs_ver = 20;
             }
             Event::Key(Key::Right) | Event::Key(Key::Char('d')) => {
                 mouse_abs_hor = -20;
