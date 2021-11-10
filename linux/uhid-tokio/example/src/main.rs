@@ -1,10 +1,15 @@
 extern crate futures;
+extern crate termion;
 extern crate tokio;
 extern crate tokio_linux_uhid;
 
-use std::io;
+use std::io::stdin;
 
-use tokio_linux_uhid::{Bus, CreateParams, UhidDevice};
+use futures::SinkExt;
+use termion::event::{Event, Key};
+use termion::input::TermRead;
+
+use tokio_linux_uhid::{Bus, CreateParams, InputEvent, UhidDevice};
 
 const RDESC: [u8; 85] = [
     0x05, 0x01, /* USAGE_PAGE (Generic Desktop) */
@@ -53,8 +58,10 @@ const RDESC: [u8; 85] = [
     0xc0, /* END_COLLECTION */
 ];
 
+// Loosely based on https://github.com/torvalds/linux/blob/master/samples/uhid/uhid-example.c
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    println!("Creating virtual USB mouse input device via uhid subsysem.");
     let create_params = CreateParams {
         name: String::from("test-uhid-device"),
         phys: String::from(""),
@@ -69,15 +76,51 @@ async fn main() {
 
     let mut uhid_device = UhidDevice::create(create_params).await.unwrap();
 
-    let button_flags = 0;
-    let mouse_abs_hor = 20;
-    let mouse_abs_ver = 0;
-    let wheel = 0;
-    let data: [u8; 5] = [1, button_flags, mouse_abs_hor, mouse_abs_ver, wheel];
+    println!("Use [w,a,s,d] or arrow keys to move your mouse! Press 'q' to quit...");
 
-    let mut input = String::new();
-    loop {
-        io::stdin().read_line(&mut input).unwrap();
-        // uhid_device.send_input(&data).unwrap();
+    // Loop key presses and send input reports to move the mouse
+    for event in stdin().events() {
+        let event = event.unwrap();
+        let report_id = 1;
+        let button_flags = 0u8;
+        let mut mouse_abs_hor = 0i8;
+        let mut mouse_abs_ver = 0i8;
+        let wheel = 0i8;
+
+        match event {
+            Event::Key(Key::Up) | Event::Key(Key::Char('w')) => {
+                mouse_abs_ver = 20;
+            }
+            Event::Key(Key::Left) | Event::Key(Key::Char('a')) => {
+                mouse_abs_hor = -20;
+            }
+            Event::Key(Key::Down) | Event::Key(Key::Char('s')) => {
+                mouse_abs_ver = -20;
+            }
+            Event::Key(Key::Right) | Event::Key(Key::Char('d')) => {
+                mouse_abs_hor = -20;
+            }
+            Event::Key(Key::Esc) | Event::Key(Key::Char('q')) => break,
+            _ => continue,
+        };
+
+        // The input data format is set by the RDESC description
+        uhid_device
+            .send(InputEvent::Input {
+                data: unsafe {
+                    [
+                        report_id, // Report ID
+                        button_flags,
+                        std::mem::transmute(mouse_abs_hor),
+                        std::mem::transmute(mouse_abs_ver),
+                        std::mem::transmute(wheel),
+                    ]
+                    .to_vec()
+                },
+            })
+            .await
+            .unwrap();
     }
+
+    uhid_device.destroy().await.unwrap();
 }

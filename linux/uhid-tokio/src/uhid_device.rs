@@ -58,6 +58,13 @@ impl UhidDevice {
         Ok(Self { transport })
     }
 
+    /// Send a HID packet to the UHID device
+    pub async fn send_input(&mut self, data: &[u8]) -> Result<(), StreamError> {
+        self.send(InputEvent::Input {
+            data: data.to_vec(),
+        }).await
+    }
+
     /// Sends a 'destroy' event to the UHID device and then close it
     pub async fn destroy(mut self) -> Result<(), StreamError> {
         self.transport.send(InputEvent::Destroy).await?;
