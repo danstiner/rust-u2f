@@ -37,7 +37,7 @@ impl UhidDevice {
 
     /// Create a UHID device using the specified character misc-device file path
     pub async fn create_with_path(path: &Path, params: CreateParams) -> Result<Self, StreamError> {
-        let file = tokio::fs::File::open(path).await?;
+        let file = tokio::fs::OpenOptions::new().read(true).write(true).open(path).await?;
         let mut transport = Framed::with_capacity(file, Codec, MAX_UHID_EVENT_SIZE);
 
         debug!("Sending create device input event");
