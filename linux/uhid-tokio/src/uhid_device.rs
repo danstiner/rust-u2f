@@ -1,17 +1,18 @@
-use std::io;
 use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures::SinkExt;
 use futures::{Sink, Stream};
-use tokio::io::AsyncWriteExt;
+use pin_project::pin_project;
 use tokio_util::codec::Framed;
-use tracing::{debug, trace};
+use tracing::debug;
 
 use crate::codec::{Bus, Codec, InputEvent, OutputEvent, StreamError, MAX_UHID_EVENT_SIZE};
 
+#[pin_project]
 pub struct UhidDevice {
+    #[pin]
     transport: Framed<tokio::fs::File, Codec>,
 }
 
@@ -59,38 +60,38 @@ impl UhidDevice {
 
     /// Sends a 'destroy' event to the UHID device and then close it
     pub async fn destroy(mut self) -> Result<(), StreamError> {
-        debug!("destroy");
         self.transport.send(InputEvent::Destroy).await?;
         self.transport.flush().await?;
         Ok(())
     }
 }
 
-// impl Stream for UhidDevice {
-//     type Item = InputEvent;
+// Forward to the underlying framed transport
+impl Stream for UhidDevice {
+    type Item = Result<OutputEvent, StreamError>;
 
-//     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-//         trace!("UhidDevice.poll_next");
-//         self.inner.poll_next(cx)
-//     }
-// }
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.project().transport.poll_next(cx)
+    }
+}
 
-// impl Sink<OutputEvent> for UhidDevice {
-//     type Error = io::Error;
+// Forward to the underlying framed transport
+impl Sink<InputEvent> for UhidDevice {
+    type Error = StreamError;
 
-//     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-//         self.inner.poll_ready(cx)
-//     }
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.project().transport.poll_ready(cx)
+    }
 
-//     fn start_send(self: Pin<&mut Self>, item: OutputEvent) -> Result<(), Self::Error> {
-//         self.inner.start_send(item)
-//     }
+    fn start_send(self: Pin<&mut Self>, item: InputEvent) -> Result<(), Self::Error> {
+        self.project().transport.start_send(item)
+    }
 
-//     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-//         self.inner.poll_flush(cx)
-//     }
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.project().transport.poll_flush(cx)
+    }
 
-//     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-//         self.inner.poll_close(cx)
-//     }
-// }
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.project().transport.poll_close(cx)
+    }
+}

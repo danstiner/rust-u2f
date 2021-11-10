@@ -1865,6 +1865,7 @@ dependencies = [
  "bitflags",
  "bytes 1.1.0",
  "futures 0.3.17",
+ "pin-project",
  "thiserror",
  "tokio",
  "tokio-util",
