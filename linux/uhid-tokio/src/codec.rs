@@ -11,6 +11,8 @@ use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
 use uhid_sys as sys;
 
+pub const MAX_UHID_EVENT_SIZE: usize = mem::size_of::<sys::uhid_event>();
+
 #[derive(Debug, Error)]
 pub enum StreamError {
     #[error("I/O error: {0}")]
