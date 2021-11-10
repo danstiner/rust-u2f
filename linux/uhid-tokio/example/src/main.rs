@@ -3,11 +3,12 @@ extern crate termion;
 extern crate tokio;
 extern crate tokio_linux_uhid;
 
-use std::io::stdin;
+use std::io;
 
 use futures::SinkExt;
-use termion::event::{Event, Key};
+use termion::event::Key;
 use termion::input::TermRead;
+use termion::raw::IntoRawMode;
 
 use tokio_linux_uhid::{Bus, CreateParams, InputEvent, UhidDevice};
 
@@ -78,30 +79,33 @@ async fn main() {
 
     println!("Use [w,a,s,d] or arrow keys to move your mouse! Press 'q' to quit...");
 
+    // Set terminal to raw mode to allow reading stdin one key at a time
+    let _stdout = io::stdout().into_raw_mode().unwrap();
+
     // Loop key presses and send input reports to move the mouse
-    for event in stdin().events() {
-        let event = event.unwrap();
+    for key in io::stdin().keys() {
+        let key = key.unwrap();
         let report_id = 1;
         let button_flags = 0u8;
         let mut mouse_abs_hor = 0i8;
         let mut mouse_abs_ver = 0i8;
         let wheel = 0i8;
 
-        match event {
-            Event::Key(Key::Up) | Event::Key(Key::Char('w')) => {
+        match key {
+            Key::Up | Key::Char('w') => {
                 mouse_abs_ver = -20;
             }
-            Event::Key(Key::Left) | Event::Key(Key::Char('a')) => {
+            Key::Left | Key::Char('a') => {
                 mouse_abs_hor = -20;
             }
-            Event::Key(Key::Down) | Event::Key(Key::Char('s')) => {
+            Key::Down | Key::Char('s') => {
                 mouse_abs_ver = 20;
             }
-            Event::Key(Key::Right) | Event::Key(Key::Char('d')) => {
-                mouse_abs_hor = -20;
+            Key::Right | Key::Char('d') => {
+                mouse_abs_hor = 20;
             }
-            Event::Key(Key::Esc) | Event::Key(Key::Char('q')) => break,
-            _ => continue,
+            Key::Esc | Key::Char('q') => break,
+            _ => {}
         };
 
         // The input data format is set by the RDESC description
