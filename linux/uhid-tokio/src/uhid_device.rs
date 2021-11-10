@@ -57,13 +57,13 @@ impl UhidDevice {
         Ok(Self { transport })
     }
 
-    // /// Sends a 'destroy' event to the UHID device and then close it
-    // pub async fn destroy(mut self) -> Result<(), io::Error> {
-    //     debug!("destroy");
-    //     self.file.send(InputEvent::Destroy)?;
-    //     self.file.flush().await?;
-    //     Ok(())
-    // }
+    /// Sends a 'destroy' event to the UHID device and then close it
+    pub async fn destroy(mut self) -> Result<(), StreamError> {
+        debug!("destroy");
+        self.transport.send(InputEvent::Destroy).await?;
+        self.transport.flush().await?;
+        Ok(())
+    }
 }
 
 // impl Stream for UhidDevice {
