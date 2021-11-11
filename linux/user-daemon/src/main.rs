@@ -69,7 +69,7 @@ pub enum Error {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let args = App::new("SoftU2F System Daemon")
+    let args = App::new("SoftU2F User Daemon")
         .version(VERSION)
         .author(AUTHORS)
         .about(DESCRIPTION)
