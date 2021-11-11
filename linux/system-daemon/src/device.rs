@@ -1,7 +1,11 @@
-use std::io;
+use std::{io, rc::Rc};
 
+use futures::SinkExt;
+use softu2f_system_daemon::{SocketInput, SocketOutput};
 use thiserror::Error;
-// use tokio_linux_uhid::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UHIDDevice};
+use tokio::net::unix::UCred;
+use tokio_linux_uhid::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UhidDevice};
+use tracing::warn;
 
 // use crate::bidirectional_pipe::BidirectionalPipe;
 
@@ -70,17 +74,89 @@ pub enum Error {
     InvalidUnicodeString,
 }
 
-// Handles bug with writes not reporting as ready
-// Maybe also return full sized buffers, so a Pipe instead of raw async read/write
-#[derive(Debug)]
-pub struct UhidDevice {}
-
 // impl AsyncRead, AsyncWrite
 
 #[derive(Debug)]
 pub struct UhidU2fDevice {
-    device: UhidDevice,
+    uhid: UhidDevice,
 }
+
+impl UhidU2fDevice {
+    fn test(&self) {
+        // self.uhid.send(item)
+    }
+}
+
+
+struct UhidU2fService {
+    device: Rc<Option<UhidU2fDevice>>,
+}
+
+impl UhidU2fService {
+    pub fn new() -> Self {
+        todo!()
+    }
+}
+
+// impl Service<SocketInput> for UhidU2fService {
+//     type Response = SocketOutput;
+//     type Error = Error;
+//     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
+
+//     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+//         Poll::Ready(Ok(()))
+//     }
+
+//     fn call(&mut self, req: SocketInput) -> Self::Future {
+//         match req {
+//             SocketInput::CreateDeviceRequest(req) => {
+//                 let params = CreateParams {
+//                     name: get_device_name(user),
+//                     phys: String::from(""),
+//                     uniq: String::from(""),
+//                     bus: Bus::USB,
+//                     vendor: 0xffff,
+//                     product: 0xffff,
+//                     version: 0,
+//                     country: 0,
+//                     data: REPORT_DESCRIPTOR.to_vec(),
+//                 };
+//                 self.device = Some(UhidDevice::create(params));
+//                 todo!()
+//             }
+//             SocketInput::Report(report) => {
+//                 self.device
+//                     .unwrap()
+//                     .send_input(&report.into_bytes())
+//                     .await;
+//             }
+//         }
+//     }
+// }
+
+// fn device_name(ucred: &UCred) -> String {
+//     match get_hostname() {
+//         Ok(hostname) => {
+//             if let Some(user) = get_user_by_uid(ucred.uid) {
+//                 let username = user.name().to_str().unwrap_or("<unknown>");
+//                 format!("SoftU2F Linux ({}@{})", username, hostname)
+//             } else {
+//                 format!("SoftU2F Linux ({})", hostname)
+//             }
+//         }
+//         Err(err) => {
+//             warn!(?err, "Unable to determine hostname, defaulting to generic device name");
+//             format!("SoftU2F Linux")
+//         }
+//     }
+// }
+
+// fn get_hostname() -> Result<String, Error> {
+//     let hostname = hostname::get().map_err(Error::Io)?;
+//     hostname
+//         .into_string()
+//         .map_err(|_| Error::InvalidUnicodeString)
+// }
 
 // impl
 // type DevicePipe =
@@ -164,30 +240,6 @@ pub struct UhidU2fDevice {
 //         .from_err();
 
 //     (Box::new(socket_future), uhid_transport)
-// }
-
-// fn get_device_name(ucred: &UCred, log: &Logger) -> String {
-//     match get_hostname() {
-//         Ok(hostname) => {
-//             if let Some(user) = get_user_by_uid(ucred.uid) {
-//                 let username = user.name().to_str().unwrap_or("<unknown>");
-//                 format!("SoftU2F Linux ({}@{})", username, hostname)
-//             } else {
-//                 format!("SoftU2F Linux ({})", hostname)
-//             }
-//         }
-//         Err(err) => {
-//             warn!(log, "Unable to determine hostname, defaulting to generic device name"; "err" => err);
-//             format!("SoftU2F Linux")
-//         }
-//     }
-// }
-
-// fn get_hostname() -> Result<String, Error> {
-//     let hostname = hostname::get().map_err(Error::Io)?;
-//     hostname
-//         .into_string()
-//         .map_err(|_| Error::InvalidUnicodeString)
 // }
 
 // fn run(

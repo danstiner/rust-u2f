@@ -14,6 +14,7 @@ hostname = "0.3.1"
 libc = "0.2.62"
 libsystemd = "0.4.0"
 nanoid = "0.4.0"
+pin-project = "1.0"
 serde = "1.0.99"
 serde_derive = "1.0.99"
 take_mut = "0.2.2"
@@ -26,8 +27,8 @@ tracing = "0.1"
 tracing-journald = "0.2"
 tracing-subscriber = "0.3"
 
-# [dependencies.tokio-linux-uhid]
-# path = "../uhid-tokio"
+[dependencies.tokio-linux-uhid]
+path = "../uhid-tokio"
 
 # [dependencies.u2fhid-protocol]
 # path = "../../u2fhid-protocol/"

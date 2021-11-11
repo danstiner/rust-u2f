@@ -1,64 +1,70 @@
 use std::io;
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
 use futures::Future;
+use pin_project::pin_project;
 use tokio::net::unix::SocketAddr;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
-use tower::make::MakeService;
+use tower::Service;
 
 #[must_use = "futures do nothing unless polled"]
+#[pin_project]
 #[derive(Debug)]
-pub struct SocketServer<S, R>
+pub struct SocketServer<H>
 where
-    S: MakeService<(UnixStream, SocketAddr), R>,
+    H: Service<(UnixStream, SocketAddr)>,
 {
     listener: UnixListener,
-    make_service: S,
-    _request_type: PhantomData<R>,
+    connection_handler: H,
 }
 
-impl<S, R> SocketServer<S, R>
+impl<H> SocketServer<H>
 where
-    S: MakeService<(UnixStream, SocketAddr), R>,
+    H: Service<(UnixStream, SocketAddr)>,
 {
-    pub fn serve(listener: UnixListener, make_service: S) -> Self {
+    pub fn serve(listener: UnixListener, connection_handler: H) -> Self {
         SocketServer {
             listener,
-            make_service,
-            _request_type: PhantomData,
+            connection_handler,
         }
     }
 }
 
-impl<S, R> Future for SocketServer<S, R>
+impl<H, Connection, E> Future for SocketServer<H>
 where
-    S: MakeService<(UnixStream, SocketAddr), R> + Unpin,
-    S::Service: Send + 'static,
-    S::Future: Send + 'static,
-    S::MakeError: Send + 'static,
-    R: Unpin,
+    H: Service<(UnixStream, SocketAddr), Response = Connection, Error = E>,
+    H::Future: Send + 'static,
+    Connection: Future + Send,
+    Connection::Output: Send,
+    E: From<io::Error> + Send,
 {
-    type Output = Result<(), io::Error>;
+    type Output = Result<(), E>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
         loop {
             // Check we have available capacity to create a service instance
             // before accepting a connection.
-            if self.make_service.poll_ready(cx).is_pending() {
+            if this.connection_handler.poll_ready(cx).is_pending() {
                 return Poll::Pending;
             }
 
             // Accept a connection on the socket and spawn a service instance to respond.
             // Repeats if successful, returns if there is an error or no connections are availabile.
-            match self.listener.poll_accept(cx) {
+            match this.listener.poll_accept(cx) {
                 Poll::Ready(Ok(connection)) => {
-                    tokio::spawn(self.make_service.make_service(connection));
+                    let connection = this.connection_handler.call(connection);
+                    tokio::spawn(async {
+                        match connection.await {
+                            Ok(connection) => connection.await,
+                            Err(_err) => todo!(),
+                        };
+                    });
                 }
-                Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+                Poll::Ready(Err(err)) => return Poll::Ready(Err(err.into())),
                 Poll::Pending => return Poll::Pending,
             }
         }

@@ -11,6 +11,7 @@ use tracing::debug;
 use crate::codec::{Bus, Codec, InputEvent, OutputEvent, StreamError, MAX_UHID_EVENT_SIZE};
 
 #[pin_project]
+#[derive(Debug)]
 pub struct UhidDevice {
     #[pin]
     transport: Framed<tokio::fs::File, Codec>,

@@ -7,7 +7,7 @@ extern crate nanoid;
 extern crate take_mut;
 extern crate tokio;
 extern crate tokio_codec;
-// extern crate tokio_linux_uhid;
+extern crate tokio_linux_uhid;
 extern crate tower;
 // extern crate u2fhid_protocol;
 // extern crate users;
@@ -25,8 +25,6 @@ use clap::{App, Arg};
 use futures::future;
 use futures::Future;
 use libsystemd::activation::IsType;
-use softu2f_system_daemon::SocketInput;
-use softu2f_system_daemon::SocketOutput;
 use thiserror::Error;
 use tokio::net::unix::SocketAddr;
 use tokio::net::UnixListener;
@@ -95,9 +93,7 @@ async fn run(socket_path: Option<&str>) -> Result<(), Error> {
     let socket = socket_listener(socket_path)?;
     let handler = ConnectionHandler::new();
 
-    SocketServer::serve(socket, handler)
-        .await
-        .map_err(Error::Io)
+    SocketServer::serve(socket, handler).await
 }
 
 fn socket_listener(socket_path: Option<&str>) -> Result<UnixListener, Error> {
@@ -138,7 +134,7 @@ impl ConnectionHandler {
 }
 
 impl Service<(UnixStream, SocketAddr)> for ConnectionHandler {
-    type Response = DeviceService;
+    type Response = Connection;
     type Error = Error;
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
@@ -156,22 +152,27 @@ impl Service<(UnixStream, SocketAddr)> for ConnectionHandler {
         //         "peer_cred" => ?stream.peer_cred());
 
         // DeviceService::new(stream, ())
-        Box::pin(future::ok(DeviceService {}))
+        Box::pin(future::ok(todo!()))
     }
 }
 
-struct DeviceService {}
+#[must_use = "futures do nothing unless polled"]
+#[derive(Debug)]
+struct Connection {}
 
-impl Service<SocketInput> for DeviceService {
-    type Response = SocketOutput;
-    type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+impl Connection {
+    fn new(stream: UnixStream, addr: SocketAddr) -> Self {
+        Connection {}
     }
+}
 
-    fn call(&mut self, _req: SocketInput) -> Self::Future {
+impl Future for Connection
+{
+    type Output = Result<(), Error>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // Maybe replace with BidirectionalPipe connecting UnixStream from user daemon and uhid device transport
+        // But only once the create request has been received and device created
         todo!()
     }
 }
