@@ -27,7 +27,6 @@ use std::task::Poll;
 
 use async_trait::async_trait;
 use byteorder::{BigEndian, WriteBytesExt};
-use futures::future;
 use futures::Future;
 use thiserror::Error;
 pub use tower::Service;

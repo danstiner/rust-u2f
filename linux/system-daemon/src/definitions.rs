@@ -37,10 +37,14 @@ pub struct Report {
 }
 
 impl Report {
-    pub fn from_bytes(bytes: &[u8]) -> Report {
+    pub fn new(bytes: Vec<u8>) -> Report {
         Report {
-            bytes: bytes.to_vec(),
+            bytes,
         }
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Report {
+        Report::new(bytes.to_vec())
     }
     pub fn to_bytes(&self) -> Vec<u8> {
         self.bytes.to_vec()

@@ -10,7 +10,7 @@ extern crate tokio_linux_uhid;
 extern crate tokio_util;
 extern crate tower;
 // extern crate u2fhid_protocol;
-// extern crate users;
+extern crate users;
 
 use std::io;
 use std::os::unix::net;
@@ -24,11 +24,13 @@ use crate::socket_server::SocketServer;
 use clap::{App, Arg};
 use futures::future;
 use futures::Future;
+use futures::future::Ready;
 use libsystemd::activation::IsType;
 use thiserror::Error;
 use tokio::net::unix::SocketAddr;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
+use tokio_linux_uhid::StreamError;
 use tower::Service;
 use tracing::{error, info};
 use tracing_subscriber::prelude::*;
@@ -134,45 +136,15 @@ impl ConnectionHandler {
 }
 
 impl Service<(UnixStream, SocketAddr)> for ConnectionHandler {
-    type Response = Connection;
+    type Response = Pin<Box<dyn Future<Output = Result<(), StreamError>> + Send>>;
     type Error = Error;
-    type Future =
-        Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
+    type Future = Ready<Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, (stream, addr): (UnixStream, SocketAddr)) -> Self::Future {
-        // TODO wrap raw unix stream with a client struct that creates the device when asked to
-
-        //     debug!(log, "accepting connection";
-        //         "local_addr" => ?stream.local_addr(),
-        //         "peer_addr" => ?stream.peer_addr(),
-        //         "peer_cred" => ?stream.peer_cred());
-
-        // DeviceService::new(stream, ())
-        Box::pin(future::ok(Connection::new(stream, addr)))
-    }
-}
-
-#[must_use = "futures do nothing unless polled"]
-#[derive(Debug)]
-struct Connection {}
-
-impl Connection {
-    fn new(stream: UnixStream, addr: SocketAddr) -> Self {
-        Connection {}
-    }
-}
-
-impl Future for Connection
-{
-    type Output = Result<(), Error>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // Maybe replace with BidirectionalPipe connecting UnixStream from user daemon and uhid device transport
-        // But only once the create request has been received and device created
-        todo!()
+        future::ok(Box::pin(connection::handle(stream, addr)))
     }
 }
