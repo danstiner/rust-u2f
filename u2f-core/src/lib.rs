@@ -40,7 +40,7 @@ use crate::constants::*;
 pub use crate::key_handle::KeyHandle;
 pub use crate::known_app_ids::try_reverse_app_id;
 use crate::known_app_ids::{BOGUS_APP_ID_HASH_CHROME, BOGUS_APP_ID_HASH_FIREFOX};
-pub use crate::openssl_crypto::OpenSSLCryptoOperations as SecureCryptoOperations;
+pub use crate::openssl_crypto::OpenSSLCryptoOperations;
 pub use crate::private_key::PrivateKey;
 use crate::public_key::PublicKey;
 pub use crate::request::{AuthenticateControlCode, Request};
@@ -60,8 +60,6 @@ mod request;
 mod response;
 mod self_signed_attestation;
 mod serde_base64;
-
-type ResultFuture<T, E> = Box<dyn Future<Output = Result<T, E>>>;
 
 #[derive(Debug)]
 pub enum StatusCode {
@@ -133,6 +131,28 @@ pub trait SecretStore {
     ) -> io::Result<Option<ApplicationKey>>;
 }
 
+impl SecretStore for Box<dyn SecretStore> {
+    fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
+        Box::as_ref(self).add_application_key(key)
+    }
+
+    fn get_and_increment_counter(
+        &self,
+        application: &AppId,
+        handle: &KeyHandle,
+    ) -> io::Result<Counter> {
+        Box::as_ref(self).get_and_increment_counter(application, handle)
+    }
+
+    fn retrieve_application_key(
+        &self,
+        application: &AppId,
+        handle: &KeyHandle,
+    ) -> io::Result<Option<ApplicationKey>> {
+       Box::as_ref(self).retrieve_application_key(application, handle)
+    }
+}
+
 #[derive(Debug)]
 pub struct Registration {
     user_public_key: Vec<u8>,
@@ -175,18 +195,19 @@ pub enum RegisterError {
     Signing(#[from] SignError),
 }
 
-pub struct U2F {
-    inner: Rc<U2FInner>,
+pub struct U2F<Approval, Crypto, Secrets> {
+    inner: Rc<U2FInner<Approval, Crypto, Secrets>>,
 }
 
-impl U2F {
-    pub fn new(
-        approval: Box<dyn UserPresence>,
-        operations: Box<dyn CryptoOperations>,
-        storage: Box<dyn SecretStore>,
-    ) -> Self {
+impl<Approval, Crypto, Secrets> U2F<Approval, Crypto, Secrets>
+where
+    Approval: UserPresence,
+    Crypto: CryptoOperations,
+    Secrets: SecretStore,
+{
+    pub fn new(user_presence: Approval, crypto: Crypto, secrets: Secrets) -> Self {
         U2F {
-            inner: Rc::new(U2FInner::new(approval, operations, storage)),
+            inner: Rc::new(U2FInner::new(user_presence, crypto, secrets)),
         }
     }
 
@@ -195,7 +216,12 @@ impl U2F {
     }
 }
 
-impl Service<Request> for U2F {
+impl<Approval, Crypto, Secrets> Service<Request> for U2F<Approval, Crypto, Secrets>
+where
+    Approval: UserPresence + 'static,
+    Crypto: CryptoOperations + 'static,
+    Secrets: SecretStore + 'static,
+{
     type Response = Response;
     type Error = io::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
@@ -235,27 +261,23 @@ impl Service<Request> for U2F {
     }
 }
 
-pub struct U2FInner {
-    approval: Box<dyn UserPresence>,
-    // log: slog::Logger,
-    operations: Box<dyn CryptoOperations>,
-    storage: Box<dyn SecretStore>,
+pub struct U2FInner<Approval, Crypto, Secrets> {
+    approval: Approval,
+    operations: Crypto,
+    storage: Secrets,
 }
 
-impl U2FInner {
-    pub fn new(
-        approval: Box<dyn UserPresence>,
-        operations: Box<dyn CryptoOperations>,
-        storage: Box<dyn SecretStore>,
-    ) -> Self {
-        // let log = log
-        //     .into()
-        //     .unwrap_or_else(|| slog::Logger::root(slog_stdlog::StdLog.fuse(), o!()));
+impl<Approval, Crypto, Secrets> U2FInner<Approval, Crypto, Secrets>
+where
+    Approval: UserPresence,
+    Crypto: CryptoOperations,
+    Secrets: SecretStore,
+{
+    pub fn new(approval: Approval, crypto: Crypto, secrets: Secrets) -> Self {
         U2FInner {
             approval,
-            // log,
-            operations,
-            storage,
+            operations: crypto,
+            storage: secrets,
         }
     }
 
@@ -361,9 +383,7 @@ impl U2FInner {
                     info!("Registration was not approved by user");
                     Ok(Response::TestOfUserPresenceNotSatisfied)
                 }
-                RegisterError::Io(err) => {
-                    Err(err)
-                }
+                RegisterError::Io(err) => Err(err),
                 RegisterError::Signing(err) => {
                     Err(io::Error::new(io::ErrorKind::Other, "Signing error"))
                 }
@@ -677,9 +697,9 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[test]
     fn is_valid_key_handle_with_invalid_handle_is_false() {
-        let approval = Box::new(FakeUserPresence::always_approve());
-        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-        let storage = Box::new(InMemoryStorage::new());
+        let approval = FakeUserPresence::always_approve();
+        let operations = OpenSSLCryptoOperations::new(get_test_attestation());
+        let storage = InMemoryStorage::new();
         let u2f = U2F::new(approval, operations, storage).inner;
 
         let application = fake_app_id();
@@ -693,9 +713,9 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[tokio::test]
     async fn is_valid_key_handle_with_valid_handle_is_true() {
-        let approval = Box::new(FakeUserPresence::always_approve());
-        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-        let storage = Box::new(InMemoryStorage::new());
+        let approval = FakeUserPresence::always_approve();
+        let operations = OpenSSLCryptoOperations::new(get_test_attestation());
+        let storage = InMemoryStorage::new();
         let u2f = U2F::new(approval, operations, storage).inner;
 
         let application = fake_app_id();
@@ -710,9 +730,9 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[tokio::test]
     async fn authenticate_with_invalid_handle_errors() {
-        let approval = Box::new(FakeUserPresence::always_approve());
-        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-        let storage = Box::new(InMemoryStorage::new());
+        let approval =FakeUserPresence::always_approve();
+        let operations =OpenSSLCryptoOperations::new(get_test_attestation());
+        let storage =InMemoryStorage::new();
         let u2f = U2F::new(approval, operations, storage).inner;
 
         let application = fake_app_id();
@@ -727,9 +747,9 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[tokio::test]
     async fn authenticate_with_valid_handle_succeeds() {
-        let approval = Box::new(FakeUserPresence::always_approve());
-        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-        let storage = Box::new(InMemoryStorage::new());
+        let approval = FakeUserPresence::always_approve();
+        let operations = OpenSSLCryptoOperations::new(get_test_attestation());
+        let storage = InMemoryStorage::new();
         let u2f = U2F::new(approval, operations, storage).inner;
 
         let application = fake_app_id();
@@ -746,12 +766,12 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[tokio::test]
     async fn authenticate_with_rejected_approval_errors() {
-        let approval = Box::new(FakeUserPresence {
+        let approval = FakeUserPresence {
             should_approve_authentication: false,
             should_approve_registration: true,
-        });
-        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-        let storage = Box::new(InMemoryStorage::new());
+        };
+        let operations = OpenSSLCryptoOperations::new(get_test_attestation());
+        let storage = InMemoryStorage::new();
         let u2f = U2F::new(approval, operations, storage).inner;
 
         let application = fake_app_id();
@@ -770,12 +790,12 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[tokio::test]
     async fn register_with_rejected_approval_errors() {
-        let approval = Box::new(FakeUserPresence {
+        let approval = FakeUserPresence {
             should_approve_authentication: true,
             should_approve_registration: false,
-        });
-        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-        let storage = Box::new(InMemoryStorage::new());
+        };
+        let operations = OpenSSLCryptoOperations::new(get_test_attestation());
+        let storage = InMemoryStorage::new();
         let u2f = U2F::new(approval, operations, storage).inner;
 
         let application = fake_app_id();
@@ -789,9 +809,9 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[tokio::test]
     async fn authenticate_signature() {
-        let approval = Box::new(FakeUserPresence::always_approve());
-        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-        let storage = Box::new(InMemoryStorage::new());
+        let approval =FakeUserPresence::always_approve();
+        let operations =OpenSSLCryptoOperations::new(get_test_attestation());
+        let storage =InMemoryStorage::new();
         let u2f = U2F::new(approval, operations, storage).inner;
 
         let application = AppId(rand::random());
@@ -830,9 +850,9 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
     #[tokio::test]
     async fn register_signature() {
-        let approval = Box::new(FakeUserPresence::always_approve());
-        let operations = Box::new(SecureCryptoOperations::new(get_test_attestation()));
-        let storage = Box::new(InMemoryStorage::new());
+        let approval = FakeUserPresence::always_approve();
+        let operations = OpenSSLCryptoOperations::new(get_test_attestation());
+        let storage = InMemoryStorage::new();
         let u2f = U2F::new(approval, operations, storage).inner;
 
         let application = AppId(rand::random());

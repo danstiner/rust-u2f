@@ -31,6 +31,7 @@ use tracing::{debug, error, info};
 use tracing_subscriber::prelude::*;
 
 use softu2f_system_daemon::{CreateDeviceError, CreateDeviceRequest, DeviceDescription};
+use u2f_core::{OpenSSLCryptoOperations, U2F};
 use user_presence::NotificationUserPresence;
 
 mod atomic_file;
@@ -111,15 +112,13 @@ struct VirtualU2fDevice {}
 
 impl VirtualU2fDevice {
     pub async fn create(system_daemon_socket: &Path) -> Result<Self, Error> {
-        let _attestation = u2f_core::self_signed_attestation();
         let config = config::Config::load()?;
-        let _secret_store = secret_store::build(&config)?;
-        let _user_presence = NotificationUserPresence::new();
+        let user_presence = NotificationUserPresence::new();
+        let attestation = u2f_core::self_signed_attestation();
+        let crypto = OpenSSLCryptoOperations::new(attestation);
+        let secrets = secret_store::build(&config)?;
 
-        //     let u2f = match U2F::new(user_presence, operations, storage, log.new(o!())) {
-        //         Ok(service) => service,
-        //         Err(err) => return Box::new(future::err(ProgramError::Io(err))),
-        //     };
+        let _u2f = U2F::new(user_presence, crypto, secrets);
 
         let system_daemon_socket =
             UnixStream::connect(system_daemon_socket)
@@ -131,7 +130,7 @@ impl VirtualU2fDevice {
 
         require_root(system_daemon_socket.peer_cred()?)?;
 
-        let _uhid_device = create_uhid_device();
+        let _uhid_device = create_uhid_device().await?;
 
         todo!()
     }
