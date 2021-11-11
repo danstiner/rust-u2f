@@ -31,7 +31,7 @@ use tracing::{debug, error, info};
 use tracing_subscriber::prelude::*;
 
 use softu2f_system_daemon::{CreateDeviceError, CreateDeviceRequest, DeviceDescription};
-use u2f_core::{OpenSSLCryptoOperations, U2F};
+use u2f_core::{OpenSSLCryptoOperations, U2fService};
 use user_presence::NotificationUserPresence;
 
 mod atomic_file;
@@ -118,7 +118,7 @@ impl VirtualU2fDevice {
         let crypto = OpenSSLCryptoOperations::new(attestation);
         let secrets = secret_store::build(&config)?;
 
-        let _u2f = U2F::new(user_presence, crypto, secrets);
+        let _u2f = U2fService::new(secrets, crypto, user_presence);
 
         let system_daemon_socket =
             UnixStream::connect(system_daemon_socket)

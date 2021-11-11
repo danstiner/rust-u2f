@@ -25,7 +25,7 @@ use futures::{Future, Sink, Stream};
 use slog::Drain;
 use tokio_core::reactor::Handle;
 use tokio_tower::pipeline::Server;
-use u2f_core::{Service, U2F};
+use u2f_core::{Service, U2f};
 
 mod definitions;
 mod protocol_state_machine;
@@ -48,7 +48,7 @@ pub struct U2FHID<T: Sink + Stream, S> {
     transport: SegmentingSink<T, PacketSegmenter>,
 }
 
-impl<T, E> U2FHID<T, U2F>
+impl<T, E> U2FHID<T, U2f>
 where
     T: Sink<SinkItem = Packet, SinkError = E> + Stream<Item = Packet, Error = E>,
     E: From<io::Error>,
