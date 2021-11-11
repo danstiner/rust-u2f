@@ -3,9 +3,11 @@ use std::{io, rc::Rc};
 use futures::SinkExt;
 use softu2f_system_daemon::{SocketInput, SocketOutput};
 use thiserror::Error;
-use tokio::net::unix::UCred;
+use tokio::net::{UnixStream, unix::{SocketAddr, UCred}};
 use tokio_linux_uhid::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UhidDevice};
+use tokio_serde::formats::Bincode;
 use tracing::warn;
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 // use crate::bidirectional_pipe::BidirectionalPipe;
 
@@ -158,53 +160,32 @@ impl UhidU2fService {
 //         .map_err(|_| Error::InvalidUnicodeString)
 // }
 
-// impl
-// type DevicePipe =
-//     Box<dyn Pipe<Item = Report, Error = Error, SinkItem = Report, SinkError = Error> + Send>;
+pub struct Connection {
+    state: ConnectionState,
+    peer_cred: UCred,
+}
 
-// enum DeviceState {
-//     Uninitialized(SocketPipe),
-//     Initialized {
-//         socket_future: Box<dyn Future<Item = SocketPipe, Error = Error> + Send + 'static>,
-//         uhid_transport: DevicePipe,
-//     },
-//     Running(BidirectionalPipe<DevicePipe, DevicePipe, Error>),
-//     Closed,
-// }
+impl Connection {
+    pub fn new(stream: UnixStream, addr: SocketAddr) -> io::Result<Self> {
+        let peer_cred = stream.peer_cred()?;
+        let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
+        let bincoded = tokio_serde::Framed::new(length_delimited, tokio_serde::formats::Bincode::default());
+        Ok(Connection {
+            state: ConnectionState::Uninitialized(bincoded),
+            peer_cred,
+        })
+    }
+}
 
-// pub struct Device {
-//     id: String,
-//     logger: Logger,
-//     state: DeviceState,
-//     user: UCred,
-// }
-
-// impl Device {
-//     pub fn new(stream: UnixStream, logger: &Logger) -> io::Result<Device> {
-//         let user = stream.peer_cred()?;
-//         let id = nanoid!();
-//         Ok(Device {
-//             id: id.clone(),
-//             logger: logger.new(o!("device_id" => id)),
-//             state: DeviceState::Uninitialized(bind_transport(stream)),
-//             user,
-//         })
-//     }
-
-//     pub fn id(&self) -> &str {
-//         &self.id
-//     }
-// }
-
-// #[allow(deprecated)]
-// fn bind_transport(stream: UnixStream) -> SocketPipe {
-//     let framed_write = length_delimited::FramedWrite::new(stream);
-//     let framed_readwrite = length_delimited::FramedRead::new(framed_write);
-//     let mapped_err = framed_readwrite.sink_from_err().from_err();
-//     let bincode_read = ReadBincode::new(mapped_err);
-//     let bincode_readwrite = WriteBincode::<_, SocketOutput>::new(bincode_read);
-//     Box::new(bincode_readwrite)
-// }
+enum ConnectionState {
+    Uninitialized(tokio_serde::Framed<Framed<UnixStream, LengthDelimitedCodec>, SocketInput, SocketOutput, Bincode<SocketInput, SocketOutput>>),
+    CreatingUhidDevice {
+        // socket_future: Box<dyn Future<Item = SocketPipe, Error = Error> + Send + 'static>,
+        // uhid_transport: DevicePipe,
+    },
+    Running(),
+    Closed,
+}
 
 // fn initialize(
 //     device_id: &str,

@@ -13,32 +13,32 @@ use tower::Service;
 #[must_use = "futures do nothing unless polled"]
 #[pin_project]
 #[derive(Debug)]
-pub struct SocketServer<H>
+pub struct SocketServer<S>
 where
-    H: Service<(UnixStream, SocketAddr)>,
+    S: Service<(UnixStream, SocketAddr)>,
 {
     listener: UnixListener,
-    connection_handler: H,
+    make_stream_handler: S,
 }
 
-impl<H> SocketServer<H>
+impl<S> SocketServer<S>
 where
-    H: Service<(UnixStream, SocketAddr)>,
+    S: Service<(UnixStream, SocketAddr)>,
 {
-    pub fn serve(listener: UnixListener, connection_handler: H) -> Self {
+    pub fn serve(listener: UnixListener, make_stream_handler: S) -> Self {
         SocketServer {
             listener,
-            connection_handler,
+            make_stream_handler,
         }
     }
 }
 
-impl<H, Connection, E> Future for SocketServer<H>
+impl<S, Handler, E> Future for SocketServer<S>
 where
-    H: Service<(UnixStream, SocketAddr), Response = Connection, Error = E>,
-    H::Future: Send + 'static,
-    Connection: Future + Send,
-    Connection::Output: Send,
+    S: Service<(UnixStream, SocketAddr), Response = Handler, Error = E>,
+    S::Future: Send + 'static,
+    Handler: Future + Send,
+    Handler::Output: Send,
     E: From<io::Error> + Send,
 {
     type Output = Result<(), E>;
@@ -46,20 +46,20 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
         loop {
-            // Check we have available capacity to create a service instance
-            // before accepting a connection.
-            if this.connection_handler.poll_ready(cx).is_pending() {
+            // Check we have available capacity to create a handler instance
+            // before accepting a stream.
+            if this.make_stream_handler.poll_ready(cx).is_pending() {
                 return Poll::Pending;
             }
 
             // Accept a connection on the socket and spawn a service instance to respond.
             // Repeats if successful, returns if there is an error or no connections are availabile.
             match this.listener.poll_accept(cx) {
-                Poll::Ready(Ok(connection)) => {
-                    let connection = this.connection_handler.call(connection);
+                Poll::Ready(Ok(stream)) => {
+                    let handler_future = this.make_stream_handler.call(stream);
                     tokio::spawn(async {
-                        match connection.await {
-                            Ok(connection) => connection.await,
+                        match handler_future.await {
+                            Ok(handler) => handler.await,
                             Err(_err) => todo!(),
                         };
                     });

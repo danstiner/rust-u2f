@@ -6,8 +6,8 @@ extern crate libsystemd;
 extern crate nanoid;
 extern crate take_mut;
 extern crate tokio;
-extern crate tokio_codec;
 extern crate tokio_linux_uhid;
+extern crate tokio_util;
 extern crate tower;
 // extern crate u2fhid_protocol;
 // extern crate users;
@@ -33,7 +33,7 @@ use tower::Service;
 use tracing::{error, info};
 use tracing_subscriber::prelude::*;
 
-mod device;
+mod connection;
 mod socket_server;
 
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -143,7 +143,7 @@ impl Service<(UnixStream, SocketAddr)> for ConnectionHandler {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, (_stream, _addr): (UnixStream, SocketAddr)) -> Self::Future {
+    fn call(&mut self, (stream, addr): (UnixStream, SocketAddr)) -> Self::Future {
         // TODO wrap raw unix stream with a client struct that creates the device when asked to
 
         //     debug!(log, "accepting connection";
@@ -152,7 +152,7 @@ impl Service<(UnixStream, SocketAddr)> for ConnectionHandler {
         //         "peer_cred" => ?stream.peer_cred());
 
         // DeviceService::new(stream, ())
-        Box::pin(future::ok(todo!()))
+        Box::pin(future::ok(Connection::new(stream, addr)))
     }
 }
 
