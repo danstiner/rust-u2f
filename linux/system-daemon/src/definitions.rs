@@ -27,7 +27,7 @@ pub enum CreateDeviceError {
     IOError,
     #[error("Already exists")]
     AlreadyExists,
-    #[error("closed")]
+    #[error("Closed")]
     Closed,
 }
 

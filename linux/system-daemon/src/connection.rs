@@ -77,7 +77,7 @@ pub async fn handle(stream: UnixStream, _addr: SocketAddr) -> Result<(), StreamE
     let ucred = stream.peer_cred()?;
     let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
     let mut user_socket: SocketTransport =
-        tokio_serde::Framed::new(length_delimited, tokio_serde::formats::Bincode::default());
+        tokio_serde::Framed::new(length_delimited, Bincode::default());
 
     let mut uhid_device = {
         let result = create_uhid_device(&mut user_socket, &ucred).await;
@@ -92,25 +92,26 @@ async fn create_uhid_device(
     user_socket: &mut SocketTransport,
     ucred: &UCred,
 ) -> Result<UhidDevice, StreamError> {
-    // TODO loop
-    match user_socket.next().await {
-        Some(Ok(SocketInput::CreateDeviceRequest(CreateDeviceRequest))) => {
-            let create_params = CreateParams {
-                name: device_name(&ucred),
-                phys: String::from(""),
-                uniq: String::from(""),
-                bus: Bus::USB,
-                vendor: 0xffff,
-                product: 0xffff,
-                version: 0,
-                country: 0,
-                data: REPORT_DESCRIPTOR.to_vec(),
-            };
+    loop {
+        match user_socket.next().await {
+            Some(Ok(SocketInput::CreateDeviceRequest(CreateDeviceRequest))) => {
+                let create_params = CreateParams {
+                    name: device_name(&ucred),
+                    phys: String::from(""),
+                    uniq: String::from(""),
+                    bus: Bus::USB,
+                    vendor: 0xffff,
+                    product: 0xffff,
+                    version: 0,
+                    country: 0,
+                    data: REPORT_DESCRIPTOR.to_vec(),
+                };
 
-            info!(name = %create_params.name, "Creating virtual U2F device");
-            return UhidDevice::create(create_params).await;
+                info!(name = %create_params.name, "Creating virtual U2F device");
+                return UhidDevice::create(create_params).await;
+            }
+            _ => return Err(todo!()),
         }
-        _ => return Err(todo!()),
     }
 }
 
@@ -126,7 +127,10 @@ async fn send_create_device_response(
     todo!()
 }
 
-async fn pipe_reports(uhid_device: &mut UhidDevice, user_socket: &mut SocketTransport) -> Result<(), StreamError> {
+async fn pipe_reports(
+    uhid_device: &mut UhidDevice,
+    user_socket: &mut SocketTransport,
+) -> Result<(), StreamError> {
     loop {
         (tokio::select! {
             Some(input) = user_socket.next() => match input? {
