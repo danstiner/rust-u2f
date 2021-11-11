@@ -13,40 +13,8 @@ pub enum SocketOutput {
     Report(Report),
 }
 
-// impl slog::Value for SocketOutput {
-//     fn serialize(
-//         &self,
-//         record: &slog::Record,
-//         key: slog::Key,
-//         serializer: &mut dyn slog::Serializer,
-//     ) -> slog::Result {
-//         match self {
-//             &SocketOutput::CreateDeviceResponse(ref response) => slog::Value::serialize(
-//                 &format!("CreateDeviceResponse({:?})", response),
-//                 record,
-//                 key,
-//                 serializer,
-//             ),
-//             &SocketOutput::Report { .. } => {
-//                 slog::Value::serialize(&"Packet", record, key, serializer)
-//             }
-//         }
-//     }
-// }
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CreateDeviceRequest;
-
-// impl slog::Value for CreateDeviceRequest {
-//     fn serialize(
-//         &self,
-//         record: &slog::Record,
-//         key: slog::Key,
-//         serializer: &mut dyn slog::Serializer,
-//     ) -> slog::Result {
-//         slog::Value::serialize(&format!("{:?}", self), record, key, serializer)
-//     }
-// }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeviceDescription {
@@ -81,14 +49,3 @@ impl Report {
         self.bytes
     }
 }
-
-// impl slog::Value for Report {
-//     fn serialize(
-//         &self,
-//         record: &slog::Record,
-//         key: slog::Key,
-//         serializer: &mut dyn slog::Serializer,
-//     ) -> slog::Result {
-//         slog::Value::serialize(&format!("{:?}", self), record, key, serializer)
-//     }
-// }
