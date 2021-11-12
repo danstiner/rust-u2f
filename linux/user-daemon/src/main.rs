@@ -39,7 +39,7 @@ use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
 use u2f_core::{OpenSSLCryptoOperations, SecretStore, Service, U2fService};
-use u2fhid_protocol::Packet;
+use u2fhid_protocol::{Packet, U2fHidServer};
 use user_presence::NotificationUserPresence;
 
 mod atomic_file;
@@ -111,60 +111,34 @@ async fn main() {
 }
 
 async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
-    let u2f = VirtualU2fDevice::create(system_daemon_socket).await?;
-    u2f.run_loop().await
-}
+    let config = config::Config::load()?;
+    let user_presence = NotificationUserPresence::new();
+    let attestation = u2f_core::self_signed_attestation();
+    let crypto = OpenSSLCryptoOperations::new(attestation);
+    let secrets = secret_store::build(&config)?;
 
-#[must_use]
-struct VirtualU2fDevice {
-    u2f_service:
-        U2fService<Box<dyn SecretStore>, OpenSSLCryptoOperations, NotificationUserPresence>,
-    hid_transport: HidTransport,
-    uhid_device: DeviceDescription,
-}
+    let u2f_service = U2fService::new(secrets, crypto, user_presence);
 
-impl VirtualU2fDevice {
-    pub async fn create(system_daemon_socket: &Path) -> Result<Self, Error> {
-        let config = config::Config::load()?;
-        let user_presence = NotificationUserPresence::new();
-        let attestation = u2f_core::self_signed_attestation();
-        let crypto = OpenSSLCryptoOperations::new(attestation);
-        let secrets = secret_store::build(&config)?;
+    let stream = UnixStream::connect(system_daemon_socket)
+        .await
+        .map_err(|error| Error::Connect {
+            error,
+            socket_path: system_daemon_socket.to_owned(),
+        })?;
 
-        let u2f_service = U2fService::new(secrets, crypto, user_presence);
+    require_root(stream.peer_cred()?)?;
 
-        let stream = UnixStream::connect(system_daemon_socket)
-            .await
-            .map_err(|error| Error::Connect {
-                error,
-                socket_path: system_daemon_socket.to_owned(),
-            })?;
+    let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
+    let mut system_socket: SocketTransport =
+        tokio_serde::Framed::new(length_delimited, Bincode::default());
 
-        require_root(stream.peer_cred()?)?;
+    let uhid_device = create_uhid_device(&mut system_socket).await?;
 
-        let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
-        let mut system_socket: SocketTransport =
-            tokio_serde::Framed::new(length_delimited, Bincode::default());
+    let hid_transport: HidTransport = Pipe::new(system_socket, SocketToHid);
 
-        let uhid_device = create_uhid_device(&mut system_socket).await?;
-
-        let hid_transport: HidTransport = Pipe::new(system_socket, SocketToHid);
-
-        Ok(Self {
-            u2f_service,
-            hid_transport,
-            uhid_device,
-        })
-    }
-
-    pub async fn run_loop(mut self) -> Result<(), Error> {
-        // todo check poll ready
-        while let Some(request) = self.hid_transport.next().await {
-            let response = self.u2f_service.call(todo!()).await?;
-            self.hid_transport.send(todo!()).await?;
-        }
-        todo!()
-    }
+    U2fHidServer::new(hid_transport, u2f_service)
+        .serve::<Error>()
+        .await
 }
 
 fn require_root(peer: UCred) -> Result<(), Error> {
@@ -268,7 +242,7 @@ where
     P: Proxy,
     T: Stream<Item = P::StreamInput>,
 {
-    type Item = P::StreamOutput;
+    type Item = Result<P::StreamOutput, P::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // self.inner

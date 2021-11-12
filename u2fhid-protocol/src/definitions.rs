@@ -111,7 +111,7 @@ pub enum Command {
     Unknown { identifier: u8 },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Packet {
     Initialization {
         channel_id: ChannelId,
