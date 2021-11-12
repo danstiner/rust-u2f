@@ -60,7 +60,8 @@ enum Error {
     WrongListenFdCount { count: usize },
 }
 
-#[tokio::main(flavor = "current_thread")]
+// TODO run single threaded to use less memory: #[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() {
     let args = App::new("Rust-u2f System Daemon")
         .version(VERSION)
