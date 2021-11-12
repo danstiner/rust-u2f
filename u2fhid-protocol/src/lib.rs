@@ -12,9 +12,5 @@ extern crate tracing;
 extern crate u2f_core;
 
 pub use definitions::*;
-pub use framed::{Framed, Decoder, Encoder};
-pub use protocol::U2fHidProtocol;
 
 mod definitions;
-mod framed;
-mod protocol;

@@ -38,8 +38,8 @@ use tracing_subscriber::prelude::*;
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
-use u2f_core::{OpenSSLCryptoOperations, Request, Response, SecretStore, Service, U2fService};
-use u2fhid_protocol::{Decoder, Encoder, Packet, U2fHidProtocol};
+use u2f_core::{OpenSSLCryptoOperations, SecretStore, Service, U2fService};
+use u2fhid_protocol::Packet;
 use user_presence::NotificationUserPresence;
 
 mod atomic_file;
@@ -119,7 +119,7 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
 struct VirtualU2fDevice {
     u2f_service:
         U2fService<Box<dyn SecretStore>, OpenSSLCryptoOperations, NotificationUserPresence>,
-    u2f_transport: U2fTransport,
+    hid_transport: HidTransport,
     uhid_device: DeviceDescription,
 }
 
@@ -148,22 +148,20 @@ impl VirtualU2fDevice {
 
         let uhid_device = create_uhid_device(&mut system_socket).await?;
 
-        let protocol = Compose::new(U2fHidProtocol::new(), PacketCodec);
-
-        let u2f_transport: U2fTransport = u2fhid_protocol::Framed::new(system_socket, protocol);
+        let hid_transport: HidTransport = Pipe::new(system_socket, SocketToHid);
 
         Ok(Self {
             u2f_service,
-            u2f_transport,
+            hid_transport,
             uhid_device,
         })
     }
 
     pub async fn run_loop(mut self) -> Result<(), Error> {
         // todo check poll ready
-        while let Some(request) = self.u2f_transport.next().await {
-            let response = self.u2f_service.call(request?).await?;
-            self.u2f_transport.send(response).await?;
+        while let Some(request) = self.hid_transport.next().await {
+            let response = self.u2f_service.call(todo!()).await?;
+            self.hid_transport.send(todo!()).await?;
         }
         todo!()
     }
@@ -188,81 +186,7 @@ type SocketTransport = tokio_serde::Framed<
     Bincode<SocketOutput, SocketInput>,
 >;
 
-type U2fTransport = u2fhid_protocol::Framed<SocketTransport, Compose<U2fHidProtocol, PacketCodec>>;
-
-pub struct Compose<Outer, Inner> {
-    outer: Outer,
-    inner: Inner,
-}
-
-impl<Outer, Inner> Compose<Outer, Inner> {
-    pub fn new(outer: Outer, inner: Inner) -> Self {
-        Self { outer, inner }
-    }
-}
-
-impl<Outer, Inner, I, E> Decoder for Compose<Outer, Inner>
-where
-    Outer: Decoder<Item = I, Error = E>,
-    Inner: Decoder<Decoded = I, Error = E>,
-{
-    type Item = Inner::Item;
-    type Decoded = Outer::Decoded;
-    type Error = E;
-
-    fn decode(&mut self, item: &mut Self::Item) -> Result<Option<Self::Decoded>, Self::Error> {
-        match self.inner.decode(item) {
-            Ok(Some(mut item)) => self.outer.decode(&mut item),
-            Ok(None) => Ok(None),
-            Err(err) => Err(err),
-        }
-    }
-}
-
-impl<Outer, Inner, I, E> Encoder for Compose<Outer, Inner>
-where
-    Outer: Encoder<Encoded = I, Error = E>,
-    Inner: Encoder<Item = I, Error = E>,
-{
-    type Item = Outer::Item;
-    type Encoded = Inner::Encoded;
-    type Error = E;
-
-    fn encode(&mut self, item: &mut Self::Item) -> Result<Option<Self::Encoded>, Self::Error> {
-        match self.outer.encode(item) {
-            Ok(Some(mut item)) => self.inner.encode(&mut item),
-            Ok(None) => Ok(None),
-            Err(err) => Err(err),
-        }
-    }
-}
-
-pub struct PacketCodec;
-
-impl Decoder for PacketCodec {
-    type Item = SocketOutput;
-    type Decoded = Packet;
-    type Error = io::Error;
-
-    fn decode(&mut self, item: &mut Self::Item) -> Result<Option<Self::Decoded>, Self::Error> {
-        match item {
-            SocketOutput::Report(report) => Packet::from_bytes(report.as_bytes())
-                .map(Option::Some)
-                .map_err(|_| io::Error::new(io::ErrorKind::Other, "TODO")),
-            _ => Ok(None),
-        }
-    }
-}
-
-impl Encoder for PacketCodec {
-    type Item = Packet;
-    type Encoded = SocketInput;
-    type Error = io::Error;
-
-    fn encode(&mut self, item: &mut Self::Item) -> Result<Option<Self::Encoded>, Self::Error> {
-        Ok(Some(SocketInput::Report(Report::new(item.to_bytes()))))
-    }
-}
+type HidTransport = Pipe<SocketTransport, SocketToHid>;
 
 async fn create_uhid_device(
     system_socket: &mut SocketTransport,
@@ -289,55 +213,89 @@ async fn create_uhid_device(
     ))
 }
 
-// // #[pin_project]
-// pub struct BidirectionalMap<T, I, O> {
-//     // #[pin]
-//     transport: T,
-//     i: I,
-//     o: O,
-// }
+struct SocketToHid;
 
-// impl<T, I, O> BidirectionalMap<T, I, O>
-// where
-//     T: Stream,
-// {
-//     pub fn new(transport: T, i: I, o: O) -> Self {
-//         Self { transport, i, o }
-//     }
-// }
+impl Proxy for SocketToHid {
+    type StreamInput = Result<SocketOutput, Self::Error>;
+    type StreamOutput = Packet;
+    type SinkInput = Packet;
+    type SinkOutput = SocketInput;
+    type Error = io::Error;
 
-// impl<T, I, O> Stream for BidirectionalMap<T, I, O>
-// where
-//     T: Stream,
-//     I: FnMut(T::Item),
-// {
-//     type Item = I::Output;
+    fn map_stream(input: Self::StreamInput) -> Result<Option<Self::StreamOutput>, Self::Error> {
+        match input {
+            Ok(SocketOutput::Report(report)) => Packet::from_bytes(report.as_bytes())
+                .map(Option::Some)
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "TODO")),
+            Ok(SocketOutput::CreateDeviceResponse(_)) => Ok(None), // todo log
+            Err(err) => Err(err),
+        }
+    }
 
-//     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-//         todo!()
-//     }
-// }
+    fn map_sink(input: Self::SinkInput) -> Result<Option<Self::SinkOutput>, Self::Error> {
+        Ok(Some(SocketInput::Report(Report::new(input.to_bytes()))))
+    }
+}
 
-// impl<T, I, O, E, I2> Sink<I2> for BidirectionalMap<T, I, O>
-// where
-//     T: Sink<O::Output, Error = E>,
-//     O: FnMut(I2),
-// {
-//     type Error = E;
+pub trait Proxy {
+    type StreamInput;
+    type StreamOutput;
+    type SinkInput;
+    type SinkOutput;
+    type Error;
 
-//     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-//         todo!()
-//     }
+    fn map_stream(input: Self::StreamInput) -> Result<Option<Self::StreamOutput>, Self::Error>;
+    fn map_sink(input: Self::SinkInput) -> Result<Option<Self::SinkOutput>, Self::Error>;
+}
 
-//     fn start_send(self: Pin<&mut Self>, item: I2) -> Result<(), Self::Error> {
-//         todo!()
-//     }
+pub struct Pipe<T, P> {
+    proxy: P,
+    inner: T,
+}
 
-//     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-//         todo!()
-//     }
+impl<T, P> Pipe<T, P>
+where
+    P: Proxy,
+    T: Stream<Item = P::StreamInput> + Sink<P::SinkOutput>,
+{
+    pub fn new(inner: T, proxy: P) -> Self {
+        Self { inner, proxy }
+    }
+}
 
-//     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-//         todo!()
-//     }
-// }
+impl<T, P> Stream for Pipe<T, P>
+where
+    P: Proxy,
+    T: Stream<Item = P::StreamInput>,
+{
+    type Item = P::StreamOutput;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // self.inner
+        todo!()
+    }
+}
+
+impl<T, P> Sink<P::SinkInput> for Pipe<T, P>
+where
+    P: Proxy,
+    T: Sink<P::SinkOutput>,
+{
+    type Error = P::Error;
+
+    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        todo!()
+    }
+
+    fn start_send(self: Pin<&mut Self>, item: P::SinkInput) -> Result<(), Self::Error> {
+        todo!()
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        todo!()
+    }
+
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        todo!()
+    }
+}
