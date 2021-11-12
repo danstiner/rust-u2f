@@ -286,6 +286,9 @@ fn to_uhid_event_type(value: u32) -> Option<sys::uhid_event_type> {
 
 fn read_event(src: &mut BytesMut) -> Option<sys::uhid_event> {
     let uhid_event_size = mem::size_of::<sys::uhid_event>();
+    // TODO events can be less than the size of the struct,
+    // The userspace process is expected to zero pad in that case
+    // There is a maximum size.
     if src.len() >= uhid_event_size {
         let bytes = src.split_to(uhid_event_size);
         let ptr = bytes.as_ptr();

@@ -1,9 +1,9 @@
 use bitflags::bitflags;
-use thiserror::Error;
 use std::cmp;
 use std::collections::vec_deque::VecDeque;
 use std::io::{Cursor, Read};
 use std::time::Duration;
+use thiserror::Error;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use serde_derive::{Deserialize, Serialize};
@@ -267,7 +267,7 @@ impl RequestMessage {
             }),
             &Command::Init => {
                 if data.len() != COMMAND_INIT_DATA_LEN {
-                    Err(RequestMessageDecodeError::PayloadLength{
+                    Err(RequestMessageDecodeError::PayloadLength {
                         expected_len: COMMAND_INIT_DATA_LEN,
                         actual_len: data.len(),
                     })
@@ -280,7 +280,7 @@ impl RequestMessage {
             &Command::Wink => Ok(RequestMessage::Wink),
             &Command::Lock => {
                 if data.len() != COMMAND_WINK_DATA_LEN {
-                    Err(RequestMessageDecodeError::PayloadLength{
+                    Err(RequestMessageDecodeError::PayloadLength {
                         expected_len: COMMAND_WINK_DATA_LEN,
                         actual_len: data.len(),
                     })

@@ -52,6 +52,8 @@ impl<'de> Deserialize<'de> for AppId {
 
 impl std::fmt::Debug for AppId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("AppId").field(&base64::encode(&self.0)).finish()
+        f.debug_tuple("AppId")
+            .field(&base64::encode(&self.0))
+            .finish()
     }
 }
