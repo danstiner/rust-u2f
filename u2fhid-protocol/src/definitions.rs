@@ -1,11 +1,12 @@
+use bitflags::bitflags;
+use thiserror::Error;
 use std::cmp;
 use std::collections::vec_deque::VecDeque;
 use std::io::{Cursor, Read};
-use std::mem::size_of;
 use std::time::Duration;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use slog;
+use serde_derive::{Deserialize, Serialize};
 use u2f_core;
 
 pub const MAJOR_DEVICE_VERSION_NUMBER: u8 = 0;
@@ -55,17 +56,6 @@ impl ChannelId {
 
     pub fn write<W: WriteBytesExt>(&self, write: &mut W) {
         write.write_u32::<BigEndian>(self.0).unwrap();
-    }
-}
-
-impl slog::Value for ChannelId {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        format!("{:#01$X}", self.0, size_of::<u32>() * 2).serialize(record, key, serializer)
     }
 }
 
@@ -121,28 +111,6 @@ pub enum Command {
     Unknown { identifier: u8 },
 }
 
-impl slog::Value for Command {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        match self {
-            &Command::Msg => "Msg",
-            &Command::Ping => "Ping",
-            &Command::Init => "Init",
-            &Command::Error => "Error",
-            &Command::Wink => "Wink",
-            &Command::Lock => "Lock",
-            &Command::Sync => "Sync",
-            &Command::Unknown { .. } => "Unknown",
-            &Command::Vendor { .. } => "Vendor",
-        }
-        .serialize(record, key, serializer)
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub enum Packet {
     Initialization {
@@ -156,21 +124,6 @@ pub enum Packet {
         sequence_number: u8,
         data: Vec<u8>,
     },
-}
-
-impl slog::Value for Packet {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        match self {
-            &Packet::Initialization { .. } => "Initialization",
-            &Packet::Continuation { .. } => "Continuation",
-        }
-        .serialize(record, key, serializer)
-    }
 }
 
 impl Packet {
@@ -314,10 +267,10 @@ impl RequestMessage {
             }),
             &Command::Init => {
                 if data.len() != COMMAND_INIT_DATA_LEN {
-                    Err(RequestMessageDecodeError::PayloadLength(
-                        COMMAND_INIT_DATA_LEN,
-                        data.len(),
-                    ))
+                    Err(RequestMessageDecodeError::PayloadLength{
+                        expected_len: COMMAND_INIT_DATA_LEN,
+                        actual_len: data.len(),
+                    })
                 } else {
                     let mut nonce = [0u8; COMMAND_INIT_DATA_LEN];
                     nonce.copy_from_slice(&data[..]);
@@ -327,10 +280,10 @@ impl RequestMessage {
             &Command::Wink => Ok(RequestMessage::Wink),
             &Command::Lock => {
                 if data.len() != COMMAND_WINK_DATA_LEN {
-                    Err(RequestMessageDecodeError::PayloadLength(
-                        COMMAND_WINK_DATA_LEN,
-                        data.len(),
-                    ))
+                    Err(RequestMessageDecodeError::PayloadLength{
+                        expected_len: COMMAND_WINK_DATA_LEN,
+                        actual_len: data.len(),
+                    })
                 } else {
                     Ok(RequestMessage::Lock {
                         lock_time: Duration::from_secs(data[0].into()),
@@ -352,23 +305,16 @@ impl RequestMessage {
     }
 }
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum RequestMessageDecodeError {
-        PayloadLength(expected_len: usize, actual_len: usize)
-        UnsupportedCommand(command: Command)
-    }
-}
+#[derive(Debug, Error)]
+pub enum RequestMessageDecodeError {
+    #[error("Payload length ({actual_len}) longer than expected ({expected_len})")]
+    PayloadLength {
+        expected_len: usize,
+        actual_len: usize,
+    },
 
-impl slog::Value for RequestMessageDecodeError {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        format!("{:?}", self).serialize(record, key, serializer)
-    }
+    #[error("Unsupported command: {0:?}")]
+    UnsupportedCommand(Command),
 }
 
 #[derive(Debug)]
@@ -437,25 +383,6 @@ pub enum ResponseMessage {
     },
     Wink,
     Lock,
-}
-
-impl slog::Value for ResponseMessage {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        match self {
-            ResponseMessage::EncapsulatedResponse { .. } => "EncapsulatedResponse",
-            ResponseMessage::Init { .. } => "Init",
-            ResponseMessage::Pong { .. } => "Pong",
-            ResponseMessage::Error { .. } => "Error",
-            ResponseMessage::Wink => "Wink",
-            ResponseMessage::Lock => "Lock",
-        }
-        .serialize(record, key, serializer)
-    }
 }
 
 impl From<u2f_core::Response> for ResponseMessage {

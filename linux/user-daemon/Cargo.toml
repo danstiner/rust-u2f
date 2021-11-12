@@ -34,8 +34,8 @@ path = "../system-daemon"
 [dependencies.u2f-core]
 path = "../../u2f-core"
 
-# [dependencies.u2fhid-protocol]
-# path = "../../u2fhid-protocol"
+[dependencies.u2fhid-protocol]
+path = "../../u2fhid-protocol"
 
 [dev-dependencies]
 tempdir = "0.3.7"

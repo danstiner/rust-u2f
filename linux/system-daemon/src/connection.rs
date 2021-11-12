@@ -5,9 +5,7 @@ use std::task::{Context, Poll};
 
 use futures::{future, Future, SinkExt, StreamExt};
 use pin_project::pin_project;
-use softu2f_system_daemon::{
-    CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
-};
+use softu2f_system_daemon::{CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput};
 use thiserror::Error;
 use tokio::net::{
     unix::{SocketAddr, UCred},
@@ -92,9 +90,9 @@ async fn create_uhid_device(
     user_socket: &mut SocketTransport,
     ucred: &UCred,
 ) -> Result<UhidDevice, StreamError> {
-    loop {
-        match user_socket.next().await {
-            Some(Ok(SocketInput::CreateDeviceRequest(CreateDeviceRequest))) => {
+    while let Some(input) = user_socket.next().await {
+        match input? {
+            SocketInput::CreateDeviceRequest(CreateDeviceRequest) => {
                 let create_params = CreateParams {
                     name: device_name(&ucred),
                     phys: String::from(""),
@@ -113,18 +111,22 @@ async fn create_uhid_device(
             _ => return Err(todo!()),
         }
     }
+
+    todo!()
 }
 
 async fn send_create_device_response(
     result: &Result<UhidDevice, StreamError>,
     user_socket: &mut SocketTransport,
 ) -> Result<(), StreamError> {
-    user_socket
-        .send(SocketOutput::CreateDeviceResponse(Ok(DeviceDescription {
+    user_socket.send(SocketOutput::CreateDeviceResponse(match result {
+        Ok(_device) => Ok(DeviceDescription {
+            
             id: String::from("TODO"),
-        })))
-        .await;
-    todo!()
+        }),
+        Err(StreamError::Io(_)) => Err(CreateDeviceError::IoError),
+        Err(_) => Err(CreateDeviceError::Unknown),
+    })).await.map_err(StreamError::Io)
 }
 
 async fn pipe_reports(

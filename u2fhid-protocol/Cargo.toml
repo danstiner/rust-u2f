@@ -10,11 +10,10 @@ futures = "0.3.17"
 itertools = "0.10.1"
 serde = "1.0.99"
 serde_derive = "1.0.99"
-slog = "2.5.2"
-slog-stdlog = "4.0.0"
+thiserror = "1.0"
 tokio-core = "0.1.17"
 tokio-tower = "0.6.0"
-quick-error = "2.0.1"
+tracing = "0.1"
 
 [dependencies.u2f-core]
 path = "../u2f-core"

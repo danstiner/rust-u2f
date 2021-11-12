@@ -194,6 +194,12 @@ pub enum RegisterError {
     Signing(#[from] SignError),
 }
 
+/// Service capable of handling the requests defined in the FIDO U2F specification.
+/// See https://fidoalliance.org/specs/fido-u2f-v1.2-ps-20170411/fido-u2f-overview-v1.2-ps-20170411.html
+/// See https://fidoalliance.org/specs/fido-u2f-v1.2-ps-20170411/fido-u2f-raw-message-formats-v1.2-ps-20170411.html
+/// 
+/// Key storage, cryptographic operations, and user presence checking are
+/// separated to pluggable dependencies for flexibility and ease of testing.
 pub struct U2fService<Secrets, Crypto, Presence>(Rc<U2f<Secrets, Crypto, Presence>>);
 
 impl<Secrets, Crypto, Presence> U2fService<Secrets, Crypto, Presence>
@@ -253,7 +259,7 @@ where
     }
 }
 
-pub struct U2f<Secrets, Crypto, Presence> {
+struct U2f<Secrets, Crypto, Presence> {
     secrets: Secrets,
     crypto: Crypto,
     presence: Presence,

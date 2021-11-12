@@ -17,7 +17,7 @@ extern crate tokio;
 extern crate tracing;
 extern crate tracing_subscriber;
 extern crate u2f_core;
-// extern crate u2fhid_protocol;
+extern crate u2fhid_protocol;
 
 use std::{
     io,

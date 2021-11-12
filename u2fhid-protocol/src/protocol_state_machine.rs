@@ -4,10 +4,12 @@ use std::time::Duration;
 
 use crate::definitions::*;
 use futures::future;
-use futures::{Async, Future};
-use slog::Logger;
+use futures::{Future};
 use tokio_core::reactor::Handle;
 use tokio_core::reactor::Timeout;
+use tracing::debug;
+use tracing::info;
+use tracing::trace;
 use u2f_core::{self, Service};
 
 macro_rules! try_some {
@@ -32,7 +34,7 @@ struct ReceiveState {
 
 struct DispatchState {
     channel_id: ChannelId,
-    future: Box<dyn Future<Item = ResponseMessage, Error = io::Error>>,
+    future: Box<dyn Future<Output = Result<ResponseMessage, io::Error>>>,
     timeout: Timeout,
 }
 
@@ -139,7 +141,6 @@ pub struct StateMachine<S> {
     channels: Channels,
     handle: Handle,
     lock: LockState,
-    logger: Logger,
     service: S,
     state: State,
 }
@@ -154,12 +155,11 @@ where
     >,
     ResponseMessage: From<<S as u2f_core::Service>::Response>,
 {
-    pub fn new(service: S, handle: Handle, logger: Logger) -> StateMachine<S> {
+    pub fn new(service: S, handle: Handle) -> StateMachine<S> {
         StateMachine {
             channels: Channels::new(),
             handle: handle,
             lock: LockState::None,
-            logger: logger,
             service: service,
             state: State::Idle,
         }
@@ -207,19 +207,19 @@ where
     }
 
     pub fn accept_packet(&mut self, packet: Packet) -> Result<Option<Response>, io::Error> {
-        trace!(self.logger, "check_channel_id");
+        trace!("check_channel_id");
         try_some!(self.check_channel_id(&packet));
 
-        trace!(self.logger, "check_lock");
+        trace!("check_lock");
         try_some!(self.check_lock(&packet));
 
-        trace!(self.logger, "step_with_packet");
+        trace!("step_with_packet");
         try_some!(self.step_with_packet(packet));
 
-        trace!(self.logger, "try_complete_receive");
+        trace!("try_complete_receive");
         try_some!(self.try_complete_receive());
 
-        trace!(self.logger, "try_complete_dispatch");
+        trace!("try_complete_dispatch");
         try_some!(self.try_complete_dispatch());
 
         Ok(None)
@@ -228,7 +228,7 @@ where
     fn check_channel_id(&self, packet: &Packet) -> Result<Option<Response>, io::Error> {
         let channel_id = packet.channel_id();
         if !self.channels.is_valid(channel_id) {
-            debug!(self.logger, "Invalid channel"; "id" => channel_id);
+            debug!(channel_id, "Invalid channel");
             Ok(Some(Self::error_output(
                 ErrorCode::InvalidChannel,
                 channel_id,
@@ -266,7 +266,7 @@ where
                     command,
                 },
             ) => {
-                debug!(self.logger, "Begin transaction"; "channel_id" => &channel_id, "command" => &command, "payload_len" => payload_len);
+                debug!("Begin transaction"; "channel_id" => &channel_id, "command" => &command, "payload_len" => payload_len);
                 StateTransition {
                     new_state: State::Receive(ReceiveState {
                         buffer: data.to_vec(),
@@ -284,7 +284,7 @@ where
                 }
             }
             (state @ State::Idle, Packet::Continuation { .. }) => {
-                debug!(self.logger, "Out of order continuation packet, ignoring");
+                debug!("Out of order continuation packet, ignoring");
                 StateTransition {
                     new_state: state,
                     output: None,
@@ -292,7 +292,7 @@ where
             }
             (State::Receive(receive), Packet::Initialization { channel_id, .. }) => {
                 if channel_id == receive.channel_id {
-                    debug!(self.logger, "Invalid message sequencing");
+                    debug!("Invalid message sequencing");
                     StateTransition {
                         new_state: State::Idle,
                         output: Some(Response {
@@ -303,7 +303,7 @@ where
                         }),
                     }
                 } else {
-                    debug!(self.logger, "Other channel busy with transaction");
+                    debug!("Other channel busy with transaction");
                     StateTransition {
                         new_state: State::Receive(receive),
                         output: Some(Response {
@@ -372,12 +372,12 @@ where
             State::Receive(receive) => {
                 if receive.buffer.len() >= receive.payload_len {
                     let bytes = &receive.buffer[0..receive.payload_len];
-                    debug!(self.logger, "Received payload"; "len" => receive.payload_len);
+                    debug!(len = receive.payload_len, "Received payload");
                     match RequestMessage::decode(&receive.command, bytes) {
                         Err(RequestMessageDecodeError::UnsupportedCommand(Command::Unknown {
                             ..
                         })) => {
-                            info!(self.logger, "Unknown command. Responding with InvalidCommand error to encourage fallback to U2F protocol");
+                            info!("Unknown command. Responding with InvalidCommand error to encourage fallback to U2F protocol");
                             StateTransition {
                                 new_state: State::Idle,
                                 output: Some(Response {
@@ -389,7 +389,7 @@ where
                             }
                         }
                         Err(error) => {
-                            debug!(self.logger, "Unable to decode request message"; "error" => error);
+                            debug!("Unable to decode request message"; "error" => error);
                             StateTransition {
                                 new_state: State::Idle,
                                 output: Some(Response {
@@ -417,7 +417,7 @@ where
                         }
                     }
                 } else {
-                    debug!(self.logger, "Payload incomplete"; "payload_len" => receive.payload_len, "receive_len" => receive.buffer.len());
+                    debug!("Payload incomplete"; "payload_len" => receive.payload_len, "receive_len" => receive.buffer.len());
                     StateTransition {
                         new_state: State::Receive(receive),
                         output: None,
@@ -474,7 +474,7 @@ where
         match request.message {
             RequestMessage::EncapsulatedRequest { data } => {
                 // TODO no unwrap
-                debug!(self.logger, "RequestMessage::EncapsulatedRequest"; "data.len" => data.len());
+                debug!(data.len = data.len(), "RequestMessage::EncapsulatedRequest");
                 let request = u2f_core::Request::decode(&data).unwrap();
                 Ok(self.dispatch(request))
             }
@@ -485,7 +485,7 @@ where
                     .channels
                     .allocate()
                     .expect("Failed to allocate new channel");
-                debug!(self.logger, "RequestMessage::Init"; "new_channel_id" => new_channel_id);
+                debug!(new_channel_id, "RequestMessage::Init");
                 Ok(Box::new(future::ok(ResponseMessage::Init {
                     nonce,
                     new_channel_id: new_channel_id,
@@ -497,12 +497,12 @@ where
                 })))
             }
             RequestMessage::Ping { data } => {
-                debug!(self.logger, "RequestMessage::Ping"; "data.len" => data.len());
+                debug!("RequestMessage::Ping"; "data.len" => data.len());
                 Ok(Box::new(future::ok(ResponseMessage::Pong { data: data })))
             }
             RequestMessage::Wink => Ok(self.dispatch(u2f_core::Request::Wink)),
             RequestMessage::Lock { lock_time } => {
-                debug!(self.logger, "RequestMessage::Lock"; "lock_time" => lock_time.as_secs());
+                debug!("RequestMessage::Lock"; "lock_time" => lock_time.as_secs());
                 if lock_time == Duration::from_secs(0) {
                     // TODO Enforce correct channel
                     self.lock.release();
@@ -528,8 +528,6 @@ where
 mod tests {
     extern crate rand;
 
-    use slog::{self, Drain};
-    use slog_stdlog;
     use tokio_core::reactor::Core;
 
     use super::*;
@@ -562,7 +560,6 @@ mod tests {
 
     #[test]
     fn init() {
-        let logger = slog::Logger::root(slog_stdlog::StdLog.fuse(), o!());
         let core = Core::new().unwrap();
         let mut state_machine = StateMachine::new(FakeU2FService, core.handle(), logger);
         init_channel(&mut state_machine);
@@ -611,7 +608,6 @@ mod tests {
 
     #[test]
     fn ping() {
-        let logger = slog::Logger::root(slog_stdlog::StdLog.fuse(), o!());
         let core = Core::new().unwrap();
         let mut state_machine = StateMachine::new(FakeU2FService, core.handle(), logger);
         let ping_data: [u8; 8] = rand::random();
