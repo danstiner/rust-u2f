@@ -148,7 +148,7 @@ async fn pipe_reports(
     user_socket: &mut SocketTransport,
 ) -> Result<(), StreamError> {
     loop {
-        trace!("select");
+        trace!("Select next HID report to send");
         (tokio::select! {
             Some(input) = user_socket.next() => match input? {
                 SocketInput::Report(report) => uhid_device.send(InputEvent::Input {
