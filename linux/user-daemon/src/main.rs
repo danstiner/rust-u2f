@@ -234,8 +234,10 @@ pub trait Proxy {
     ) -> Result<Option<Self::SinkOutput>, Self::Error>;
 }
 
+#[pin_project]
 pub struct Pipe<T, P> {
     proxy: P,
+    #[pin]
     inner: T,
 }
 
