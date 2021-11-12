@@ -75,6 +75,7 @@ pub enum Error {
 
 pub async fn handle(stream: UnixStream, _addr: SocketAddr) -> Result<(), StreamError> {
     let ucred = stream.peer_cred()?;
+    trace!(?ucred, "Handling connection");
     let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
     let mut user_socket: SocketTransport =
         tokio_serde::Framed::new(length_delimited, Bincode::default());
@@ -92,6 +93,7 @@ async fn create_uhid_device(
     user_socket: &mut SocketTransport,
     ucred: &UCred,
 ) -> Result<UhidDevice, StreamError> {
+    trace!("create_uhid_device");
     while let Some(input) = user_socket.next().await {
         match input? {
             SocketInput::CreateDeviceRequest(CreateDeviceRequest) => {
@@ -121,6 +123,7 @@ async fn send_create_device_response(
     result: &Result<UhidDevice, StreamError>,
     user_socket: &mut SocketTransport,
 ) -> Result<(), StreamError> {
+    trace!("send_create_device_response");
     user_socket
         .send(SocketOutput::CreateDeviceResponse(match result {
             Ok(_device) => Ok(DeviceDescription {
@@ -138,6 +141,7 @@ async fn pipe_reports(
     user_socket: &mut SocketTransport,
 ) -> Result<(), StreamError> {
     loop {
+        trace!("select");
         (tokio::select! {
             Some(input) = user_socket.next() => match input? {
                 SocketInput::Report(report) => uhid_device.send(InputEvent::Input {

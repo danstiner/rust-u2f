@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io;
 use std::pin::Pin;
 use std::task::Context;
@@ -9,6 +10,7 @@ use tokio::net::unix::SocketAddr;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
 use tower::Service;
+use tracing::error;
 use tracing::trace;
 
 #[must_use = "futures do nothing unless polled"]
@@ -40,7 +42,7 @@ where
     S::Future: Send + 'static,
     Handler: Future + Send,
     Handler::Output: Send,
-    E: From<io::Error> + Send,
+    E: From<io::Error> + Send + fmt::Debug,
 {
     type Output = Result<(), E>;
 
@@ -63,7 +65,10 @@ where
                     tokio::spawn(async {
                         match handler_future.await {
                             Ok(handler) => handler.await,
-                            Err(_err) => todo!(),
+                            Err(err) => {
+                                error!(?err, "Error from spawned task");
+                                todo!()
+                            },
                         };
                     });
                 }
