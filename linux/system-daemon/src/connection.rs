@@ -128,12 +128,14 @@ async fn send_create_device_response(
         Ok(_device) => Ok(DeviceDescription {
             id: String::from("TODO"),
         }),
-        Err(StreamError::Io(_)) => Err(CreateDeviceError::IoError),
-        Err(err) => {
-            warn!(?err, "Unknown create device error");
-            // TODO handle better, it wasn't an I/O error
+        Err(StreamError::Io(err)) => {
+            warn!("Creating UHID device failed: I/O error: {}", err);
             Err(CreateDeviceError::IoError)
-        }
+        },
+        Err(err) => {
+            warn!("Creating UHID device failed: Unknown error: {}", err);
+            Err(CreateDeviceError::Unknown)
+        },
     };
     user_socket
         .send(SocketOutput::CreateDeviceResponse(response))
