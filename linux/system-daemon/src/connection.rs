@@ -73,7 +73,8 @@ pub async fn handle(stream: UnixStream, _addr: SocketAddr) -> Result<(), StreamE
     let ucred = stream.peer_cred()?;
     trace!(?ucred, "Handling connection");
     let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
-    let mut user_socket: SocketTransport = tokio_serde::Framed::new(length_delimited, Bincode::default());
+    let mut user_socket: SocketTransport =
+        tokio_serde::Framed::new(length_delimited, Bincode::default());
 
     let mut uhid_device = {
         let result = create_uhid_device(&mut user_socket, &ucred).await;

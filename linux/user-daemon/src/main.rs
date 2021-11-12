@@ -69,8 +69,8 @@ pub enum Error {
     #[error("{0}")]
     InvalidState(&'static str),
 
-    #[error("{0:?}")]
-    CreateDeviceError(CreateDeviceError),
+    #[error("{0}")]
+    CreateDeviceError(#[from] CreateDeviceError),
 
     #[error("Home directory path could not be retrieved from the operating system")]
     HomeDirectoryNotFound,
@@ -173,7 +173,7 @@ async fn create_uhid_device(
     while let Some(output) = system_socket.next().await {
         match output? {
             SocketOutput::CreateDeviceResponse(Ok(device)) => return Ok(device),
-            SocketOutput::CreateDeviceResponse(Err(err)) => return Err(Error::CreateDeviceError(err)),
+            SocketOutput::CreateDeviceResponse(Err(err)) => return Err(err.into()),
             SocketOutput::Report(_) => {
                 return Err(Error::InvalidState(
                     "Received HID report while waiting for create device response",
