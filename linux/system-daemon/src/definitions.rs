@@ -40,9 +40,7 @@ pub struct Report {
 
 impl Report {
     pub fn new(bytes: Vec<u8>) -> Report {
-        Report {
-            bytes,
-        }
+        Report { bytes }
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Report {

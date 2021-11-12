@@ -60,7 +60,7 @@
 //!     0x91, 0x01,		/* Output (Cnst,Var,Abs) */
 //!     0xc0,		/* END_COLLECTION */
 //! ];
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() {
 //!     let mut uhid_device = UhidDevice::create(CreateParams {

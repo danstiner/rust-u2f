@@ -38,7 +38,11 @@ impl UhidDevice {
 
     /// Create a UHID device using the specified character misc-device file path
     pub async fn create_with_path(path: &Path, params: CreateParams) -> Result<Self, StreamError> {
-        let file = tokio::fs::OpenOptions::new().read(true).write(true).open(path).await?;
+        let file = tokio::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .await?;
         let mut transport = Framed::with_capacity(file, Codec, MAX_UHID_EVENT_SIZE);
 
         debug!("Sending create device input event");
@@ -63,7 +67,8 @@ impl UhidDevice {
     pub async fn send_input(&mut self, data: &[u8]) -> Result<(), StreamError> {
         self.send(InputEvent::Input {
             data: data.to_vec(),
-        }).await
+        })
+        .await
     }
 
     /// Sends a 'destroy' event to the UHID device and then close it
