@@ -9,7 +9,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - 1.51.0 # Minimum supported Rust version
+          - 1.56.1 # Minimum supported Rust version
     steps:
       - name: Install dependencies
         run: sudo apt-get install -y libdbus-1-dev libssl-dev libsystemd-dev libudev-dev
