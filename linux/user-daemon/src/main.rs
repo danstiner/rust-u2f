@@ -8,6 +8,7 @@ extern crate futures;
 extern crate futures_cpupool;
 extern crate lazy_static;
 extern crate notify_rust;
+extern crate pin_project;
 extern crate secret_service;
 extern crate serde_derive;
 extern crate serde_json;
@@ -27,7 +28,8 @@ use std::{
 };
 
 use clap::{App, Arg};
-use futures::{Sink, SinkExt, Stream, StreamExt};
+use futures::{ready, Sink, SinkExt, Stream, StreamExt};
+use pin_project::pin_project;
 use thiserror::Error;
 use tokio::net::{unix::UCred, UnixStream};
 use tokio_serde::formats::Bincode;
@@ -194,7 +196,10 @@ impl Proxy for SocketToHid {
     type SinkOutput = SocketInput;
     type Error = io::Error;
 
-    fn map_stream(input: Self::StreamInput) -> Result<Option<Self::StreamOutput>, Self::Error> {
+    fn try_map_stream(
+        &mut self,
+        input: Self::StreamInput,
+    ) -> Result<Option<Self::StreamOutput>, Self::Error> {
         match input {
             Ok(SocketOutput::Report(report)) => Packet::from_bytes(report.as_bytes())
                 .map(Option::Some)
@@ -204,7 +209,10 @@ impl Proxy for SocketToHid {
         }
     }
 
-    fn map_sink(input: Self::SinkInput) -> Result<Option<Self::SinkOutput>, Self::Error> {
+    fn try_map_sink(
+        &mut self,
+        input: Self::SinkInput,
+    ) -> Result<Option<Self::SinkOutput>, Self::Error> {
         Ok(Some(SocketInput::Report(Report::new(input.to_bytes()))))
     }
 }
@@ -216,8 +224,14 @@ pub trait Proxy {
     type SinkOutput;
     type Error;
 
-    fn map_stream(input: Self::StreamInput) -> Result<Option<Self::StreamOutput>, Self::Error>;
-    fn map_sink(input: Self::SinkInput) -> Result<Option<Self::SinkOutput>, Self::Error>;
+    fn try_map_stream(
+        &mut self,
+        input: Self::StreamInput,
+    ) -> Result<Option<Self::StreamOutput>, Self::Error>;
+    fn try_map_sink(
+        &mut self,
+        input: Self::SinkInput,
+    ) -> Result<Option<Self::SinkOutput>, Self::Error>;
 }
 
 pub struct Pipe<T, P> {
@@ -238,36 +252,52 @@ where
 impl<T, P> Stream for Pipe<T, P>
 where
     P: Proxy,
-    T: Stream<Item = P::StreamInput>,
+    T: Stream<Item = P::StreamInput> + Unpin,
 {
     type Item = Result<P::StreamOutput, P::Error>;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // self.inner
-        todo!()
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = &mut *self;
+        while let Some(input) = ready!(Pin::new(&mut this.inner).poll_next(cx)) {
+            match this.proxy.try_map_stream(input) {
+                Ok(Some(item)) => return Poll::Ready(Some(Ok(item))),
+                Ok(None) => continue, // Item mapped to None, skip returning it
+                Err(err) => return Poll::Ready(Some(Err(err))),
+            };
+        }
+
+        Poll::Ready(None)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
     }
 }
 
 impl<T, P> Sink<P::SinkInput> for Pipe<T, P>
 where
     P: Proxy,
-    T: Sink<P::SinkOutput>,
+    T: Sink<P::SinkOutput, Error = P::Error> + Unpin,
 {
-    type Error = P::Error;
+    type Error = T::Error;
 
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        todo!()
+        self.inner.poll_ready_unpin(cx)
     }
 
-    fn start_send(self: Pin<&mut Self>, item: P::SinkInput) -> Result<(), Self::Error> {
-        todo!()
+    fn start_send(mut self: Pin<&mut Self>, item: P::SinkInput) -> Result<(), Self::Error> {
+        match self.proxy.try_map_sink(item) {
+            Ok(Some(item)) => self.inner.start_send_unpin(item),
+            Ok(None) => Ok(()), // Item mapped to None, skip send
+            Err(err) => Err(err),
+        }
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        todo!()
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_flush_unpin(cx)
     }
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        todo!()
+        self.inner.poll_close_unpin(cx)
     }
 }
