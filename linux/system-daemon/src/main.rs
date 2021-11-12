@@ -32,7 +32,7 @@ use tokio::net::UnixListener;
 use tokio::net::UnixStream;
 use tokio_linux_uhid::StreamError;
 use tower::Service;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 use tracing_subscriber::prelude::*;
 
 mod connection;
@@ -145,6 +145,7 @@ impl Service<(UnixStream, SocketAddr)> for ConnectionHandler {
     }
 
     fn call(&mut self, (stream, addr): (UnixStream, SocketAddr)) -> Self::Future {
+        trace!("ConnectionHandler::call");
         future::ok(Box::pin(connection::handle(stream, addr)))
     }
 }

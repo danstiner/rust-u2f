@@ -60,7 +60,7 @@ where
             // Repeats if successful, returns if there is an error or no connections are availabile.
             match this.listener.poll_accept(cx) {
                 Poll::Ready(Ok((stream, addr))) => {
-                    trace!(?addr, "Accepted stream");
+                    trace!(?addr, "SocketServer: accepted stream");
                     let handler_future = this.make_stream_handler.call((stream, addr));
                     tokio::spawn(async {
                         match handler_future.await {
