@@ -10,6 +10,7 @@ use tokio::net::unix::SocketAddr;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
 use tower::Service;
+use tracing::debug;
 use tracing::error;
 use tracing::trace;
 
@@ -41,7 +42,7 @@ where
     S: Service<(UnixStream, SocketAddr), Response = Handler, Error = E>,
     S::Future: Send + 'static,
     Handler: Future + Send,
-    Handler::Output: Send,
+    Handler::Output: Send + fmt::Debug,
     E: From<io::Error> + Send + fmt::Debug,
 {
     type Output = Result<(), E>;
@@ -67,7 +68,8 @@ where
                         match handler_future.await {
                             Ok(handler) => {
                                 trace!("Handler ready, waiting for it to complete");
-                                handler.await;
+                                let res = handler.await;
+                                debug!(?res, "Spawned handler finished with: {:?}", res);
                                 todo!()
                             }
                             Err(err) => {

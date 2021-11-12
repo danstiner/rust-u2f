@@ -123,7 +123,7 @@ async fn send_create_device_response(
     result: &Result<UhidDevice, StreamError>,
     user_socket: &mut SocketTransport,
 ) -> Result<(), StreamError> {
-    trace!("Sending response to indicate if creating a UHID device succeeded");
+    trace!("Sending create device response, success:{}", result.is_ok());
     let response = match result {
         Ok(_device) => Ok(DeviceDescription {
             id: String::from("TODO"),
