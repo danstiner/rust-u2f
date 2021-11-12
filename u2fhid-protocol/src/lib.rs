@@ -6,7 +6,6 @@ extern crate pin_project;
 extern crate serde;
 extern crate serde_derive;
 extern crate thiserror;
-extern crate tokio_core;
 extern crate tokio_tower;
 extern crate tracing;
 extern crate u2f_core;

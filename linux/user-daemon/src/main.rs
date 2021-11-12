@@ -132,13 +132,11 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let mut system_socket: SocketTransport =
         tokio_serde::Framed::new(length_delimited, Bincode::default());
 
-    let uhid_device = create_uhid_device(&mut system_socket).await?;
+    let _uhid_device = create_uhid_device(&mut system_socket).await?;
 
     let hid_transport: HidTransport = Pipe::new(system_socket, SocketToHid);
 
-    U2fHidServer::new(hid_transport, u2f_service)
-        .serve::<Error>()
-        .await
+    U2fHidServer::new(hid_transport, u2f_service).await
 }
 
 fn require_root(peer: UCred) -> Result<(), Error> {

@@ -81,7 +81,7 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
-    fn into_byte(self) -> u8 {
+    fn to_byte(&self) -> u8 {
         match self {
             ErrorCode::None => 0x00,
             ErrorCode::InvalidCommand => 0x01,
@@ -324,9 +324,9 @@ pub struct Response {
 }
 
 impl Response {
-    pub fn into_packets(self) -> VecDeque<Packet> {
+    pub fn to_packets(&self) -> VecDeque<Packet> {
         let channel_id = self.channel_id;
-        match self.message {
+        match &self.message {
             ResponseMessage::EncapsulatedResponse { data } => {
                 encode_response(channel_id, Command::Msg, &data)
             }
@@ -340,19 +340,19 @@ impl Response {
                 capabilities,
             } => {
                 let mut data = Vec::with_capacity(17);
-                data.extend_from_slice(&nonce);
+                data.extend_from_slice(nonce);
                 new_channel_id.write(&mut data);
-                data.push(u2fhid_protocol_version);
-                data.push(major_device_version_number);
-                data.push(minor_device_version_number);
-                data.push(build_device_version_number);
+                data.push(*u2fhid_protocol_version);
+                data.push(*major_device_version_number);
+                data.push(*minor_device_version_number);
+                data.push(*build_device_version_number);
                 data.push(capabilities.bits);
                 assert_eq!(data.len(), 17);
                 encode_response(channel_id, Command::Init, &data)
             }
             ResponseMessage::Pong { data } => encode_response(channel_id, Command::Ping, &data),
             ResponseMessage::Error { code } => {
-                let data = vec![code.into_byte()];
+                let data = vec![code.to_byte()];
                 encode_response(channel_id, Command::Error, &data)
             }
             ResponseMessage::Wink => encode_response(channel_id, Command::Wink, &[]),
