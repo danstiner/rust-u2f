@@ -117,7 +117,7 @@ pub enum Packet {
         channel_id: ChannelId,
         command: Command,
         data: Vec<u8>,
-        payload_len: usize,
+        payload_len: u16,
     },
     Continuation {
         channel_id: ChannelId,
@@ -161,7 +161,7 @@ impl Packet {
                 channel_id,
                 command,
                 data: packet_data,
-                payload_len: payload_len as usize,
+                payload_len,
             })
         } else {
             let sequence_number = first_byte;
@@ -175,7 +175,7 @@ impl Packet {
         }
     }
 
-    pub fn into_bytes(self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(HID_REPORT_LEN);
         match self {
             Packet::Initialization {
@@ -197,14 +197,14 @@ impl Packet {
                     Command::Wink => U2FHID_WINK,
                     Command::Lock => U2FHID_LOCK,
                     Command::Sync => U2FHID_SYNC,
-                    Command::Vendor { identifier } => identifier,
-                    Command::Unknown { identifier } => identifier,
+                    Command::Vendor { identifier } => *identifier,
+                    Command::Unknown { identifier } => *identifier,
                 };
                 bytes.push(command_byte);
 
                 // 5      1      BCNTH    High part of payload length
                 // 6      1      BCNTL    Low part of payload length
-                bytes.write_u16::<BigEndian>(payload_len as u16).unwrap();
+                bytes.write_u16::<BigEndian>(*payload_len).unwrap();
 
                 // 7      (s-7)  DATA     Payload data (s is equal to the fixed packet size)
                 bytes.extend_from_slice(&data);
@@ -223,7 +223,7 @@ impl Packet {
 
                 // 4      1      SEQ      Packet sequence 0x00..0x7f (bit 7 always cleared)
                 assert_eq!(sequence_number & FRAME_TYPE_MASK, FRAME_TYPE_CONT);
-                bytes.push(sequence_number);
+                bytes.push(*sequence_number);
 
                 // 5      (s-5)  DATA     Payload data (s is equal to the fixed packet size)
                 bytes.extend_from_slice(&data);
@@ -395,7 +395,7 @@ impl From<u2f_core::Response> for ResponseMessage {
 
 fn encode_response(channel_id: ChannelId, command: Command, data: &[u8]) -> VecDeque<Packet> {
     let mut packets = VecDeque::new();
-    let payload_len = data.len();
+    let payload_len = data.len() as u16;
     let split_index = cmp::min(data.len(), INITIAL_PACKET_DATA_LEN);
     let (initial, remaining) = data.split_at(split_index);
     packets.push_back(Packet::Initialization {

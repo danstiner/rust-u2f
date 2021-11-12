@@ -1167,6 +1167,7 @@ dependencies = [
  "byteorder",
  "futures 0.3.17",
  "itertools",
+ "pin-project",
  "rand",
  "serde",
  "serde_derive",

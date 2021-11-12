@@ -2624,6 +2624,7 @@ dependencies = [
  "byteorder",
  "futures 0.3.17",
  "itertools",
+ "pin-project",
  "serde",
  "serde_derive",
  "thiserror",
