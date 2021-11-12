@@ -163,7 +163,7 @@ impl VirtualU2fDevice {
         // todo check poll ready
         while let Some(request) = self.u2f_transport.next().await {
             let response = self.u2f_service.call(request?).await?;
-            self.u2f_transport.send(response);
+            self.u2f_transport.send(response).await?;
         }
         todo!()
     }
