@@ -34,7 +34,7 @@ use thiserror::Error;
 use tokio::net::{unix::UCred, UnixStream};
 use tokio_serde::formats::Bincode;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 
 use softu2f_system_daemon::{
@@ -134,7 +134,8 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let mut system_socket: SocketTransport =
         tokio_serde::Framed::new(length_delimited, Bincode::default());
 
-    let _uhid_device = create_uhid_device(&mut system_socket).await?;
+    let uhid_device = create_uhid_device(&mut system_socket).await?;
+    debug!("UHID device created with id: {}", uhid_device.id);
 
     let hid_transport: HidTransport = Pipe::new(system_socket, SocketToHid);
 
@@ -204,7 +205,10 @@ impl Proxy for SocketToHid {
             Ok(SocketOutput::Report(report)) => Packet::from_bytes(report.as_bytes())
                 .map(Option::Some)
                 .map_err(|_| io::Error::new(io::ErrorKind::Other, "TODO")),
-            Ok(SocketOutput::CreateDeviceResponse(_)) => Ok(None), // todo log
+            Ok(SocketOutput::CreateDeviceResponse(_)) => {
+                warn!("Received unexpected CreateDeviceResponse");
+                Ok(None)
+            }
             Err(err) => Err(err),
         }
     }
