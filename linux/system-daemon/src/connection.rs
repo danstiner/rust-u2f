@@ -1,5 +1,9 @@
 use std::io;
 
+use bincode::{
+    config::{AllowTrailing, WithOtherTrailing},
+    DefaultOptions, Options,
+};
 use futures::{SinkExt, StreamExt};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
@@ -72,9 +76,10 @@ pub enum Error {
 pub async fn handle(stream: UnixStream, _addr: SocketAddr) -> Result<(), StreamError> {
     let ucred = stream.peer_cred()?;
     trace!(?ucred, "Handling connection");
+    let codec = Bincode::from(bincode::DefaultOptions::new().allow_trailing_bytes());
+
     let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
-    let mut user_socket: SocketTransport =
-        tokio_serde::Framed::new(length_delimited, Bincode::default());
+    let mut user_socket: SocketTransport = tokio_serde::Framed::new(length_delimited, codec);
 
     let mut uhid_device = {
         let result = create_uhid_device(&mut user_socket, &ucred).await;
@@ -168,7 +173,7 @@ type SocketTransport = tokio_serde::Framed<
     Framed<UnixStream, LengthDelimitedCodec>,
     SocketInput,
     SocketOutput,
-    Bincode<SocketInput, SocketOutput>,
+    Bincode<SocketInput, SocketOutput, WithOtherTrailing<DefaultOptions, AllowTrailing>>,
 >;
 
 fn device_name(ucred: &UCred) -> String {
