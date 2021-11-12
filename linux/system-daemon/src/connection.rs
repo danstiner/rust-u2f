@@ -74,6 +74,7 @@ pub enum Error {
 }
 
 pub async fn handle(stream: UnixStream, _addr: SocketAddr) -> Result<(), StreamError> {
+    trace!("Handling connection");
     let ucred = stream.peer_cred()?;
     trace!(?ucred, "Handling connection");
     let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());

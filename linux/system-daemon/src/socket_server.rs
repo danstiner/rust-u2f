@@ -63,8 +63,12 @@ where
                     trace!(?addr, "SocketServer: accepted stream");
                     let handler_future = this.make_stream_handler.call((stream, addr));
                     tokio::spawn(async {
+                        trace!("Spawned");
                         match handler_future.await {
-                            Ok(handler) => handler.await,
+                            Ok(handler) => {
+                                trace!("Handler created, awaiting it to complete");
+                                handler.await
+                            },
                             Err(err) => {
                                 error!(?err, "Error from spawned task");
                                 todo!()
