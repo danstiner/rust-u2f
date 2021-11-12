@@ -1,10 +1,6 @@
 use std::io;
-use std::pin::Pin;
-use std::rc::Rc;
-use std::task::{Context, Poll};
 
-use futures::{future, Future, SinkExt, StreamExt};
-use pin_project::pin_project;
+use futures::{SinkExt, StreamExt};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
@@ -16,7 +12,7 @@ use tokio::net::{
 use tokio_linux_uhid::{Bus, CreateParams, InputEvent, OutputEvent, StreamError, UhidDevice};
 use tokio_serde::formats::Bincode;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use tracing::{info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use users::get_user_by_uid;
 
 // use crate::bidirectional_pipe::BidirectionalPipe;
@@ -74,7 +70,6 @@ pub enum Error {
 }
 
 pub async fn handle(stream: UnixStream, _addr: SocketAddr) -> Result<(), StreamError> {
-    trace!("Handling connection");
     let ucred = stream.peer_cred()?;
     trace!(?ucred, "Handling connection");
     let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
@@ -94,7 +89,7 @@ async fn create_uhid_device(
     user_socket: &mut SocketTransport,
     ucred: &UCred,
 ) -> Result<UhidDevice, StreamError> {
-    trace!("create_uhid_device");
+    trace!("Ready to create UHID device");
     while let Some(input) = user_socket.next().await {
         match input? {
             SocketInput::CreateDeviceRequest(CreateDeviceRequest) => {
@@ -113,10 +108,14 @@ async fn create_uhid_device(
                 info!(name = %create_params.name, "Creating virtual U2F device");
                 return UhidDevice::create(create_params).await;
             }
-            _ => return Err(todo!()),
+            _ => {
+                error!("Unexpected input from user socket");
+                todo!()
+            }
         }
     }
 
+    debug!("Socket closed before create device request was received");
     todo!()
 }
 
@@ -124,17 +123,21 @@ async fn send_create_device_response(
     result: &Result<UhidDevice, StreamError>,
     user_socket: &mut SocketTransport,
 ) -> Result<(), StreamError> {
-    trace!("send_create_device_response");
+    trace!("Sending response to indicate if creating a UHID device succeeded");
+    let response = match result {
+        Ok(_device) => Ok(DeviceDescription {
+            id: String::from("TODO"),
+        }),
+        Err(StreamError::Io(_)) => Err(CreateDeviceError::IoError),
+        Err(err) => {
+            warn!(?err, "Unknown create device error");
+            Err(CreateDeviceError::Unknown)
+        }
+    };
     user_socket
-        .send(SocketOutput::CreateDeviceResponse(match result {
-            Ok(_device) => Ok(DeviceDescription {
-                id: String::from("TODO"),
-            }),
-            Err(StreamError::Io(_)) => Err(CreateDeviceError::IoError),
-            Err(_) => Err(CreateDeviceError::Unknown),
-        }))
-        .await
-        .map_err(StreamError::Io)
+        .send(SocketOutput::CreateDeviceResponse(response))
+        .await?;
+    Ok(())
 }
 
 async fn pipe_reports(
