@@ -21,16 +21,16 @@ pub struct DeviceDescription {
     pub id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Error)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum CreateDeviceError {
-    #[error("I/O Error")]
+    // #[error("I/O Error")]
     IoError,
-    #[error("Already exists")]
+    // #[error("Already exists")]
     AlreadyExists,
-    #[error("Closed")]
+    // #[error("Closed")]
     Closed,
-    #[error("Unknown")]
-    Unknown,
+    // #[error("Unknown")]
+    // Unknown,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
