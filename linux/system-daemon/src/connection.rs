@@ -82,6 +82,7 @@ pub async fn handle(stream: UnixStream, _addr: SocketAddr) -> Result<(), StreamE
         result?
     };
 
+    trace!("UHID device created, starting to pipe HID reports to/from userspace");
     pipe_reports(&mut uhid_device, &mut user_socket).await
 }
 
@@ -151,17 +152,27 @@ async fn pipe_reports(
         trace!("Select next HID report to send");
         (tokio::select! {
             Some(input) = user_socket.next() => match input? {
-                SocketInput::Report(report) => uhid_device.send(InputEvent::Input {
-                    data: report.into_bytes(),
-                }).await,
+                SocketInput::Report(report) => {
+                    trace!("Piping report from userspace, len:{}", report.len());
+                    uhid_device.send(InputEvent::Input {
+                        data: report.into_bytes(),
+                    }).await
+                }
                 SocketInput::CreateDeviceRequest(_) => {
                     warn!("Ignoring create device request, UHID device already created");
                     continue
                 },
             },
             Some(output) = uhid_device.next() => match output? {
-                OutputEvent::Output { data } => user_socket.send(SocketOutput::Report(Report::new(data))).await.map_err(StreamError::Io),
-                _ => continue,
+                OutputEvent::Output { data } => {
+                    let report = Report::new(data);
+                    trace!("Piping report from UHID device, len:{}", report.len());
+                    user_socket.send(SocketOutput::Report(report)).await.map_err(StreamError::Io)
+                },
+                _ => {
+                    trace!("Ignoring non-output UHID event");
+                    continue
+                },
             },
         })?;
     }

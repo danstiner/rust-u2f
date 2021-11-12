@@ -23,13 +23,13 @@ pub struct DeviceDescription {
 
 #[derive(Serialize, Deserialize, Debug, Error)]
 pub enum CreateDeviceError {
-    #[error("I/O Error")]
+    #[error("UHID device experienced an I/O Error")]
     IoError,
-    #[error("Already exists")]
+    #[error("UHID device already exists")]
     AlreadyExists,
-    #[error("Closed")]
+    #[error("UHID device closed")]
     Closed,
-    #[error("Unknown")]
+    #[error("UHID device failed with unknown error")]
     Unknown,
 }
 
@@ -54,5 +54,9 @@ impl Report {
     }
     pub fn into_bytes(self) -> Vec<u8> {
         self.bytes
+    }
+
+    pub fn len(&self) -> usize {
+        self.bytes.len()
     }
 }
