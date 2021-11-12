@@ -9,6 +9,7 @@ use tokio::net::unix::SocketAddr;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
 use tower::Service;
+use tracing::trace;
 
 #[must_use = "futures do nothing unless polled"]
 #[pin_project]
@@ -49,14 +50,16 @@ where
             // Check we have available capacity to create a handler instance
             // before accepting a stream.
             if this.make_stream_handler.poll_ready(cx).is_pending() {
+                trace!("Not ready to accept streams");
                 return Poll::Pending;
             }
 
             // Accept a connection on the socket and spawn a service instance to respond.
             // Repeats if successful, returns if there is an error or no connections are availabile.
             match this.listener.poll_accept(cx) {
-                Poll::Ready(Ok(stream)) => {
-                    let handler_future = this.make_stream_handler.call(stream);
+                Poll::Ready(Ok((stream, addr))) => {
+                    trace!(?addr, "Accepted stream");
+                    let handler_future = this.make_stream_handler.call((stream, addr));
                     tokio::spawn(async {
                         match handler_future.await {
                             Ok(handler) => handler.await,
