@@ -131,11 +131,11 @@ async fn send_create_device_response(
         Err(StreamError::Io(err)) => {
             warn!("Creating UHID device failed: I/O error: {}", err);
             Err(CreateDeviceError::IoError)
-        },
+        }
         Err(err) => {
             warn!("Creating UHID device failed: Unknown error: {}", err);
             Err(CreateDeviceError::Unknown)
-        },
+        }
     };
     user_socket
         .send(SocketOutput::CreateDeviceResponse(response))
