@@ -87,10 +87,10 @@
 //!     uhid_device.send_input(&data).await.unwrap();
 //! }
 //! ```
-#[macro_use]
 extern crate bitflags;
 extern crate bytes;
 extern crate futures;
+extern crate pin_project;
 extern crate tokio;
 extern crate uhid_sys;
 
@@ -98,6 +98,7 @@ pub use crate::codec::{Bus, InputEvent, OutputEvent, StreamError};
 pub use crate::uhid_device::CreateParams;
 pub use crate::uhid_device::UhidDevice;
 
+mod character_device;
 mod codec;
-// mod transport;
+mod event_framed;
 mod uhid_device;

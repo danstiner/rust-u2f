@@ -5,16 +5,17 @@ use std::task::{Context, Poll};
 use futures::SinkExt;
 use futures::{Sink, Stream};
 use pin_project::pin_project;
-use tokio_util::codec::Framed;
 use tracing::debug;
 
-use crate::codec::{Bus, Codec, InputEvent, OutputEvent, StreamError, MAX_UHID_EVENT_SIZE};
+use crate::character_device::CharacterDevice;
+use crate::codec::{Bus, Codec, InputEvent, OutputEvent, StreamError};
+use crate::event_framed::EventFramed;
 
 #[pin_project]
 #[derive(Debug)]
 pub struct UhidDevice {
     #[pin]
-    transport: Framed<tokio::fs::File, Codec>,
+    transport: EventFramed<CharacterDevice, Codec>,
 }
 
 /// Parameters used to create UHID devices
@@ -38,12 +39,9 @@ impl UhidDevice {
 
     /// Create a UHID device using the specified character misc-device file path
     pub async fn create_with_path(path: &Path, params: CreateParams) -> Result<Self, StreamError> {
-        let file = tokio::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(path)
-            .await?;
-        let mut transport = Framed::with_capacity(file, Codec, MAX_UHID_EVENT_SIZE);
+        let cdev = CharacterDevice::open(path).await?;
+        // let cdev = AlwaysWriteReady::new(cdev);
+        let mut transport = EventFramed::new(cdev, Codec);
 
         debug!("Sending create device input event");
         transport

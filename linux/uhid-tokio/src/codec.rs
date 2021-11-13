@@ -4,14 +4,16 @@ use std::iter::repeat;
 use std::mem;
 use std::slice;
 
+use bitflags::bitflags;
 use bytes::BytesMut;
 use thiserror::Error;
 
-use tokio_util::codec::Decoder;
-use tokio_util::codec::Encoder;
 use uhid_sys as sys;
 
-pub const MAX_UHID_EVENT_SIZE: usize = mem::size_of::<sys::uhid_event>();
+use crate::event_framed::Decoder;
+use crate::event_framed::Encoder;
+
+pub const UHID_EVENT_SIZE: usize = mem::size_of::<sys::uhid_event>();
 
 #[derive(Debug, Error)]
 pub enum StreamError {
@@ -310,12 +312,18 @@ impl Decoder for Codec {
     type Item = OutputEvent;
     type Error = StreamError;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Self::Item, Self::Error> {
+        debug_assert_eq!(src.len(), UHID_EVENT_SIZE);
+
         if let Some(event) = read_event(src) {
-            Ok(Some(decode_event(event)?))
+            Ok(decode_event(event)?)
         } else {
             Err(StreamError::Unknown)
         }
+    }
+
+    fn read_len(&self) -> usize {
+        UHID_EVENT_SIZE
     }
 }
 
@@ -325,6 +333,9 @@ impl Encoder<InputEvent> for Codec {
     fn encode(&mut self, item: InputEvent, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let event = item.into_uhid_event()?;
         dst.extend_from_slice(encode_event(&event));
+
+        debug_assert_eq!(dst.len(), UHID_EVENT_SIZE);
+
         Ok(())
     }
 }
