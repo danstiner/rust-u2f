@@ -34,29 +34,30 @@ pub enum CreateDeviceError {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Report {
-    bytes: Vec<u8>,
-}
+pub struct Report(Vec<u8>);
 
 impl Report {
     pub fn new(bytes: Vec<u8>) -> Report {
-        Report { bytes }
+        Report(bytes)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Report {
         Report::new(bytes.to_vec())
     }
+
     pub fn as_bytes(&self) -> &[u8] {
-        &self.bytes
+        &self.0
     }
+
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.bytes.to_vec()
+        self.0.to_vec()
     }
+
     pub fn into_bytes(self) -> Vec<u8> {
-        self.bytes
+        self.0
     }
 
     pub fn len(&self) -> usize {
-        self.bytes.len()
+        self.0.len()
     }
 }
