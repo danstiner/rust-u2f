@@ -105,20 +105,20 @@ impl LockState {
     }
 
     // fn tick(&mut self) -> Result<(), io::Error> {
-    //     // // Check lock timeout
-    //     // let timed_out = match *self {
-    //     //     LockState::Locked {
-    //     //         ref mut timeout, ..
-    //     //     } => match timeout.poll()? {
-    //     //         Async::Ready(()) => true,
-    //     //         Async::NotReady => false,
-    //     //     },
-    //     //     _ => false,
-    //     // };
+    //     // Check lock timeout
+    //     let timed_out = match *self {
+    //         LockState::Locked {
+    //             ref mut timeout, ..
+    //         } => match timeout.poll()? {
+    //             Async::Ready(()) => true,
+    //             Async::NotReady => false,
+    //         },
+    //         _ => false,
+    //     };
 
-    //     // if timed_out {
-    //     //     *self = LockState::None;
-    //     // }
+    //     if timed_out {
+    //         *self = LockState::None;
+    //     }
 
     //     // TODO Check frame and transation timeouts
 
@@ -541,7 +541,7 @@ mod tests {
 
     use super::*;
 
-    struct FakeU2FService;
+    // struct FakeU2FService;
 
     // impl Service for FakeU2FService {
     //     type Request = u2f_core::Request;
