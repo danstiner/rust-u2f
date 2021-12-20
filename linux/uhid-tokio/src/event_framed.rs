@@ -131,7 +131,8 @@ where
         Ok(())
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        ready!(Pin::new(&mut self).poll_ready(cx))?;
         ready!(self.project().transport.poll_flush(cx))?;
         Poll::Ready(Ok(()))
     }
