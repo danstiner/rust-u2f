@@ -60,9 +60,6 @@ const REPORT_DESCRIPTOR: [u8; 34] = [
 pub enum Error {
     #[error("I/O error")]
     Io(#[from] io::Error),
-
-    // #[error("Stream error")]
-    // StreamError(#[from] StreamError),
     #[error("Invalid Unicode string")]
     InvalidUnicodeString,
 }
@@ -190,10 +187,13 @@ fn device_name(ucred: &UCred) -> String {
     match get_hostname() {
         Ok(hostname) => {
             if let Some(user) = get_user_by_uid(ucred.uid()) {
-                let username = user.name().to_str().unwrap_or("<unknown>");
-                format!("SoftU2F Linux ({}@{})", username, hostname)
+                if let Some(username) = user.name().to_str() {
+                    format!("rust-u2f ({}@{})", username, hostname)
+                } else {
+                    format!("rust-u2f ({})", hostname)
+                }
             } else {
-                format!("SoftU2F Linux ({})", hostname)
+                format!("rust-u2f ({})", hostname)
             }
         }
         Err(err) => {
@@ -201,7 +201,7 @@ fn device_name(ucred: &UCred) -> String {
                 ?err,
                 "Unable to determine hostname, defaulting to generic device name"
             );
-            format!("SoftU2F Linux")
+            format!("rust-u2f")
         }
     }
 }
