@@ -46,7 +46,7 @@ impl NotificationUserPresence {
             .hint(Hint::Transient(true))
             .hint(Hint::Urgency(URGENCY))
             .urgency(URGENCY)
-            .timeout(TIMEOUT.clone());
+            .timeout(*TIMEOUT);
 
         let mut apply_workaround = false;
         let server_info = notify_rust::get_server_information().unwrap();
@@ -113,7 +113,7 @@ impl UserPresence for NotificationUserPresence {
             .hint(Hint::Transient(true))
             .hint(Hint::Urgency(URGENCY))
             .urgency(URGENCY)
-            .timeout(TIMEOUT.clone());
+            .timeout(*TIMEOUT);
         Ok(())
     }
 }

@@ -114,7 +114,7 @@ impl ConfigFile {
                     })
                 }),
             Err(ref err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(err) => Err(err.into()),
+            Err(err) => Err(err),
         }
     }
 

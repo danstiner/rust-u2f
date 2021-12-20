@@ -103,7 +103,7 @@ impl<'a> SecretStore for SecretServiceStore<'a> {
                 let count = value.parse::<u64>().unwrap_or(0);
                 *value = (count + 1).to_string();
             })
-            .or_insert(0.to_string());
+            .or_insert_with(|| 0.to_string());
         let attributes = attributes
             .iter()
             .map(|(key, value)| (key.as_str(), value.as_str()))

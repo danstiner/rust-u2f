@@ -40,7 +40,7 @@ use tracing_subscriber::prelude::*;
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
-use u2f_core::{OpenSSLCryptoOperations, SecretStore, Service, U2fService};
+use u2f_core::{OpenSSLCryptoOperations, U2fService};
 use u2fhid_protocol::{Packet, U2fHidServer};
 use user_presence::NotificationUserPresence;
 
@@ -171,21 +171,17 @@ async fn create_uhid_device(
         .send(SocketInput::CreateDeviceRequest(CreateDeviceRequest))
         .await?;
 
-    while let Some(output) = system_socket.next().await {
-        match output? {
-            SocketOutput::CreateDeviceResponse(Ok(device)) => return Ok(device),
-            SocketOutput::CreateDeviceResponse(Err(err)) => return Err(err.into()),
-            SocketOutput::Report(_) => {
-                return Err(Error::InvalidState(
-                    "Received HID report while waiting for create device response",
-                ))
-            }
-        }
+    match system_socket.next().await {
+        Some(Ok(SocketOutput::CreateDeviceResponse(Ok(device)))) => Ok(device),
+        Some(Ok(SocketOutput::CreateDeviceResponse(Err(err)))) => Err(err.into()),
+        Some(Ok(SocketOutput::Report(_))) => Err(Error::InvalidState(
+            "Received HID report while waiting for create device response",
+        )),
+        Some(Err(err)) => Err(err.into()),
+        None => Err(Error::InvalidState(
+            "Socket closed while waiting for response to create device request",
+        )),
     }
-
-    Err(Error::InvalidState(
-        "Socket closed while waiting for response to create device request",
-    ))
 }
 
 struct SocketToHid;
