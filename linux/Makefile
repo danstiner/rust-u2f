@@ -18,12 +18,18 @@ install: build
 	if [ -n "$$(which sestatus 1>/dev/null 2>&1)" ]; then \
 		sudo ${selinuxpolicydir}/softu2f-system-daemon.sh; \
 	fi
-	sudo systemctl --system enable softu2f.socket
-	sudo systemctl --system start softu2f.socket
 	sudo install -m 755 target/debug/softu2f-user-daemon /usr/lib/softu2f/user-daemon
 	sudo install -m 644 ${userdaemondir}/softu2f.service /etc/systemd/user/softu2f.service
+
+	# Stop existing services if this is a re-install
+	systemctl --user stop softu2f.service
+	sudo systemctl --system stop softu2f.service
+
+	# Enable and start services (system service is started via the socket service)
+	sudo systemctl --system enable softu2f.socket
+	sudo systemctl --system start softu2f.socket
 	systemctl --user enable softu2f.service
-	systemctl --user start softu2f.service
+	systemctl --user restart softu2f.service
 
 uninstall:
 	-systemctl --user disable softu2f.service
