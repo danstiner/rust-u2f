@@ -31,8 +31,8 @@ users = "0.11"
 [dependencies.tokio-linux-uhid]
 path = "../uhid-tokio"
 
-# [dependencies.u2fhid-protocol]
-# path = "../../u2fhid-protocol/"
+[dependencies.u2fhid-protocol]
+path = "../../u2fhid-protocol"
 
 [[bin]]
 doc = false

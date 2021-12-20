@@ -1783,6 +1783,7 @@ dependencies = [
  "tracing",
  "tracing-journald",
  "tracing-subscriber",
+ "u2fhid-protocol",
  "users",
 ]
 
