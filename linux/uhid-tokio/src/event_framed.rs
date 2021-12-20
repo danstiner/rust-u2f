@@ -105,7 +105,11 @@ where
             match this.transport.poll_write(cx, &buf) {
                 Poll::Ready(Ok(n)) => {
                     if n != buf.len() {
-                        return Poll::Ready(Err(todo!()));
+                        return Poll::Ready(Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "Bad write, wrong number of bytes written",
+                        )
+                        .into()));
                     }
                 }
                 Poll::Ready(Err(err)) => return Poll::Ready(Err(err.into())),

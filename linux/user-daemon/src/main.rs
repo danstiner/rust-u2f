@@ -135,11 +135,9 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
         tokio_serde::Framed::new(length_delimited, Bincode::default());
 
     let uhid_device = create_uhid_device(&mut system_socket).await?;
-    debug!("UHID device created with id: {}", uhid_device.id);
+    debug!(id = %uhid_device.id, "UHID device created with id");
 
-    let hid_transport: HidTransport = Pipe::new(system_socket, SocketToHid);
-
-    U2fHidServer::new(hid_transport, u2f_service).await
+    U2fHidServer::new(Pipe::new(system_socket, SocketToHid), u2f_service).await
 }
 
 fn require_root(peer: UCred) -> Result<(), Error> {
@@ -160,8 +158,6 @@ type SocketTransport = tokio_serde::Framed<
     SocketInput,
     Bincode<SocketOutput, SocketInput>,
 >;
-
-type HidTransport = Pipe<SocketTransport, SocketToHid>;
 
 async fn create_uhid_device(
     system_socket: &mut SocketTransport,
