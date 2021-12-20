@@ -350,9 +350,6 @@ where
         application: AppId,
         challenge: Challenge,
     ) -> Result<Response, io::Error> {
-        // let log = self
-        //     .log
-        //     .new(o!("app" => try_reverse_app_id(&application).unwrap_or(application.to_base64())));
         debug!("Registration request");
 
         if application == BOGUS_APP_ID_HASH_CHROME {
