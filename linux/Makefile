@@ -20,6 +20,8 @@ install: build
 	fi
 	sudo install -m 755 target/debug/softu2f-user-daemon /usr/lib/softu2f/user-daemon
 	sudo install -m 644 ${userdaemondir}/softu2f.service /etc/systemd/user/softu2f.service
+	sudo systemctl daemon-reload
+	systemctl --user daemon-reload
 
 	# Stop existing services if this is a re-install
 	systemctl --user stop softu2f.service
