@@ -45,8 +45,6 @@ const PATH_ARG: &str = "path";
 
 #[derive(Debug, Error)]
 enum Error {
-    // #[error("Device error")]
-    // Device(#[from] device::Error),
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 

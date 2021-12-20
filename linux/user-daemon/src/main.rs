@@ -135,7 +135,7 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
         tokio_serde::Framed::new(length_delimited, Bincode::default());
 
     let uhid_device = create_uhid_device(&mut system_socket).await?;
-    debug!(id = %uhid_device.id, "UHID device created with id");
+    debug!("UHID device created with id: {}", uhid_device.id);
 
     U2fHidServer::new(Pipe::new(system_socket, SocketToHid), u2f_service).await
 }
