@@ -15,8 +15,6 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, trace, warn};
 use users::get_user_by_uid;
 
-// use crate::bidirectional_pipe::BidirectionalPipe;
-
 const INPUT_REPORT_LEN: u8 = 64;
 const OUTPUT_REPORT_LEN: u8 = 64;
 
@@ -106,7 +104,7 @@ async fn create_uhid_device(
                     data: REPORT_DESCRIPTOR.to_vec(),
                 };
 
-                info!(name = %create_params.name, "Creating virtual U2F device");
+                info!(name = %create_params.name, "Creating UHID virtual U2F device");
                 return UhidDevice::create(create_params).await;
             }
             _ => {
@@ -124,7 +122,10 @@ async fn send_create_device_response(
     result: &Result<UhidDevice, StreamError>,
     user_socket: &mut SocketTransport,
 ) -> Result<(), StreamError> {
-    trace!("Relaying create device response, success:{}", result.is_ok());
+    trace!(
+        "Relaying create device response, success:{}",
+        result.is_ok()
+    );
     let response = match result {
         Ok(_device) => Ok(DeviceDescription {
             id: String::from("TODO"),
@@ -153,7 +154,7 @@ async fn pipe_reports(
         (tokio::select! {
             Some(input) = user_socket.next() => match input? {
                 SocketInput::Report(report) => {
-                    trace!("Piping report from userspace, len:{}", report.len());
+                    trace!(len = report.len(), "Piping report from userspace");
                     uhid_device.send(InputEvent::Input {
                         data: report.into_bytes(),
                     }).await
@@ -166,7 +167,7 @@ async fn pipe_reports(
             Some(output) = uhid_device.next() => match output? {
                 OutputEvent::Output { data } => {
                     let report = Report::new(data);
-                    trace!("Piping report from UHID device, len:{}", report.len());
+                    trace!(len = report.len(), "Piping report from UHID device");
                     user_socket.send(SocketOutput::Report(report)).await.map_err(StreamError::Io)
                 },
                 _ => {

@@ -60,7 +60,7 @@ const RDESC: [u8; 85] = [
 ];
 
 // Loosely based on https://github.com/torvalds/linux/blob/master/samples/uhid/uhid-example.c
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() {
     println!("Creating virtual USB mouse input device via uhid subsysem.");
     let create_params = CreateParams {
@@ -113,7 +113,7 @@ async fn main() {
             .send(InputEvent::Input {
                 data: unsafe {
                     [
-                        report_id, // Report ID
+                        report_id,
                         button_flags,
                         std::mem::transmute(mouse_abs_hor),
                         std::mem::transmute(mouse_abs_ver),

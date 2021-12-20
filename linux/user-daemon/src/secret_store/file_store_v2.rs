@@ -89,7 +89,7 @@ impl SecretStore for FileStoreV2 {
         let mut data = self.read()?;
         let secret = data
             .find_secret_mut(application, handle)
-            .ok_or_else(|| io::Error::new( io::ErrorKind::Other, "No such secret"))?;
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "No such secret"))?;
         let new_counter = secret.counter + 1;
         secret.counter = new_counter;
         self.write(&data)?;

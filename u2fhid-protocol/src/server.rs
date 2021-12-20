@@ -38,12 +38,12 @@ where
         }
     }
 
-    fn queue_send(&mut self, response: Response) {
+    fn buffer_send(&mut self, response: Response) {
         debug_assert!(self.send_buffer.is_none());
         trace!(
             channel_id = ?response.channel_id,
             message = ?response.message,
-            "U2fHidServer:queue_send: Queuing packetized response"
+            "U2fHidServer:buffer_send: Buffering packetized response"
         );
         self.send_buffer = Some(response.to_packets());
     }
@@ -62,6 +62,7 @@ where
         trace!("U2fHidServer::poll");
         let this = &mut *self;
         loop {
+            // First flush any buffered packets
             if let Some(mut buffer) = this.send_buffer.take() {
                 trace!("U2fHidServer::poll: Sending buffered packets");
 
@@ -95,16 +96,18 @@ where
                 }
             }
 
+            // At this point the packet buffer is empty, check if there is a new response to send
             if let Some(response) = ready!(this.state_machine.poll_next(cx))? {
-                this.queue_send(response);
+                this.buffer_send(response);
                 continue;
             }
 
+            // At this point there are no responses waiting to send, check for input
             match ready!(Pin::new(&mut this.transport).poll_next(cx)?) {
                 Some(packet) => {
                     trace!(?packet, "Got packet from transport");
                     if let Some(response) = this.state_machine.accept_packet(packet, cx)? {
-                        this.queue_send(response);
+                        this.buffer_send(response);
                     }
                 }
                 None => todo!("it's closing time"),

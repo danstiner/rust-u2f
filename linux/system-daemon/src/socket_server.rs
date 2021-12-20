@@ -63,7 +63,7 @@ where
                 Poll::Ready(Ok((stream, addr))) => {
                     trace!(?addr, "SocketServer: accepted stream");
                     let handler_future = this.make_stream_handler.call((stream, addr));
-                    tokio::spawn(async {
+                    spawn_named("stream handler", async {
                         trace!("SocketServer: Spawned handler for stream");
                         match handler_future.await {
                             Ok(handler) => {
@@ -84,4 +84,18 @@ where
             }
         }
     }
+}
+
+fn spawn_named<T>(
+    _name: &str,
+    task: impl std::future::Future<Output = T> + Send + 'static,
+) -> tokio::task::JoinHandle<T>
+where
+    T: Send + 'static,
+{
+    #[cfg(tokio_unstable)]
+    return tokio::task::Builder::new().name(_name).spawn(task);
+
+    #[cfg(not(tokio_unstable))]
+    tokio::spawn(task)
 }

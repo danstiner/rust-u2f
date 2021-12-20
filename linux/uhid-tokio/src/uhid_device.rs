@@ -40,7 +40,6 @@ impl UhidDevice {
     /// Create a UHID device using the specified character misc-device file path
     pub async fn create_with_path(path: &Path, params: CreateParams) -> Result<Self, StreamError> {
         let cdev = CharacterDevice::open(path).await?;
-        // let cdev = AlwaysWriteReady::new(cdev);
         let mut transport = EventFramed::new(cdev, Codec);
 
         debug!("Sending create device input event");

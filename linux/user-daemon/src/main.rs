@@ -78,7 +78,7 @@ pub enum Error {
     HomeDirectoryNotFound,
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
     let args = App::new("SoftU2F User Daemon")
         .version(VERSION)
@@ -108,7 +108,7 @@ async fn main() {
     info!(version = VERSION, "Starting rust-u2f user daemon");
 
     if let Err(ref err) = run(system_daemon_socket).await {
-        error!(error = ?err, "Error encountered, exiting");
+        error!("Error encountered, exiting: {}", err);
     }
 }
 
