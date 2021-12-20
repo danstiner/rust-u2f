@@ -1,10 +1,8 @@
 use openssl::bn::BigNumContext;
-use openssl::ec::{EcGroup, EcKey, EcPoint, PointConversionForm};
+use openssl::ec::{EcGroup, EcKey, PointConversionForm};
 use openssl::nid::Nid;
 use openssl::pkey::Public;
-use std::result::Result;
 
-use crate::constants::EC_POINT_FORMAT_UNCOMPRESSED;
 use crate::private_key::PrivateKey;
 
 pub struct PublicKey(EcKey<Public>);
@@ -18,7 +16,11 @@ impl PublicKey {
     /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].
     /// I.e. [0x04, X (32 bytes), Y (32 bytes)] . Where the byte 0x04 denotes the
     /// uncompressed point compression method.
+    #[cfg(test)]
     pub(crate) fn from_bytes(bytes: &[u8]) -> Result<PublicKey, String> {
+        use crate::constants::EC_POINT_FORMAT_UNCOMPRESSED;
+        use openssl::ec::EcPoint;
+
         let mut ctx = BigNumContext::new().unwrap();
         if bytes.len() != 65 {
             return Err(format!("Expected 65 bytes, found {}", bytes.len()));

@@ -386,7 +386,7 @@ where
                     Ok(Response::TestOfUserPresenceNotSatisfied)
                 }
                 RegisterError::Io(err) => Err(err),
-                RegisterError::Signing(err) => {
+                RegisterError::Signing(_) => {
                     Err(io::Error::new(io::ErrorKind::Other, "Signing error"))
                 }
             },

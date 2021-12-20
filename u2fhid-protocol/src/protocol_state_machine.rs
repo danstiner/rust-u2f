@@ -1,5 +1,4 @@
 use std::io;
-use std::marker::PhantomData;
 use std::mem;
 use std::pin::Pin;
 use std::task::Context;
@@ -9,7 +8,6 @@ use std::time::Duration;
 use crate::definitions::*;
 use futures::future;
 use futures::Future;
-use futures::FutureExt;
 use tracing::{debug, info, trace};
 use u2f_core::{self, Service};
 
@@ -94,7 +92,7 @@ enum LockState {
 }
 
 impl LockState {
-    fn lock(&mut self, duration: Duration, channel_id: ChannelId) -> io::Result<()> {
+    fn lock(&mut self, _duration: Duration, channel_id: ChannelId) -> io::Result<()> {
         *self = LockState::Locked {
             channel_id: channel_id,
             // timeout: Timeout::new(duration, handle)?,
@@ -106,26 +104,26 @@ impl LockState {
         *self = LockState::None;
     }
 
-    fn tick(&mut self) -> Result<(), io::Error> {
-        // // Check lock timeout
-        // let timed_out = match *self {
-        //     LockState::Locked {
-        //         ref mut timeout, ..
-        //     } => match timeout.poll()? {
-        //         Async::Ready(()) => true,
-        //         Async::NotReady => false,
-        //     },
-        //     _ => false,
-        // };
+    // fn tick(&mut self) -> Result<(), io::Error> {
+    //     // // Check lock timeout
+    //     // let timed_out = match *self {
+    //     //     LockState::Locked {
+    //     //         ref mut timeout, ..
+    //     //     } => match timeout.poll()? {
+    //     //         Async::Ready(()) => true,
+    //     //         Async::NotReady => false,
+    //     //     },
+    //     //     _ => false,
+    //     // };
 
-        // if timed_out {
-        //     *self = LockState::None;
-        // }
+    //     // if timed_out {
+    //     //     *self = LockState::None;
+    //     // }
 
-        // TODO Check frame and transation timeouts
+    //     // TODO Check frame and transation timeouts
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }
 
 struct StateTransition<O, E> {
