@@ -76,6 +76,7 @@ pub enum Bus {
 }
 
 pub enum InputEvent {
+    // Encoded as struct uhid_create2_req
     Create {
         name: String,
         phys: String,
@@ -88,6 +89,7 @@ pub enum InputEvent {
         data: Vec<u8>,
     },
     Destroy,
+    // Encoded as struct uhid_input2_req
     Input {
         data: Vec<u8>,
     },
@@ -109,6 +111,7 @@ pub enum OutputEvent {
     Stop,
     Open,
     Close,
+    // Encoded as struct uhid_output_req
     Output {
         data: Vec<u8>,
     },
@@ -124,9 +127,6 @@ pub enum OutputEvent {
         data: Vec<u8>,
     },
 }
-
-#[derive(Debug, Default)]
-pub struct Codec;
 
 impl InputEvent {
     fn into_uhid_event(self) -> Result<sys::uhid_event, StreamError> {
@@ -307,6 +307,9 @@ fn encode_event(event: &sys::uhid_event) -> &[u8] {
 unsafe fn as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     slice::from_raw_parts((p as *const T) as *const u8, mem::size_of::<T>())
 }
+
+#[derive(Debug, Default)]
+pub struct Codec;
 
 impl Decoder for Codec {
     type Item = OutputEvent;
