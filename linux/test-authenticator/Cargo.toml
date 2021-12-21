@@ -10,4 +10,4 @@ authenticator = { git = "https://github.com/mozilla/authenticator-rs", tag = "v0
 base64 = "^0.13.0"
 env_logger = "^0.9.0"
 getopts = "^0.2"
-sha2 = "^0.8.2"
+sha2 = "^0.10.0"

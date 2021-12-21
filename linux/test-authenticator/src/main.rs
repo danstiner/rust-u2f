@@ -89,12 +89,12 @@ fn main() {
         r#" "version": "U2F_V2", "appId": "https://demo.yubico.com"}"#
     );
     let mut challenge = Sha256::default();
-    challenge.input(challenge_str.as_bytes());
-    let chall_bytes = challenge.result().to_vec();
+    challenge.update(challenge_str.as_bytes());
+    let chall_bytes = challenge.finalize().to_vec();
 
     let mut application = Sha256::default();
-    application.input(b"https://demo.yubico.com");
-    let app_bytes = application.result().to_vec();
+    application.update(b"https://demo.yubico.com");
+    let app_bytes = application.finalize().to_vec();
 
     let flags = RegisterFlags::empty();
 
