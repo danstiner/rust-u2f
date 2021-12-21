@@ -94,7 +94,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub enum Command {
     Msg,
     Ping,
@@ -107,7 +107,7 @@ pub enum Command {
     Unknown { identifier: u8 },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum Packet {
     Initialization {
         channel_id: ChannelId,

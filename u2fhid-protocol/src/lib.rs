@@ -10,6 +10,12 @@ extern crate tokio_tower;
 extern crate tracing;
 extern crate u2f_core;
 
+#[cfg(test)]
+extern crate tokio;
+
+#[cfg(test)]
+extern crate tokio_stream;
+
 pub use definitions::*;
 pub use server::U2fHidServer;
 
