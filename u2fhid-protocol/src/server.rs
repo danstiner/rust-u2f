@@ -14,22 +14,22 @@ use u2f_core::Service;
 use crate::{protocol_state_machine::StateMachine, Packet, Response};
 
 #[pin_project]
-pub struct U2fHidServer<T, S, E> {
-    state_machine: StateMachine<S, E>,
+pub struct U2fHidServer<T, Svc, E> {
+    state_machine: StateMachine<Svc, E>,
     send_buffer: Option<VecDeque<Packet>>,
     #[pin]
     transport: T,
     _marker: PhantomData<E>,
 }
 
-impl<T, S, SinkE, StreamE, E> U2fHidServer<T, S, E>
+impl<T, Svc, SinkE, StreamE, E> U2fHidServer<T, Svc, E>
 where
     T: Sink<Packet, Error = SinkE> + Stream<Item = Result<Packet, StreamE>> + Unpin,
-    S: Service<u2f_core::Request, Response = u2f_core::Response>,
-    S::Future: 'static,
-    E: From<SinkE> + From<StreamE> + From<S::Error> + From<io::Error> + 'static,
+    Svc: Service<u2f_core::Request, Response = u2f_core::Response>,
+    Svc::Future: 'static,
+    E: From<SinkE> + From<StreamE> + From<Svc::Error> + From<io::Error> + 'static,
 {
-    pub fn new(transport: T, service: S) -> U2fHidServer<T, S, E> {
+    pub fn new(transport: T, service: Svc) -> U2fHidServer<T, Svc, E> {
         U2fHidServer {
             state_machine: StateMachine::new(service),
             transport,
