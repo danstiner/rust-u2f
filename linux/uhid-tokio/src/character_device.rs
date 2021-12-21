@@ -23,6 +23,8 @@ enum State {
 /// A reference to a device driver on the system.
 ///
 /// Character devices (also known as raw devices)
+/// 
+/// TODO
 #[pin_project]
 pub struct CharacterDevice {
     file: Arc<std::fs::File>,
