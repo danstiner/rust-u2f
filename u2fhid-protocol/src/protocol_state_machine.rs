@@ -473,8 +473,7 @@ where
             RequestMessage::EncapsulatedRequest { data } => {
                 // TODO no unwrap
                 debug!(len = data.len(), "RequestMessage::EncapsulatedRequest");
-                let request = u2f_core::Request::decode(&data).unwrap();
-                self.dispatch(request)
+                self.dispatch(u2f_core::Request::decode(&data).unwrap())
             }
             RequestMessage::Init { nonce } => {
                 // TODO Check what channnel message came in on
@@ -484,15 +483,26 @@ where
                     .allocate()
                     .expect("Failed to allocate new channel");
                 debug!(?new_channel_id, "RequestMessage::Init");
-                Box::pin(future::ok(ResponseMessage::Init {
-                    nonce,
-                    new_channel_id: new_channel_id,
-                    u2fhid_protocol_version: U2FHID_PROTOCOL_VERSION,
-                    major_device_version_number: MAJOR_DEVICE_VERSION_NUMBER,
-                    minor_device_version_number: MINOR_DEVICE_VERSION_NUMBER,
-                    build_device_version_number: BUILD_DEVICE_VERSION_NUMBER,
-                    capabilities: CapabilityFlags::CAPFLAG_WINK,
-                }))
+                let fut = self.service.call(u2f_core::Request::GetVersion);
+                Box::pin(async move {
+                    match fut.await? {
+                        u2f_core::Response::Version {
+                            device_version_major,
+                            device_version_minor,
+                            device_version_build,
+                            ..
+                        } => Ok(ResponseMessage::Init {
+                            nonce,
+                            new_channel_id: new_channel_id,
+                            u2fhid_protocol_version: U2FHID_PROTOCOL_VERSION,
+                            major_device_version_number: device_version_major,
+                            minor_device_version_number: device_version_minor,
+                            build_device_version_number: device_version_build,
+                            capabilities: CapabilityFlags::CAPFLAG_WINK,
+                        }),
+                        _ => Err(todo!()),
+                    }
+                })
             }
             RequestMessage::Ping { data } => {
                 debug!(len = data.len(), "RequestMessage::Ping");
@@ -520,14 +530,8 @@ where
         &mut self,
         request: u2f_core::Request,
     ) -> Pin<Box<dyn Future<Output = Result<ResponseMessage, E>>>> {
-        let fut = self.service.call(request);
-        Box::pin(async move {
-            let t = fut.await;
-            match t {
-                Ok(response) => Ok(response.into()),
-                Err(err) => Err(err.into()),
-            }
-        })
+        let response = self.service.call(request);
+        Box::pin(async move { Ok(response.await?.into()) })
     }
 }
 

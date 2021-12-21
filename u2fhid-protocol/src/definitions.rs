@@ -9,10 +9,6 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use serde_derive::{Deserialize, Serialize};
 use u2f_core;
 
-pub const MAJOR_DEVICE_VERSION_NUMBER: u8 = 0;
-pub const MINOR_DEVICE_VERSION_NUMBER: u8 = 1;
-pub const BUILD_DEVICE_VERSION_NUMBER: u8 = 0;
-
 pub const U2FHID_PROTOCOL_VERSION: u8 = 2;
 
 const HID_REPORT_LEN: usize = 64;

@@ -9,10 +9,11 @@ extern crate hex;
 #[macro_use]
 extern crate lazy_static;
 extern crate openssl;
+extern crate pkg_version;
 extern crate rand;
 extern crate ring;
-extern crate serde;
 extern crate serde_derive;
+extern crate serde;
 extern crate subtle;
 extern crate tokio;
 extern crate tower;
@@ -249,7 +250,10 @@ where
                 Request::GetVersion => {
                     debug!("Get version request");
                     let response = Response::Version {
-                        version_string: u2f.version_string(),
+                        u2f_version_string: u2f.version_string(),
+                        device_version_major: pkg_version::pkg_version_major!(),
+                        device_version_minor: pkg_version::pkg_version_minor!(),
+                        device_version_build: pkg_version::pkg_version_patch!(),
                     };
                     Ok(response)
                 }

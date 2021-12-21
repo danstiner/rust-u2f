@@ -42,8 +42,7 @@ where
         debug_assert!(self.send_buffer.is_none());
         trace!(
             channel_id = ?response.channel_id,
-            message = ?response.message,
-            "U2fHidServer:buffer_send: Buffering packetized response"
+            "U2fHidServer::buffer_send: {:?}", response.message
         );
         self.send_buffer = Some(response.to_packets());
     }
@@ -64,12 +63,16 @@ where
         loop {
             // First flush any buffered packets
             if let Some(mut buffer) = this.send_buffer.take() {
-                trace!("U2fHidServer::poll: Sending buffered packets");
+                trace!(
+                    "U2fHidServer::poll: Sending {} buffered packets",
+                    buffer.len()
+                );
 
                 // Ensure transport is ready to send a packet, otherwise place back the buffer
                 match Pin::new(&mut this.transport).poll_ready(cx)? {
                     Poll::Ready(()) => {}
                     Poll::Pending => {
+                        trace!("U2fHidServer::poll: Transport not ready");
                         this.send_buffer = Some(buffer);
                         return Poll::Pending;
                     }
@@ -78,16 +81,22 @@ where
                 match buffer.pop_front() {
                     Some(packet) => {
                         // Send first packet and place back the remaining buffer
+                        trace!(
+                            "U2fHidServer::poll: Start send packet, remaining: {}",
+                            buffer.len()
+                        );
                         this.send_buffer = Some(buffer);
                         Pin::new(&mut this.transport).start_send(packet)?;
                         continue;
                     }
                     None => {
                         // All packets in the buffer have been sent, flush before clearing entirely
+                        trace!("U2fHidServer::poll: Flushing");
                         match Pin::new(&mut this.transport).poll_flush(cx) {
                             Poll::Ready(Ok(())) => continue,
                             Poll::Ready(Err(err)) => return Poll::Ready(Err(err.into())),
                             Poll::Pending => {
+                                // Putting back will cause the next poll() to try flushing again
                                 this.send_buffer = Some(buffer);
                                 return Poll::Pending;
                             }

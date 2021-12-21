@@ -30,7 +30,7 @@ lazy_static! {
     static ref KNOWN_APP_IDS: HashMap<AppId, &'static str> = {
         let mut map = HashMap::new();
 
-        // Should be kept in sync with https://github.com/github/SoftU2F/blob/master/SoftU2FTool/KnownFacets.swift
+        // Sourced from https://github.com/github/SoftU2F/blob/master/SoftU2FTool/KnownFacets.swift
         map.insert(from_url("https://github.com/u2f/trusted_facets"), "github.com");
         map.insert(from_url("https://demo.yubico.com"), "demo.yubico.com");
         map.insert(from_url("https://www.dropbox.com/u2f-app-id.json"), "dropbox.com");

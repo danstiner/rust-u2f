@@ -24,7 +24,10 @@ pub enum Response {
         user_present: bool,
     },
     Version {
-        version_string: String,
+        u2f_version_string: String,
+        device_version_major: u8,
+        device_version_minor: u8,
+        device_version_build: u8,
     },
     DidWink,
     TestOfUserPresenceNotSatisfied,
@@ -85,11 +88,11 @@ impl Response {
                 // Status word [2 bytes]
                 StatusCode::NoError.write(&mut bytes);
             }
-            Response::Version { version_string } => {
+            Response::Version { u2f_version_string, .. } => {
                 // The response message's raw representation is the
                 // ASCII representation of the string 'U2F_V2'
                 // (without quotes, and without any NUL terminator).
-                bytes.extend_from_slice(version_string.as_bytes());
+                bytes.extend_from_slice(u2f_version_string.as_bytes());
 
                 // Status word [2 bytes]
                 StatusCode::NoError.write(&mut bytes);
