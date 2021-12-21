@@ -1,0 +1,13 @@
+[package]
+name = "test-authenticator"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+authenticator = { git = "https://github.com/mozilla/authenticator-rs", tag = "v0.3.1" }
+base64 = "^0.10"
+env_logger = "^0.6"
+getopts = "^0.2"
+sha2 = "^0.8.2"

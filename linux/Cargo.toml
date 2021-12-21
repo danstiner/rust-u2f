@@ -1,5 +1,12 @@
 [workspace]
-members = ["uhid-sys", "uhid-tokio", "uhid-tokio/example", "user-daemon", "system-daemon"]
+members = [
+    "uhid-sys",
+    "uhid-tokio",
+    "uhid-tokio/example",
+    "user-daemon",
+    "system-daemon",
+    "test-authenticator"
+]
 
 [profile.release]
 lto = true
