@@ -88,7 +88,9 @@ impl Response {
                 // Status word [2 bytes]
                 StatusCode::NoError.write(&mut bytes);
             }
-            Response::Version { u2f_version_string, .. } => {
+            Response::Version {
+                u2f_version_string, ..
+            } => {
                 // The response message's raw representation is the
                 // ASCII representation of the string 'U2F_V2'
                 // (without quotes, and without any NUL terminator).
