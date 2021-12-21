@@ -72,7 +72,7 @@ pub async fn handle(stream: UnixStream, _addr: SocketAddr) -> Result<(), StreamE
         tokio_serde::Framed::new(length_delimited, Bincode::default());
 
     let mut uhid_device = {
-        let result = create_uhid_device(&mut user_socket, &ucred).await;
+        let result = handle_create_device_request(&mut user_socket, &ucred).await;
         send_create_device_response(&result, &mut user_socket).await?;
         result?
     };
@@ -81,7 +81,7 @@ pub async fn handle(stream: UnixStream, _addr: SocketAddr) -> Result<(), StreamE
     pipe_reports(&mut uhid_device, &mut user_socket).await
 }
 
-async fn create_uhid_device(
+async fn handle_create_device_request(
     user_socket: &mut SocketTransport,
     ucred: &UCred,
 ) -> Result<UhidDevice, StreamError> {
@@ -91,12 +91,12 @@ async fn create_uhid_device(
             SocketInput::CreateDeviceRequest(CreateDeviceRequest) => {
                 let create_params = CreateParams {
                     name: device_name(&ucred),
-                    phys: String::from(""),
-                    uniq: String::from(""),
+                    phys: String::from(""), // Physical location of device (not relevant)
+                    uniq: String::from(""), // Unique identifier of device (serial #) (not relevant)
                     bus: Bus::USB,
-                    vendor: 0xffff,
+                    vendor: 0xffff, // We are not a real vendor or product (http://www.linux-usb.org/usb.ids)
                     product: 0xffff,
-                    version: 0,
+                    version: 1,
                     country: 0,
                     data: REPORT_DESCRIPTOR.to_vec(),
                 };
@@ -167,8 +167,28 @@ async fn pipe_reports(
                     trace!(len = report.len(), "Piping report from UHID device");
                     user_socket.send(SocketOutput::Report(report)).await.map_err(StreamError::Io)
                 },
-                _ => {
-                    trace!("Ignoring non-output UHID event");
+                OutputEvent::Start { .. } => {
+                    trace!("Ignoring Start UHID event");
+                    continue
+                },
+                OutputEvent::Stop { .. } => {
+                    trace!("Ignoring Stop UHID event");
+                    continue
+                },
+                OutputEvent::Open { .. } => {
+                    trace!("Ignoring Open UHID event");
+                    continue
+                },
+                OutputEvent::Close { .. } => {
+                    trace!("Ignoring Close UHID event");
+                    continue
+                },
+                OutputEvent::GetReport { .. } => {
+                    trace!("Ignoring GetReport UHID event");
+                    continue
+                },
+                OutputEvent::SetReport { .. } => {
+                    trace!("Ignoring SetReport UHID event");
                     continue
                 },
             },

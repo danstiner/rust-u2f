@@ -290,10 +290,6 @@ where
         application: AppId,
         key_handle: KeyHandle,
     ) -> Result<Response, io::Error> {
-        // let log = self.log.new(o!(
-        //     "app" => try_reverse_app_id(&application).unwrap_or(application.to_base64()),
-        //     "control_code" => format!("{:?}", control_code),
-        // ));
         debug!("Authenticate request");
 
         match control_code {
