@@ -58,13 +58,12 @@ where
     type Output = Result<(), E>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        trace!("U2fHidServer::poll");
         let this = &mut *self;
         loop {
             // First flush any buffered packets
             if let Some(mut buffer) = this.send_buffer.take() {
                 trace!(
-                    "U2fHidServer::poll: Sending {} buffered packets",
+                    "U2fHidServer::poll: {} packets in send buffer",
                     buffer.len()
                 );
 
@@ -82,7 +81,7 @@ where
                     Some(packet) => {
                         // Send first packet and place back the remaining buffer
                         trace!(
-                            "U2fHidServer::poll: Start send packet, remaining: {}",
+                            "U2fHidServer::poll: Starting send of a packet, remaining: {}",
                             buffer.len()
                         );
                         this.send_buffer = Some(buffer);
@@ -90,8 +89,8 @@ where
                         continue;
                     }
                     None => {
-                        // All packets in the buffer have been sent, flush before clearing entirely
-                        trace!("U2fHidServer::poll: Flushing");
+                        // Have begun sending all buffer have been sent, flush before clearing entirely
+                        trace!("U2fHidServer::poll: Started send of all buffered packets, flushing transport");
                         match Pin::new(&mut this.transport).poll_flush(cx) {
                             Poll::Ready(Ok(())) => continue,
                             Poll::Ready(Err(err)) => return Poll::Ready(Err(err.into())),

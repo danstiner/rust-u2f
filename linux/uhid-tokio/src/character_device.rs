@@ -59,13 +59,11 @@ impl futures::AsyncRead for CharacterDevice {
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        trace!("CharacterDevice::read; buf.len:{}", buf.len());
         let this = self.project();
         loop {
             match this.state {
                 State::Ready(ref mut prev_read) => {
                     if prev_read.len() > 0 {
-                        trace!("CharacterDevice::read Leftover Read");
                         // Return leftover bytes from a previous read
                         let n = cmp::min(prev_read.len(), buf.len());
                         let mut remaining = prev_read.split_off(n);
@@ -73,7 +71,7 @@ impl futures::AsyncRead for CharacterDevice {
                         buf[..n].copy_from_slice(&remaining);
                         return Poll::Ready(Ok(n));
                     } else {
-                        trace!("CharacterDevice::read Spawn Read");
+                        trace!("CharacterDevice::poll_read: Begin new async read");
                         // Spawn a new read on a worker thread
                         // TODO: Consider opening device in async mode instead
                         // TODO: Re-use read buffer instead of allocating every time
@@ -86,7 +84,6 @@ impl futures::AsyncRead for CharacterDevice {
                     }
                 }
                 State::Reading(ref mut handle) => {
-                    trace!("CharacterDevice::read Reading");
                     // Check if read is complete
                     let mut read = ready!(handle.poll_unpin(cx))??;
 
