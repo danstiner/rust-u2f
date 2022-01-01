@@ -15,45 +15,24 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, trace, warn};
 use users::get_user_by_uid;
 
-const INPUT_REPORT_LEN: u8 = 64;
-const OUTPUT_REPORT_LEN: u8 = 64;
-
 // HID Report Descriptor from http://www.usb.org/developers/hidpage/HUTRR48.pdf
 const REPORT_DESCRIPTOR: [u8; 34] = [
-    0x06,
-    0xd0,
-    0xf1, // USAGE_PAGE (FIDO Alliance)
-    0x09,
-    0x01, // USAGE (Keyboard)
-    0xa1,
-    0x01, // COLLECTION (Application)
-    0x09,
-    0x20, //   USAGE (Input Report Data)
-    0x15,
-    0x00, //   LOGICAL_MINIMUM (0)
-    0x26,
-    0xff,
-    0x00, //   LOGICAL_MAXIMUM (255)
-    0x75,
-    0x08, //   REPORT_SIZE (8)
-    0x95,
-    INPUT_REPORT_LEN, //   REPORT_COUNT (64)
-    0x81,
-    0x02, //   INPUT (Data,Var,Abs)
-    0x09,
-    0x21, //   USAGE(Output Report Data)
-    0x15,
-    0x00, //   LOGICAL_MINIMUM (0)
-    0x26,
-    0xff,
-    0x00, //   LOGICAL_MAXIMUM (255)
-    0x75,
-    0x08, //   REPORT_SIZE (8)
-    0x95,
-    OUTPUT_REPORT_LEN, //   REPORT_COUNT (64)
-    0x91,
-    0x02, //   OUTPUT (Data,Var,Abs)
-    0xc0, // END_COLLECTION
+    0x06, 0xd0, 0xf1, /* Usage Page: FIDO Alliance Page (0xF1D0) */
+    0x09, 0x01, /*       Usage: U2F Authenticator Device (0x01)  */
+    0xa1, 0x01, /*       Collection: Application                 */
+    0x09, 0x20, /*       - Usage: Input Report Data (0x20)       */
+    0x15, 0x00, /*       - Logical Minimum (0)                   */
+    0x26, 0xff, 0x00, /* - Logical Maximum (255)                 */
+    0x75, 0x08, /*       - Report Size (8)                       */
+    0x95, 0x40, /*       - Report Count (64)                     */
+    0x81, 0x02, /*       - Input (Data, Absolute, Variable)      */
+    0x09, 0x21, /*       - Usage: Input Report Data (0x21)       */
+    0x15, 0x00, /*       - Logical Minimum (0)                  */
+    0x26, 0xff, 0x00, /* - Logical Maximum (255)                 */
+    0x75, 0x08, /*       - Report Size (8)                       */
+    0x95, 0x40, /*       - Report Count (64)                     */
+    0x91, 0x02, /*       - Output (Data, Absolute, Variable)     */
+    0xc0, /*             End Collection                          */
 ];
 
 #[derive(Debug, Error)]
