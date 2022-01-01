@@ -105,7 +105,7 @@ impl UserPresence for NotificationUserPresence {
         application: &AppId,
     ) -> Box<dyn Future<Item = bool, Error = io::Error>> {
         let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
-        let message = format!("Register with {}", site_name);
+        let message = format!("Register {}", site_name);
         self.test_user_presence(&message)
     }
 
@@ -114,7 +114,7 @@ impl UserPresence for NotificationUserPresence {
         application: &AppId,
     ) -> Box<dyn Future<Item = bool, Error = io::Error>> {
         let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
-        let message = format!("Authenticate with {}", site_name);
+        let message = format!("Authenticate {}", site_name);
         self.test_user_presence(&message)
     }
 
