@@ -371,7 +371,7 @@ mod tests {
         todo!()
 
         // match packet {
-            
+
         // }
 
         // match  {
@@ -403,7 +403,6 @@ mod tests {
         panic!("test");
     }
 
-    
     #[tokio::test]
     async fn ping() {
         let ping_data: [u8; 8] = rand::random();
