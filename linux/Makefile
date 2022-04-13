@@ -6,9 +6,12 @@ userdaemondir := ${pwd}/user-daemon
 
 default: build
 
+.PHONY: build
 build:
-	cargo build
+	cargo build --manifest-path ../Cargo.toml
 
+
+.PHONY: install
 install: build
 	sudo mkdir -p /usr/lib/softu2f
 	sudo install -m 755 target/debug/softu2f-system-daemon /usr/lib/softu2f/system-daemon
@@ -33,6 +36,8 @@ install: build
 	systemctl --user enable softu2f.service
 	systemctl --user restart softu2f.service
 
+
+.PHONY: uninstall
 uninstall:
 	-systemctl --user disable softu2f.service
 	-systemctl --user stop softu2f.service
@@ -46,20 +51,20 @@ uninstall:
 	-sudo rm /etc/systemd/user/softu2f.service
 	-sudo semodule -r softu2f-system-daemon
 
+.PHONY: rpm
 rpm: softu2f.spec rpm-selinux-policy rpm-system-daemon rpm-user-daemon
 	rpmbuild --define "_sourcedir ${pwd}" --define "_specdir ${pwd}" --define "_builddir ${pwd}" --define "_srcrpmdir ${targetdir}" --define "_rpmdir ${targetdir}" --define "_buildrootdir ${pwd}/.build" -ba softu2f.spec
 
+.PHONY: rpm-selinux-policy
 rpm-selinux-policy:
 	cd "${selinuxpolicydir}" && make -f /usr/share/selinux/devel/Makefile
 	rpmbuild --define "_sourcedir ${selinuxpolicydir}" --define "_specdir ${selinuxpolicydir}" --define "_builddir ${selinuxpolicydir}" --define "_srcrpmdir ${targetdir}" --define "_rpmdir ${targetdir}" --define "_buildrootdir ${pwd}/.build" -ba "${selinuxpolicydir}/softu2f-system-daemon-selinux.spec"
 	cd "${selinuxpolicydir}" && make -f /usr/share/selinux/devel/Makefile clean
 
+.PHONY: rpm-system-daemon
 rpm-system-daemon: rpm-selinux-policy rpm-user-daemon
 	rpmbuild --define "_sourcedir ${systemdaemondir}" --define "_specdir ${systemdaemondir}" --define "_builddir ${systemdaemondir}" --define "_srcrpmdir ${targetdir}" --define "_rpmdir ${targetdir}" --define "_buildrootdir ${pwd}/.build" -ba "${systemdaemondir}/softu2f-system-daemon.spec"
 
+.PHONY: rpm-user-daemon
 rpm-user-daemon:
 	rpmbuild --define "_sourcedir ${userdaemondir}" --define "_specdir ${userdaemondir}" --define "_builddir ${userdaemondir}" --define "_srcrpmdir ${targetdir}" --define "_rpmdir ${targetdir}" --define "_buildrootdir ${pwd}/.build" -ba "${userdaemondir}/softu2f-user-daemon.spec"
-
-.PHONY: build
-.PHONY: install uninstall
-.PHONY: rpm make-selinux-policy rpm-selinux-policy rpm-system-daemon rpm-user-daemon

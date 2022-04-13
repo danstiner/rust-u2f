@@ -25,17 +25,15 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --manifest-path linux/Cargo.toml
 
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --manifest-path linux/Cargo.toml
 
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all --manifest-path linux/Cargo.toml -- --check
+          args: --all -- --check
 
       # Disabled until clippy warnings are fixed
       # - uses: actions-rs/cargo@v1

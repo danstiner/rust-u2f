@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "linux/uhid-sys",
+    "linux/uhid-tokio",
+    "linux/uhid-tokio/example",
+    "linux/user-daemon",
+    "linux/system-daemon",
+    "linux/test-authenticator",
+    "u2f-core",
+    "u2fhid-protocol"
+]
+
+[profile.release]
+lto = true
+panic = 'abort'
