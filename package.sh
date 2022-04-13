@@ -25,7 +25,7 @@ package() {
     $docker build -f "$dist_dockerfile" -t "$build_target" .
 
     id=$($docker create "$build_target")
-    $docker cp "$id":/app/linux/dist/. "$dist_path"
+    $docker cp "$id":/app/dist/. "$dist_path"
     $docker rm -v $id
 }
 

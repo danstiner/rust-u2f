@@ -36,6 +36,6 @@ RUN cargo test --release
 
 RUN cd linux && make rpm
 
-RUN mkdir -p dist/ && cp -r linux/target/fedora/* dist/
+RUN mkdir -p dist/ && cp -r target/fedora/* dist/
 
 CMD ["/bin/bash"]
