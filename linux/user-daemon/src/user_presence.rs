@@ -92,13 +92,13 @@ impl NotificationUserPresence {
 impl UserPresence for NotificationUserPresence {
     async fn approve_registration(&self, application: &AppId) -> Result<bool, io::Error> {
         let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
-        let message = format!("Register with {}", site_name);
+        let message = format!("Register {}", site_name);
         self.test_user_presence(message).await
     }
 
     async fn approve_authentication(&self, application: &AppId) -> Result<bool, io::Error> {
         let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
-        let message = format!("Authenticate with {}", site_name);
+        let message = format!("Authenticate {}", site_name);
         self.test_user_presence(message).await
     }
 
