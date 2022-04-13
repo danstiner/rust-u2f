@@ -13,6 +13,6 @@ futures = "^0.3.17"
 pin-project = "^1.0"
 thiserror = "^1.0"
 tokio = { version = "^1.15.0", features = ["fs", "net", "io-util"] }
-tokio-util = { version = "^0.6", features = ["codec"] }
+tokio-util = { version = "0.7.1", features = ["codec"] }
 tracing = "^0.1"
 uhid-sys = { path = "../uhid-sys" }

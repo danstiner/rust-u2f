@@ -9,7 +9,6 @@ extern crate tokio;
 extern crate tokio_linux_uhid;
 extern crate tokio_util;
 extern crate tower;
-// extern crate u2fhid_protocol;
 extern crate users;
 
 use std::io;
@@ -21,7 +20,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use crate::socket_server::SocketServer;
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use futures::future;
 use futures::future::Ready;
 use futures::Future;
@@ -60,12 +59,12 @@ enum Error {
 
 #[tokio::main]
 async fn main() {
-    let args = App::new("Rust-u2f System Daemon")
+    let args = Command::new("Rust-U2F System Daemon")
         .version(VERSION)
         .author(AUTHORS)
         .about(DESCRIPTION)
-        .arg(Arg::with_name(PATH_ARG)
-            .short("s")
+        .arg(Arg::new(PATH_ARG)
+            .short('s')
             .long("socket")
             .takes_value(true)
             .help("Bind to specified socket path instead of file-descriptor from systemd"))

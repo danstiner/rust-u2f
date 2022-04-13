@@ -27,7 +27,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use futures::{ready, Sink, SinkExt, Stream, StreamExt};
 use pin_project::pin_project;
 use thiserror::Error;
@@ -80,12 +80,12 @@ pub enum Error {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
-    let args = App::new("SoftU2F User Daemon")
+    let args = Command::new("Rust-U2F User Daemon")
         .version(VERSION)
         .author(AUTHORS)
         .about(DESCRIPTION)
-        .arg(Arg::with_name(SOCKET_PATH_ARG)
-            .short("s")
+        .arg(Arg::new(SOCKET_PATH_ARG)
+            .short('s')
             .long("socket")
             .takes_value(true)
             .help("Bind to specified socket path instead of file-descriptor from systemd"))
