@@ -48,7 +48,7 @@ assets = [
     ["softu2f.socket", "usr/lib/systemd/system/", "644"],
     ["softu2f.preset", "usr/lib/systemd/system-preset/95-softu2f.preset", "644"],
     ["softu2f-tmpfiles.conf", "usr/lib/tmpfiles.d/softu2f.conf", "644"],
-    ["../target/release/softu2f-system-daemon", "usr/libexec/softu2f/system-daemon", "755"]
+    ["../../target/release/softu2f-system-daemon", "usr/libexec/softu2f/system-daemon", "755"]
 ]
 depends = "$auto, systemd, u2f-hidraw-policy"
 extended-description = """Provides a socket interface for unprivileged users to create emulated Universal 2nd Factor
