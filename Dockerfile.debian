@@ -31,22 +31,22 @@ RUN set -eux; \
 RUN cargo install cargo-deb
 
 COPY . /app
-WORKDIR /app/linux
+WORKDIR /app
 
 RUN cargo test --release
 
 RUN mkdir -p dist/
 
-RUN cd system-daemon && cargo deb
+RUN cargo deb --package softu2f-system-daemon
 RUN mv target/debian/*.deb dist/
 
-RUN cd user-daemon && cargo deb
+RUN cargo deb --package softu2f-user-daemon
 RUN mv target/debian/*.deb dist/
 
-RUN cd meta-package && dpkg-buildpackage -us -uc
-RUN mv *.deb dist/
+RUN cd linux/meta-package && dpkg-buildpackage -us -uc
+RUN mv linux/*.deb dist/
 
-RUN cd u2f-hidraw-policy && dpkg-buildpackage -b
-RUN mv *.deb dist/
+RUN cd linux/u2f-hidraw-policy && dpkg-buildpackage -b
+RUN mv linux/*.deb dist/
 
 CMD ["/bin/bash"]

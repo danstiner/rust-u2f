@@ -3,6 +3,7 @@ use std::io;
 use crate::attestation::AttestationCertificate;
 use crate::key_handle::KeyHandle;
 use byteorder::{BigEndian, WriteBytesExt};
+use thiserror::Error;
 
 use super::user_presence_byte;
 use super::Counter;
@@ -23,7 +24,10 @@ pub enum Response {
         user_present: bool,
     },
     Version {
-        version_string: String,
+        u2f_version_string: String,
+        device_version_major: u8,
+        device_version_minor: u8,
+        device_version_build: u8,
     },
     DidWink,
     TestOfUserPresenceNotSatisfied,
@@ -84,11 +88,13 @@ impl Response {
                 // Status word [2 bytes]
                 StatusCode::NoError.write(&mut bytes);
             }
-            Response::Version { version_string } => {
+            Response::Version {
+                u2f_version_string, ..
+            } => {
                 // The response message's raw representation is the
                 // ASCII representation of the string 'U2F_V2'
                 // (without quotes, and without any NUL terminator).
-                bytes.extend_from_slice(version_string.as_bytes());
+                bytes.extend_from_slice(u2f_version_string.as_bytes());
 
                 // Status word [2 bytes]
                 StatusCode::NoError.write(&mut bytes);
@@ -118,16 +124,13 @@ impl Response {
     }
 }
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum ResponseError {
-        Io(err: io::Error) {
-            from()
-        }
-        Signing(err: SignError) {
-            from()
-        }
-    }
+#[derive(Debug, Error)]
+pub enum ResponseError {
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("Signing error: {0}")]
+    Signing(#[from] SignError),
 }
 
 impl Into<io::Error> for ResponseError {

@@ -1,16 +1,13 @@
+use bitflags::bitflags;
 use std::cmp;
 use std::collections::vec_deque::VecDeque;
 use std::io::{Cursor, Read};
-use std::mem::size_of;
 use std::time::Duration;
+use thiserror::Error;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use slog;
+use serde_derive::{Deserialize, Serialize};
 use u2f_core;
-
-pub const MAJOR_DEVICE_VERSION_NUMBER: u8 = 0;
-pub const MINOR_DEVICE_VERSION_NUMBER: u8 = 1;
-pub const BUILD_DEVICE_VERSION_NUMBER: u8 = 0;
 
 pub const U2FHID_PROTOCOL_VERSION: u8 = 2;
 
@@ -58,17 +55,6 @@ impl ChannelId {
     }
 }
 
-impl slog::Value for ChannelId {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        format!("{:#01$X}", self.0, size_of::<u32>() * 2).serialize(record, key, serializer)
-    }
-}
-
 bitflags! {
     pub struct CapabilityFlags: u8 {
         const CAPFLAG_WINK = 0b0000_0001;
@@ -91,7 +77,7 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
-    fn into_byte(self) -> u8 {
+    fn to_byte(&self) -> u8 {
         match self {
             ErrorCode::None => 0x00,
             ErrorCode::InvalidCommand => 0x01,
@@ -108,7 +94,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub enum Command {
     Msg,
     Ping,
@@ -121,56 +107,19 @@ pub enum Command {
     Unknown { identifier: u8 },
 }
 
-impl slog::Value for Command {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        match self {
-            &Command::Msg => "Msg",
-            &Command::Ping => "Ping",
-            &Command::Init => "Init",
-            &Command::Error => "Error",
-            &Command::Wink => "Wink",
-            &Command::Lock => "Lock",
-            &Command::Sync => "Sync",
-            &Command::Unknown { .. } => "Unknown",
-            &Command::Vendor { .. } => "Vendor",
-        }
-        .serialize(record, key, serializer)
-    }
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum Packet {
     Initialization {
         channel_id: ChannelId,
         command: Command,
         data: Vec<u8>,
-        payload_len: usize,
+        payload_len: u16,
     },
     Continuation {
         channel_id: ChannelId,
         sequence_number: u8,
         data: Vec<u8>,
     },
-}
-
-impl slog::Value for Packet {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        match self {
-            &Packet::Initialization { .. } => "Initialization",
-            &Packet::Continuation { .. } => "Continuation",
-        }
-        .serialize(record, key, serializer)
-    }
 }
 
 impl Packet {
@@ -208,7 +157,7 @@ impl Packet {
                 channel_id,
                 command,
                 data: packet_data,
-                payload_len: payload_len as usize,
+                payload_len,
             })
         } else {
             let sequence_number = first_byte;
@@ -222,7 +171,7 @@ impl Packet {
         }
     }
 
-    pub fn into_bytes(self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(HID_REPORT_LEN);
         match self {
             Packet::Initialization {
@@ -244,14 +193,14 @@ impl Packet {
                     Command::Wink => U2FHID_WINK,
                     Command::Lock => U2FHID_LOCK,
                     Command::Sync => U2FHID_SYNC,
-                    Command::Vendor { identifier } => identifier,
-                    Command::Unknown { identifier } => identifier,
+                    Command::Vendor { identifier } => *identifier,
+                    Command::Unknown { identifier } => *identifier,
                 };
                 bytes.push(command_byte);
 
                 // 5      1      BCNTH    High part of payload length
                 // 6      1      BCNTL    Low part of payload length
-                bytes.write_u16::<BigEndian>(payload_len as u16).unwrap();
+                bytes.write_u16::<BigEndian>(*payload_len).unwrap();
 
                 // 7      (s-7)  DATA     Payload data (s is equal to the fixed packet size)
                 bytes.extend_from_slice(&data);
@@ -270,7 +219,7 @@ impl Packet {
 
                 // 4      1      SEQ      Packet sequence 0x00..0x7f (bit 7 always cleared)
                 assert_eq!(sequence_number & FRAME_TYPE_MASK, FRAME_TYPE_CONT);
-                bytes.push(sequence_number);
+                bytes.push(*sequence_number);
 
                 // 5      (s-5)  DATA     Payload data (s is equal to the fixed packet size)
                 bytes.extend_from_slice(&data);
@@ -314,10 +263,10 @@ impl RequestMessage {
             }),
             &Command::Init => {
                 if data.len() != COMMAND_INIT_DATA_LEN {
-                    Err(RequestMessageDecodeError::PayloadLength(
-                        COMMAND_INIT_DATA_LEN,
-                        data.len(),
-                    ))
+                    Err(RequestMessageDecodeError::PayloadLength {
+                        expected_len: COMMAND_INIT_DATA_LEN,
+                        actual_len: data.len(),
+                    })
                 } else {
                     let mut nonce = [0u8; COMMAND_INIT_DATA_LEN];
                     nonce.copy_from_slice(&data[..]);
@@ -327,10 +276,10 @@ impl RequestMessage {
             &Command::Wink => Ok(RequestMessage::Wink),
             &Command::Lock => {
                 if data.len() != COMMAND_WINK_DATA_LEN {
-                    Err(RequestMessageDecodeError::PayloadLength(
-                        COMMAND_WINK_DATA_LEN,
-                        data.len(),
-                    ))
+                    Err(RequestMessageDecodeError::PayloadLength {
+                        expected_len: COMMAND_WINK_DATA_LEN,
+                        actual_len: data.len(),
+                    })
                 } else {
                     Ok(RequestMessage::Lock {
                         lock_time: Duration::from_secs(data[0].into()),
@@ -352,23 +301,16 @@ impl RequestMessage {
     }
 }
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum RequestMessageDecodeError {
-        PayloadLength(expected_len: usize, actual_len: usize)
-        UnsupportedCommand(command: Command)
-    }
-}
+#[derive(Debug, Error)]
+pub enum RequestMessageDecodeError {
+    #[error("Payload length ({actual_len}) longer than expected ({expected_len})")]
+    PayloadLength {
+        expected_len: usize,
+        actual_len: usize,
+    },
 
-impl slog::Value for RequestMessageDecodeError {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        format!("{:?}", self).serialize(record, key, serializer)
-    }
+    #[error("Unsupported command: {0:?}")]
+    UnsupportedCommand(Command),
 }
 
 #[derive(Debug)]
@@ -378,9 +320,9 @@ pub struct Response {
 }
 
 impl Response {
-    pub fn into_packets(self) -> VecDeque<Packet> {
+    pub fn to_packets(&self) -> VecDeque<Packet> {
         let channel_id = self.channel_id;
-        match self.message {
+        match &self.message {
             ResponseMessage::EncapsulatedResponse { data } => {
                 encode_response(channel_id, Command::Msg, &data)
             }
@@ -394,19 +336,19 @@ impl Response {
                 capabilities,
             } => {
                 let mut data = Vec::with_capacity(17);
-                data.extend_from_slice(&nonce);
+                data.extend_from_slice(nonce);
                 new_channel_id.write(&mut data);
-                data.push(u2fhid_protocol_version);
-                data.push(major_device_version_number);
-                data.push(minor_device_version_number);
-                data.push(build_device_version_number);
+                data.push(*u2fhid_protocol_version);
+                data.push(*major_device_version_number);
+                data.push(*minor_device_version_number);
+                data.push(*build_device_version_number);
                 data.push(capabilities.bits);
                 assert_eq!(data.len(), 17);
                 encode_response(channel_id, Command::Init, &data)
             }
             ResponseMessage::Pong { data } => encode_response(channel_id, Command::Ping, &data),
             ResponseMessage::Error { code } => {
-                let data = vec![code.into_byte()];
+                let data = vec![code.to_byte()];
                 encode_response(channel_id, Command::Error, &data)
             }
             ResponseMessage::Wink => encode_response(channel_id, Command::Wink, &[]),
@@ -439,25 +381,6 @@ pub enum ResponseMessage {
     Lock,
 }
 
-impl slog::Value for ResponseMessage {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        match self {
-            ResponseMessage::EncapsulatedResponse { .. } => "EncapsulatedResponse",
-            ResponseMessage::Init { .. } => "Init",
-            ResponseMessage::Pong { .. } => "Pong",
-            ResponseMessage::Error { .. } => "Error",
-            ResponseMessage::Wink => "Wink",
-            ResponseMessage::Lock => "Lock",
-        }
-        .serialize(record, key, serializer)
-    }
-}
-
 impl From<u2f_core::Response> for ResponseMessage {
     fn from(response: u2f_core::Response) -> ResponseMessage {
         ResponseMessage::EncapsulatedResponse {
@@ -468,7 +391,7 @@ impl From<u2f_core::Response> for ResponseMessage {
 
 fn encode_response(channel_id: ChannelId, command: Command, data: &[u8]) -> VecDeque<Packet> {
     let mut packets = VecDeque::new();
-    let payload_len = data.len();
+    let payload_len = data.len() as u16;
     let split_index = cmp::min(data.len(), INITIAL_PACKET_DATA_LEN);
     let (initial, remaining) = data.split_at(split_index);
     packets.push_back(Packet::Initialization {

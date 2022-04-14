@@ -154,7 +154,7 @@ impl Request {
                 assert_eq!(request_data_len, 0);
                 Request::GetVersion
             }
-            _ => panic!("Not implemented"),
+            _ => panic!("Command not implemented"),
         };
         Ok(request)
     }

@@ -24,7 +24,7 @@ softu2f-system-daemon being installed.
 rm -rf $RPM_BUILD_ROOT
 mkdir $RPM_BUILD_ROOT
 cargo build --bin softu2f-user-daemon --release
-cp ../target/release/softu2f-user-daemon %{_tmppath}
+cp ../../target/release/softu2f-user-daemon %{_tmppath}
 strip %{_tmppath}/softu2f-user-daemon
 
 %install

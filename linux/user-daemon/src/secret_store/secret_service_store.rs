@@ -7,7 +7,7 @@ use secret_service::{Collection, EncryptionType, Error, Item, SecretService};
 use serde_json;
 use u2f_core::{try_reverse_app_id, AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
 
-use crate::stores::{Secret, UserSecretStore};
+use crate::secret_store::{MutableSecretStore, Secret};
 
 pub struct SecretServiceStore<'a> {
     service: SecretService<'a>,
@@ -25,7 +25,7 @@ impl SecretServiceStore<'_> {
     }
 }
 
-impl<'a> UserSecretStore for SecretServiceStore<'a> {
+impl<'a> MutableSecretStore for SecretServiceStore<'a> {
     fn add_secret(&self, secret: Secret) -> io::Result<()> {
         let collection = self
             .service
@@ -103,7 +103,7 @@ impl<'a> SecretStore for SecretServiceStore<'a> {
                 let count = value.parse::<u64>().unwrap_or(0);
                 *value = (count + 1).to_string();
             })
-            .or_insert(0.to_string());
+            .or_insert_with(|| 0.to_string());
         let attributes = attributes
             .iter()
             .map(|(key, value)| (key.as_str(), value.as_str()))

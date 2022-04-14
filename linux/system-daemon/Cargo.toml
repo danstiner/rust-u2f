@@ -3,36 +3,36 @@ authors = ["Daniel Stiner <danstiner@gmail.com>"]
 description = "System daemon for emulating U2F devices"
 name = "softu2f-system-daemon"
 version = "0.4.2"
+edition = "2021"
 
 [dependencies]
-bincode = "1.1.4"
+bincode = "1.3.3"
 bytes = "1.1.0"
-clap = "2.33.0"
-futures = "0.1.28"
+clap = "3.1.8"
+futures = "0.3.17"
 hostname = "0.3.1"
 libc = "0.2.62"
-libsystemd = "0.4.0"
+libsystemd = "0.5.0"
 nanoid = "0.4.0"
+pin-project = "1.0"
 serde = "1.0.99"
 serde_derive = "1.0.99"
-slog = { version = "2.5.2", features = ["max_level_debug", "release_max_level_info" ] }
-slog-journald = "2.0.0"
-slog-term = "2.4.1"
 take_mut = "0.2.2"
-tokio = "0.1.22"
-tokio-codec = "0.1"
-tokio-core = "0.1.17"
-tokio-io = "0.1.12"
-tokio-serde-bincode = "0.2.1"
-tokio-uds = "0.2.5"
-users = "0.11.0"
-quick-error = "2.0.1"
+thiserror = "1.0"
+tokio = { version = "1.13.0", features = ["full"] }
+tokio-serde = { version = "0.8", features = ["bincode"] }
+tokio-util = { version = "0.7.1", features = ["full"] }
+tower = "0.4"
+tracing = { version = "0.1", features = ["release_max_level_debug"] }
+tracing-journald = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+users = "0.11"
 
 [dependencies.tokio-linux-uhid]
 path = "../uhid-tokio"
 
 [dependencies.u2fhid-protocol]
-path = "../../u2fhid-protocol/"
+path = "../../u2fhid-protocol"
 
 [[bin]]
 doc = false
@@ -48,7 +48,7 @@ assets = [
     ["softu2f.socket", "usr/lib/systemd/system/", "644"],
     ["softu2f.preset", "usr/lib/systemd/system-preset/95-softu2f.preset", "644"],
     ["softu2f-tmpfiles.conf", "usr/lib/tmpfiles.d/softu2f.conf", "644"],
-    ["../target/release/softu2f-system-daemon", "usr/libexec/softu2f/system-daemon", "755"]
+    ["../../target/release/softu2f-system-daemon", "usr/libexec/softu2f/system-daemon", "755"]
 ]
 depends = "$auto, systemd, u2f-hidraw-policy"
 extended-description = """Provides a socket interface for unprivileged users to create emulated Universal 2nd Factor

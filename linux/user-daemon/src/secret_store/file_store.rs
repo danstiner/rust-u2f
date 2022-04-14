@@ -1,14 +1,15 @@
 use alloc::vec::IntoIter;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter};
 
-use crate::stores::Secret;
+use crate::secret_store::Secret;
 
 #[derive(Serialize, Deserialize)]
 struct Data {
@@ -23,6 +24,13 @@ pub struct FileStore {
 impl FileStore {
     pub fn new(path: PathBuf) -> io::Result<FileStore> {
         Ok(FileStore { path })
+    }
+
+    pub fn default_path<H>(home_dir: H) -> PathBuf
+    where
+        H: AsRef<Path>,
+    {
+        home_dir.as_ref().join(".softu2f-secrets.json")
     }
 
     pub fn delete(self) -> io::Result<()> {

@@ -1,6 +1,0 @@
-[workspace]
-members = ["uhid-sys", "uhid-tokio", "uhid-tokio/example", "user-daemon", "system-daemon"]
-
-[profile.release]
-lto = true
-panic = 'abort'

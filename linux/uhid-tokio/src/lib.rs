@@ -10,7 +10,7 @@
 //!#  extern crate tokio;
 //!#  extern crate tokio_linux_uhid;
 //!
-//! use tokio_linux_uhid::{Bus, CreateParams, UHIDDevice};
+//! use tokio_linux_uhid::{Bus, CreateParams, UhidDevice};
 //!
 //! // Formulate a 'HID Report Descriptor' to describe the function of your device.
 //! // This tells the kernel how to interpret the HID packets you send to the device.
@@ -61,8 +61,9 @@
 //!     0xc0,		/* END_COLLECTION */
 //! ];
 //!
-//! fn main() {
-//!     let mut uhid_device = UHIDDevice::create(CreateParams {
+//! #[tokio::main]
+//! async fn main() {
+//!     let mut uhid_device = UhidDevice::create(CreateParams {
 //!         name: String::from("test-uhid-device"),
 //!         phys: String::from(""),
 //!         uniq: String::from(""),
@@ -73,7 +74,7 @@
 //!         country: 0,
 //!         // Most important field - HID Report Descriptor
 //!         data: RDESC.to_vec(),
-//!     }, None).unwrap();
+//!     }).await.unwrap();
 //!
 //!     // Formulate a HID Packet
 //!     let button_flags = 0;
@@ -83,31 +84,21 @@
 //!     let data: [u8; 5] = [1, button_flags, mouse_abs_hor, mouse_abs_ver, wheel];
 //!     
 //!     // Send the HID packet to the device. Cursor should move 20 points to the right.
-//!     uhid_device.send_input(&data).unwrap();
+//!     uhid_device.send_input(&data).await.unwrap();
 //! }
 //! ```
-#[macro_use]
 extern crate bitflags;
 extern crate bytes;
 extern crate futures;
-extern crate mio;
-extern crate nix;
-#[macro_use]
-extern crate quick_error;
-#[macro_use]
-extern crate slog;
-extern crate slog_stdlog;
+extern crate pin_project;
 extern crate tokio;
-extern crate tokio_io;
 extern crate uhid_sys;
 
 pub use crate::codec::{Bus, InputEvent, OutputEvent, StreamError};
-pub use crate::misc_driver::MiscDriver;
 pub use crate::uhid_device::CreateParams;
-pub use crate::uhid_device::UHIDDevice;
+pub use crate::uhid_device::UhidDevice;
 
 mod character_device;
 mod codec;
-mod misc_driver;
-mod transport;
+mod event_framed;
 mod uhid_device;

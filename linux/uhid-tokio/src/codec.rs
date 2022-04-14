@@ -4,29 +4,33 @@ use std::iter::repeat;
 use std::mem;
 use std::slice;
 
+use bitflags::bitflags;
 use bytes::BytesMut;
-use slog;
+use thiserror::Error;
 
-use crate::transport::{Decoder, Encoder};
 use uhid_sys as sys;
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum StreamError {
-        Io(err: io::Error) {
-            from()
-        }
-        UnknownEventType(event_type_value: u32) {
-            display(r#"Unknown/Unsupported event type: "{}""#, event_type_value)
-        }
-        BufferOverflow(data_size: usize, max_size: usize) {
-            display(r#"Size "{}" exceeds available space "{}""#, data_size, max_size)
-        }
-        Nul(err: ffi::NulError) {
-            from()
-        }
-        Unknown
-    }
+use crate::event_framed::Decoder;
+use crate::event_framed::Encoder;
+
+pub const UHID_EVENT_SIZE: usize = mem::size_of::<sys::uhid_event>();
+
+#[derive(Debug, Error)]
+pub enum StreamError {
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("Unknown/Unsupported event type: {0}")]
+    UnknownEventType(u32),
+
+    #[error("Buffer overflow, size {data_size} exceeds max size {max_size}")]
+    BufferOverflow { data_size: usize, max_size: usize },
+
+    #[error("FFI Null Pointer: {0}")]
+    Nul(#[from] ffi::NulError),
+
+    #[error("Unkown error")]
+    Unknown,
 }
 
 bitflags! {
@@ -72,6 +76,7 @@ pub enum Bus {
 }
 
 pub enum InputEvent {
+    // Encoded as struct uhid_create2_req
     Create {
         name: String,
         phys: String,
@@ -84,6 +89,7 @@ pub enum InputEvent {
         data: Vec<u8>,
     },
     Destroy,
+    // Encoded as struct uhid_input2_req
     Input {
         data: Vec<u8>,
     },
@@ -105,6 +111,7 @@ pub enum OutputEvent {
     Stop,
     Open,
     Close,
+    // Encoded as struct uhid_output_req
     Output {
         data: Vec<u8>,
     },
@@ -120,29 +127,6 @@ pub enum OutputEvent {
         data: Vec<u8>,
     },
 }
-
-impl slog::Value for OutputEvent {
-    fn serialize(
-        &self,
-        record: &slog::Record,
-        key: slog::Key,
-        serializer: &mut dyn slog::Serializer,
-    ) -> slog::Result {
-        match self {
-            &OutputEvent::Start { .. } => "Start",
-            &OutputEvent::Stop => "Stop",
-            &OutputEvent::Open => "Open",
-            &OutputEvent::Close => "Close",
-            &OutputEvent::Output { .. } => "Output",
-            &OutputEvent::GetReport { .. } => "GetReport",
-            &OutputEvent::SetReport { .. } => "SetReport",
-        }
-        .serialize(record, key, serializer)
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct Codec;
 
 impl InputEvent {
     fn into_uhid_event(self) -> Result<sys::uhid_event, StreamError> {
@@ -210,7 +194,10 @@ fn copy_bytes_sized(src: Vec<u8>, dst: &mut [u8]) -> Result<usize, StreamError> 
     let dst_size = dst.len();
 
     if src_size > dst_size {
-        return Err(StreamError::BufferOverflow(src_size, dst_size));
+        return Err(StreamError::BufferOverflow {
+            data_size: src_size,
+            max_size: dst_size,
+        });
     }
 
     dst.get_mut(0..src_size)
@@ -225,7 +212,10 @@ fn copy_as_cstr(string: String, dst: &mut [u8]) -> Result<(), StreamError> {
     let dst_size = dst.len();
 
     if src_size >= dst_size {
-        return Err(StreamError::BufferOverflow(src_size, dst_size));
+        return Err(StreamError::BufferOverflow {
+            data_size: src_size,
+            max_size: dst_size,
+        });
     }
 
     src.extend(repeat(0).take(dst_size - src_size));
@@ -298,6 +288,9 @@ fn to_uhid_event_type(value: u32) -> Option<sys::uhid_event_type> {
 
 fn read_event(src: &mut BytesMut) -> Option<sys::uhid_event> {
     let uhid_event_size = mem::size_of::<sys::uhid_event>();
+    // TODO events can be less than the size of the struct,
+    // The userspace process is expected to zero pad in that case
+    // There is a maximum size.
     if src.len() >= uhid_event_size {
         let bytes = src.split_to(uhid_event_size);
         let ptr = bytes.as_ptr();
@@ -315,11 +308,16 @@ unsafe fn as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     slice::from_raw_parts((p as *const T) as *const u8, mem::size_of::<T>())
 }
 
+#[derive(Debug, Default)]
+pub struct Codec;
+
 impl Decoder for Codec {
     type Item = OutputEvent;
     type Error = StreamError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Self::Item, Self::Error> {
+        debug_assert_eq!(src.len(), UHID_EVENT_SIZE);
+
         if let Some(event) = read_event(src) {
             Ok(decode_event(event)?)
         } else {
@@ -328,17 +326,19 @@ impl Decoder for Codec {
     }
 
     fn read_len(&self) -> usize {
-        mem::size_of::<sys::uhid_event>()
+        UHID_EVENT_SIZE
     }
 }
 
-impl Encoder for Codec {
-    type Item = InputEvent;
+impl Encoder<InputEvent> for Codec {
     type Error = StreamError;
 
-    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: InputEvent, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let event = item.into_uhid_event()?;
         dst.extend_from_slice(encode_event(&event));
+
+        debug_assert_eq!(dst.len(), UHID_EVENT_SIZE);
+
         Ok(())
     }
 }
