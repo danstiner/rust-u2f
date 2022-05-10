@@ -47,6 +47,66 @@ sudo apt install -y softu2f
 systemctl --user start softu2f
 ```
 
+## Architecture
+
+### Background
+- [FIDO Specifications](https://fidoalliance.org/specifications/)
+- [UHID - User-space I/O driver support for HID subsystem](https://www.kernel.org/doc/Documentation/hid/uhid.txt)
+- [HID I/O Transport Drivers in the Linux kernel](https://www.kernel.org/doc/html/latest/hid/hid-transport.html)
+- [Chromium's Input Stack](https://chromium.googlesource.com/chromiumos/docs/+/HEAD/input_stack.md)
+
+### FIDO
+
+Conceptually FIDO consists of three pieces:
+- A remote server that wants to verify a user's identity
+- A user device running a browser or other client application
+- An authenticator device that can store keys and attest the user's identify
+
+Hardware authenticators commonly present as Human Interface Devices (HID) utilizing a USB transport.
+However, the HID subsystem of the Linux kernel also allows defining HID transports and devices from
+user-space. This project takes advantage of that support (UHID) to create virtual HID authenticator devices that, to browsers and other client applications, appear identical to a real hardware authenticator (modulo not having certain metadata such as a USB bus id).
+
+This project is split into two programs that coordinate to implement such a virtual HID authenticator.
+
+### system-daemon
+
+This program listens on a socket file for connections from user-daemon instances and for each connection uses `/dev/uhid` to create a HID device with a report descriptor defining it as a FIDO Alliance authenticator device. It then forwards HID report data between the device and user-daemon connection. It is essentially a simple broker allowing non-privledged users to create authenticator devices. It is usually run by systemd in a privileged context in order to access `/dev/uhid`, but can also be run manually if desired.
+
+### user-daemon
+
+This program runs in the user's session. It connects to the system-daemon's socket file and then reads incoming HID report data, decoding it into the commands as defined by FIDO Client to Authenticator Protocol (CTAP). It responds to those commands, handling all signing and secrets. It verifies user presence by using `libnotify` to show notifications with the option to approve or deny requests to register or authenticate a user.
+
+### Diagram
+
+```
++-----------+        +-----------------+
+| Webserver |        | Notification UI |
++-----------+        +-----------------+
+      |                      |
+      | HTTP(S)              | D-Bus
+      |                      |
++-----------+         +---------------+
+|  Browser  |         |  user-daemon  |
++-----------+         +---------------+
+      | /dev/input/event*    | socket file
+------|----------------------|--------------
+      |                      |       
+      |               +---------------+
+      |               | system-daemon |
+      |               +---------------+
+      |                      | /dev/uhid
+      |                      |
+------|----------------------|-------------
+      |                      |       Kernel
++-----------+            +--------+
+| evdev     |            |  UHID  |
++-----------+            +--------+
+      |                      |
++-----------------------------------------+
+|          Kernel HID subsystem           |
++-----------------------------------------+
+```
+
 ## Building
 
 See `Dockerfile.debian` or `Dockerfile.fedora` for pre-requisite packages that must be installed.
