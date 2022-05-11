@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "ctaphid-protocol",
     "linux/uhid-sys",
     "linux/uhid-tokio",
     "linux/uhid-tokio/example",

@@ -490,6 +490,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctaphid-protocol"
+version = "0.4.2"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "futures 0.3.21",
+ "itertools",
+ "pin-project",
+ "rand 0.8.5",
+ "serde",
+ "serde_derive",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-tower",
+ "tracing",
+ "u2f-core",
+]
+
+[[package]]
 name = "derivative"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
