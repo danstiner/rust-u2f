@@ -4,6 +4,6 @@ Wants=softu2f.socket
 
 [Service]
 Type=simple
-ExecStart=/usr/lib/softu2f/system-daemon
+ExecStart=/usr/libexec/softu2f/system-daemon
 PrivateNetwork=yes
 PrivateTmp=true
