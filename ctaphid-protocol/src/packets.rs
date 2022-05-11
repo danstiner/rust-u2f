@@ -76,7 +76,7 @@ impl Packet {
         let mut reader = Cursor::new(bytes);
 
         let hid_report_id = reader.read_u8().unwrap();
-        assert_eq!(hid_report_id, 0x01); // TODO move validating the report it to a HID layer
+        assert_eq!(hid_report_id, 0x00); // TODO move validating the report it to a HID layer
 
         let channel_id = ChannelId(reader.read_u32::<BigEndian>().unwrap());
         let first_byte = reader.read_u8().unwrap();
