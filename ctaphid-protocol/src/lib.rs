@@ -21,6 +21,7 @@ mod packets;
 mod protocol_state_machine;
 mod server;
 
+pub use packets::Packet;
 pub use server::Server;
 
 pub const CTAPHID_PROTOCOL_VERSION: u8 = 2;

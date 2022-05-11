@@ -8,7 +8,6 @@ members = [
     "linux/system-daemon",
     "linux/test-authenticator",
     "u2f-core",
-    "u2fhid-protocol"
 ]
 
 [profile.release]

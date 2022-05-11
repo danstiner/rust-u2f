@@ -42,7 +42,7 @@ where
         debug_assert!(self.send_buffer.is_none());
         trace!(
             channel_id = ?message.channel_id,
-            "U2fHidServer::buffer_send: {:?}", message.response
+            "CtapHidServer::buffer_send: {:?}", message.response
         );
         self.send_buffer = Some(message.to_packets());
     }
@@ -63,7 +63,7 @@ where
             // First flush any buffered packets
             if let Some(mut buffer) = this.send_buffer.take() {
                 trace!(
-                    "U2fHidServer::poll: {} packets in send buffer",
+                    "CtapHidServer::poll: {} packets in send buffer",
                     buffer.len()
                 );
 
@@ -71,7 +71,7 @@ where
                 match Pin::new(&mut this.transport).poll_ready(cx)? {
                     Poll::Ready(()) => {}
                     Poll::Pending => {
-                        trace!("U2fHidServer::poll: Transport not ready");
+                        trace!("CtapHidServer::poll: Transport not ready");
                         this.send_buffer = Some(buffer);
                         return Poll::Pending;
                     }
@@ -81,7 +81,7 @@ where
                     Some(packet) => {
                         // Send first packet and place back the remaining buffer
                         trace!(
-                            "U2fHidServer::poll: Starting send of a packet, remaining: {}",
+                            "CtapHidServer::poll: Starting send of a packet, remaining: {}",
                             buffer.len()
                         );
                         this.send_buffer = Some(buffer);
@@ -90,7 +90,7 @@ where
                     }
                     None => {
                         // Have begun sending all buffer have been sent, flush before clearing entirely
-                        trace!("U2fHidServer::poll: Started send of all buffered packets, flushing transport");
+                        trace!("CtapHidServer::poll: Started send of all buffered packets, flushing transport");
                         match Pin::new(&mut this.transport).poll_flush(cx) {
                             Poll::Ready(Ok(())) => continue,
                             Poll::Ready(Err(err)) => return Poll::Ready(Err(err.into())),

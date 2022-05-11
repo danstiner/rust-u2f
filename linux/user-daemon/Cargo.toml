@@ -29,14 +29,14 @@ tracing = { version = "^0.1", features = ["release_max_level_debug"] }
 tracing-journald = "^0.2"
 tracing-subscriber = { version = "^0.3", features = ["env-filter"] }
 
+[dependencies.ctaphid-protocol]
+path = "../../ctaphid-protocol"
+
 [dependencies.softu2f-system-daemon]
 path = "../system-daemon"
 
 [dependencies.u2f-core]
 path = "../../u2f-core"
-
-[dependencies.u2fhid-protocol]
-path = "../../u2fhid-protocol"
 
 [dev-dependencies]
 tempdir = "0.3.7"

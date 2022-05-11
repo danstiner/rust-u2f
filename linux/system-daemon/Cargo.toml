@@ -34,9 +34,6 @@ path = "../../ctaphid-protocol"
 [dependencies.tokio-linux-uhid]
 path = "../uhid-tokio"
 
-[dependencies.u2fhid-protocol]
-path = "../../u2fhid-protocol"
-
 [[bin]]
 doc = false
 name = "softu2f-system-daemon"

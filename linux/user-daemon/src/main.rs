@@ -2,6 +2,7 @@ extern crate alloc;
 extern crate bincode;
 extern crate clap;
 extern crate core;
+extern crate ctaphid_protocol;
 extern crate directories;
 extern crate dirs;
 extern crate futures;
@@ -18,7 +19,6 @@ extern crate tokio;
 extern crate tracing;
 extern crate tracing_subscriber;
 extern crate u2f_core;
-extern crate u2fhid_protocol;
 
 use std::{
     io,
@@ -37,11 +37,11 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 
+use ctaphid_protocol::{Packet, Server};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
 use u2f_core::{OpenSSLCryptoOperations, U2fService};
-use u2fhid_protocol::{Packet, U2fHidServer};
 use user_presence::NotificationUserPresence;
 
 mod atomic_file;
@@ -137,7 +137,7 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let uhid_device = create_uhid_device(&mut system_socket).await?;
     debug!("UHID device created with id: {}", uhid_device.id);
 
-    U2fHidServer::new(Pipe::new(system_socket, SocketToHid), u2f_service).await
+    Server::new(Pipe::new(system_socket, SocketToHid), u2f_service).await
 }
 
 fn require_root(peer: UCred) -> Result<(), Error> {
