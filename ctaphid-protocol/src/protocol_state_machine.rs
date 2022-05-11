@@ -492,8 +492,7 @@ where
                             major_device_version_number: device_version_major,
                             minor_device_version_number: device_version_minor,
                             build_device_version_number: device_version_build,
-                            capabilities: CapabilityFlags::CAPFLAG_WINK
-                                | CapabilityFlags::CAPFLAG_CBOR,
+                            capabilities: CapabilityFlags::WINK,
                         }),
                         _ => Err(todo!()),
                     }
