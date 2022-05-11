@@ -2034,6 +2034,7 @@ dependencies = [
  "bincode",
  "bytes",
  "clap",
+ "ctaphid-protocol",
  "futures 0.3.21",
  "hostname",
  "libc",

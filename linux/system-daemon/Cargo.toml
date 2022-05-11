@@ -28,6 +28,9 @@ tracing-journald = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 users = "0.11"
 
+[dependencies.ctaphid-protocol]
+path = "../../ctaphid-protocol"
+
 [dependencies.tokio-linux-uhid]
 path = "../uhid-tokio"
 
