@@ -204,6 +204,6 @@ bitflags! {
     pub struct CapabilityFlags: u8 {
         const CAPFLAG_WINK = 0b0000_0001; // If set, authenticator implements CTAPHID_WINK function
         const CAPFLAG_CBOR = 0b0000_0100; // If set, authenticator implements CTAPHID_CBOR function
-        const CAPFLAG_NMSG = 0b0000_0100; // If set, authenticator DOES NOT implement CTAPHID_MSG function
+        const CAPFLAG_NMSG = 0b0000_1000; // If set, authenticator DOES NOT implement CTAPHID_MSG function
     }
 }
