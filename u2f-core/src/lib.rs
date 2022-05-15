@@ -246,7 +246,6 @@ where
                     u2f.authenticate_request(control_code, challenge, application, key_handle)
                         .await
                 }
-
                 Request::GetVersion => {
                     debug!("Get version request");
                     let response = Response::Version {

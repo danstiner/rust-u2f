@@ -78,7 +78,9 @@ impl futures::AsyncRead for CharacterDevice {
                         let file = Arc::clone(this.file);
                         let mut read = vec![0u8; buf.len()];
                         *this.state = State::Reading(task::spawn_blocking(move || {
+                            trace!("CharacterDevice::poll_read: Blocking read start");
                             (&*file).read(&mut read)?;
+                            trace!("CharacterDevice::poll_read: Blocking read end");
                             Ok(read)
                         }));
                     }
@@ -86,6 +88,7 @@ impl futures::AsyncRead for CharacterDevice {
                 State::Reading(ref mut handle) => {
                     // Check if read is complete
                     let mut read = ready!(handle.poll_unpin(cx))??;
+                    trace!("CharacterDevice::poll_read: Read complete");
 
                     // If it is, copy as many bytes as fit into buf and split off the rest
                     let n = cmp::min(read.len(), buf.len());

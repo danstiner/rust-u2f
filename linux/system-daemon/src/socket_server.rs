@@ -62,10 +62,10 @@ where
             match this.listener.poll_accept(cx) {
                 Poll::Ready(Ok((stream, addr))) => {
                     trace!(?addr, "SocketServer: accepted stream");
-                    let handler_future = this.make_stream_handler.call((stream, addr));
+                    let make_handler = this.make_stream_handler.call((stream, addr));
                     spawn_named("stream handler", async {
-                        trace!("SocketServer: Spawned handler for stream");
-                        match handler_future.await {
+                        trace!("SocketServer: Spawned task for stream handler");
+                        match make_handler.await {
                             Ok(handler) => {
                                 trace!("Handler ready, waiting for it to complete");
                                 let res = handler.await;
@@ -73,7 +73,7 @@ where
                                 todo!()
                             }
                             Err(err) => {
-                                error!(?err, "Error from spawned task");
+                                error!(?err, "Error creating stream handler");
                                 todo!()
                             }
                         };

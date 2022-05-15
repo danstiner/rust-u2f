@@ -102,6 +102,7 @@ where
         let this = self.project();
 
         if let Some(buf) = this.write_buffer.take() {
+            trace!(bytes = ?buf, "EventFramed::poll_ready: writing");
             match this.transport.poll_write(cx, &buf) {
                 Poll::Ready(Ok(n)) => {
                     if n != buf.len() {
