@@ -7,6 +7,7 @@ use std::slice;
 use bitflags::bitflags;
 use bytes::BytesMut;
 use thiserror::Error;
+use tracing::trace;
 
 use uhid_sys as sys;
 
@@ -306,6 +307,7 @@ fn read_event(src: &mut BytesMut) -> Option<sys::uhid_event> {
     // TODO events can be less than the size of the struct,
     // The userspace process is expected to zero pad in that case
     // There is a maximum size.
+    trace!(uhid_event_size, len=src.len(), "Reading UHID event");
     if src.len() >= uhid_event_size {
         let bytes = src.split_to(uhid_event_size);
         let ptr = bytes.as_ptr();
