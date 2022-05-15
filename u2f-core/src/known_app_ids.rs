@@ -75,6 +75,7 @@ lazy_static! {
         map.insert(from_url("webauthn.bin.coffee"), "webauthn.bin.coffee");
         map.insert(from_url("webauthn.io"), "webauthn.io");
         map.insert(from_url("www.token2.com"), "www.token2.com");
+        map.insert(from_url("webauthn.me"), "webauthn.me");
         map
     };
 }
