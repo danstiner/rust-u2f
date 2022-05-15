@@ -25,7 +25,7 @@ users to create emulated U2F devices.
 %build
 rm -rf $RPM_BUILD_ROOT
 mkdir $RPM_BUILD_ROOT
-cargo build --bin softu2f-system-daemon --release
+cargo build --bin softu2f-system-daemon
 cp ../../target/release/softu2f-system-daemon %{_tmppath}
 strip %{_tmppath}/softu2f-system-daemon
 

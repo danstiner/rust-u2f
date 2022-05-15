@@ -13,15 +13,15 @@ build:
 
 .PHONY: install
 install: build
-	sudo mkdir -p /usr/lib/softu2f
-	sudo install -m 755 target/debug/softu2f-system-daemon /usr/lib/softu2f/system-daemon
+	sudo mkdir -p /usr/libexec/softu2f
+	sudo install -m 755 ${targetdir}/debug/softu2f-system-daemon /usr/libexec/softu2f/system-daemon
 	sudo install -m 644 ${systemdaemondir}/softu2f.service /etc/systemd/system/softu2f.service
 	sudo install -m 644 ${systemdaemondir}/softu2f.socket /etc/systemd/system/softu2f.socket
 	sudo install -m 644 ${systemdaemondir}/softu2f-tmpfiles.conf /etc/tmpfiles.d/softu2f.conf
 	if [ -n "$$(which sestatus 1>/dev/null 2>&1)" ]; then \
 		sudo ${selinuxpolicydir}/softu2f-system-daemon.sh; \
 	fi
-	sudo install -m 755 target/debug/softu2f-user-daemon /usr/lib/softu2f/user-daemon
+	sudo install -m 755 ${targetdir}/debug/softu2f-user-daemon /usr/libexec/softu2f/user-daemon
 	sudo install -m 644 ${userdaemondir}/softu2f.service /etc/systemd/user/softu2f.service
 	sudo systemctl daemon-reload
 	systemctl --user daemon-reload
@@ -43,11 +43,11 @@ uninstall:
 	-systemctl --user stop softu2f.service
 	-sudo systemctl --system disable softu2f.socket
 	-sudo systemctl --system stop softu2f.service
-	-sudo rm /usr/lib/softu2f/system-daemon
+	-sudo rm /usr/libexec/softu2f/system-daemon
 	-sudo rm /etc/systemd/system/softu2f.service
 	-sudo rm /etc/systemd/system/softu2f.socket
 	-sudo rm /etc/tmpfiles.d/softu2f.conf
-	-sudo rm /usr/lib/softu2f/user-daemon
+	-sudo rm /usr/libexec/softu2f/user-daemon
 	-sudo rm /etc/systemd/user/softu2f.service
 	-sudo semodule -r softu2f-system-daemon
 

@@ -44,8 +44,8 @@ make -f /usr/share/selinux/devel/Makefile softu2f-system-daemon.pp || exit
 
 # Generate a man page off the installed module
 sepolicy manpage -p . -d softu2f_system_daemon_t
-# Fixing the file context on /usr/lib/softu2f/system-daemon
-/sbin/restorecon -F -R -v /usr/lib/softu2f/system-daemon
+# Fixing the file context on /usr/libexec/softu2f/system-daemon
+/sbin/restorecon -F -R -v /usr/libexec/softu2f/system-daemon
 # Generate a rpm package for the newly generated policy
 
 pwd=$(pwd)

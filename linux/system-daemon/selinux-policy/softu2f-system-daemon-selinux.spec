@@ -2,7 +2,7 @@
 
 
 %define relabel_files() \
-restorecon -R /usr/libexec/softu2f-system-daemon; \
+restorecon -R /usr/libexec/softu2f/system-daemon; \
 
 %define selinux_policyver 0.0.0
 
