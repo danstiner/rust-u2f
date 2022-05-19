@@ -27,7 +27,6 @@ rm -rf $RPM_BUILD_ROOT
 mkdir $RPM_BUILD_ROOT
 cargo build --release --bin softu2f-system-daemon
 cp ../../target/release/softu2f-system-daemon %{_tmppath}
-strip %{_tmppath}/softu2f-system-daemon
 
 %install
 install -d %{buildroot}%{_libexecdir}/softu2f
