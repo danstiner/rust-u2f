@@ -1,8 +1,8 @@
 export PWD := $(shell pwd)
-export TARGETDIR := ${PWD}/../target/fedora
+export TARGETDIR := ${PWD}/../target
 
 rpm: selinux-policy
-	rpmbuild --define "_sourcedir ${PWD}" --define "_specdir ${PWD}" --define "_builddir ${PWD}" --define "_srcrpmdir ${TARGETDIR}" --define "_rpmdir ${TARGETDIR}" --define "_buildrootdir ${PWD}/.build" -ba softu2f-system-daemon.spec
+	rpmbuild --define "_sourcedir ${PWD}" --define "_specdir ${PWD}" --define "_builddir ${PWD}" --define "_srcrpmdir ${TARGETDIR}/rpm" --define "_rpmdir ${TARGETDIR}/rpm" --define "_buildrootdir ${PWD}/.build" -ba softu2f-system-daemon.spec
 
 selinux-policy:
 	@$(MAKE) -C $@
