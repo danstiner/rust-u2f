@@ -36,16 +36,13 @@ else
     package fedora fedora 36
     package fedora fedora 35
     package fedora fedora 34
-    package fedora fedora 33
     package debian debian latest
     package debian debian bullseye
     package debian debian buster
-    package debian debian stretch
     package debian ubuntu latest
+    package debian ubuntu jammy
     package debian ubuntu impish
     package debian ubuntu hirsute
     package debian ubuntu focal
     package debian ubuntu bionic
-    package debian ubuntu xenial
-    package debian linuxmintd/mint19.3-amd64 latest
 fi
