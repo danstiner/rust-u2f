@@ -70,45 +70,52 @@ This project is split into two programs that coordinate to implement such a virt
 
 ### system-daemon
 
-This program listens on a socket file for connections from user-daemon instances and for each connection uses `/dev/uhid` to create a HID device with a report descriptor defining it as a FIDO Alliance authenticator device. It then forwards HID report data between the device and user-daemon connection. It is essentially a simple broker allowing non-privledged users to create authenticator devices. It is usually run by systemd in a privileged context in order to access `/dev/uhid`, but can also be run manually if desired.
+This program listens on a socket file for connections from *user-daemon* instances and for each connection uses `/dev/uhid` to create a HID device with a report descriptor defining it as a FIDO Alliance authenticator device. It then forwards HID report data between the device and *user-daemon* connection. It is essentially a simple broker allowing non-privileged users to create authenticator devices. It is usually run by systemd in a privileged context in order to access `/dev/uhid`, but can also be run manually if desired.
 
-
-crates used:
-- [uhid-tokio](linux/uhid-tokio)
-- [uhid-sys](linux/uhid-sys)
-- [system-daemon](linux/system-daemon)
+It is broken down into the following crates:
+- [system-daemon](linux/system-daemon) is the binary itself
+- [uhid-tokio](linux/uhid-tokio) provides a [tokio](https://tokio.rs/)-based async interface to the [Linux UHID driver](https://www.kernel.org/doc/Documentation/hid/uhid.txt). It is published to [crates.io](https://crates.io/crates/tokio-linux-uhid) for use independent from this project
+- [uhid-sys](linux/uhid-sys) provides FFI bindings to `<linux/uhid.h>` used by *uhid-tokio*. It is also published to [crates.io](https://crates.io/crates/uhid-sys)
+- [ctaphid](ctaphid) provides the HID report descriptor that says the virtual HID is an authenticator
 
 ### user-daemon
 
 This program runs in the user's session. It connects to the system-daemon's socket file and then reads incoming HID report data, decoding it into the commands as defined by FIDO Client to Authenticator Protocol (CTAP). It responds to those commands, handling all signing and secrets. It verifies user presence by using `libnotify` to show notifications with the option to approve or deny requests to register or authenticate a user.
 
-crates used:
-- [fido2-authenticator-service](fido2-authenticator-service)
-- [fido2-authenticator-api](fido2-authenticator-api)
-- [ctaphid-protocol](ctaphid-protocol)
-- [user-daemon](linux/user-daemon)
+It is broken down into the following crates:
+- [user-daemon](linux/user-daemon) is the binary itself
+- [ctaphid](ctaphid) implements the client to authenticator protocol as defined by the FIDO2 specification. As USB authenticators can only receive data as fixed-size HID reports, this protocol lets clients send large messages by packetizing them into a series of HID reports. It also handles potentially concurrent access from multiple clients. So to emulate a USB/HID authenticator, this crate handles decoding the reports back to larger messages, which are themselves encoded authentication requests/responses using either CBOR or a legacy U2F encoding
+- [fido2-authenticator-api](fido2-authenticator-api) defines the API for authentication requests and responses, following the FIDO2 specification. *ctaphid* depends on this API and *fido2-authenticator-service* implements this API. It also handles serialization of CBOR messages and the legacy U2F message encoding
+- [fido2-authenticator-service](fido2-authenticator-service) implements the actual authentication operations. It does not directly implement secret storage or user presence verification, specific implementations of these are injected as dependencies when the `user-daemon` intializes an authenticator instance
 
 ### Diagram
 
 ```
-+-----------+        +-----------------+
-| Webserver |        | Notification UI |
-+-----------+        +-----------------+
++-----------+    +---------+  +-----------------+
+| Webserver |    | Keyring |  | Notification UI |
++-----------+    +---------+  +-----------------+
+      |               |________________|
       |                      |
       | HTTP(S)              | D-Bus
       |                      |
 +-----------+         +---------------+
 |  Browser  |         |  user-daemon  |
 +-----------+         +---------------+
-      |                      | socket file
+      |                      |
+      | /dev/input/event*    | /run/softu2f/softu2f.sock
+      |                      |
+      |                      |      User session
+------|----------------------|------------------
+      |                      |            System
       |                      |       
       |               +---------------+
       |               | system-daemon |
       |               +---------------+
-      | /dev/input/event*    | /dev/uhid
       |                      |
-------|----------------------|-------------
-      |                      |       Kernel
+      |                      | /dev/uhid
+      |                      |
+------|----------------------|------------------
+      |                      |            Kernel
 +-----------+            +--------+
 | evdev     |            |  UHID  |
 +-----------+            +--------+

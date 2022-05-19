@@ -1,4 +1,4 @@
-# ctaphid-protocol
+# ctaphid
 
 The Client to Authenticator (CTAP) Protocol allows the authenticator API to be accessed over a USB transport using the HID (Human Interface Device) protocol.
 

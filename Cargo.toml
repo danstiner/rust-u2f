@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "ctaphid-protocol",
+    "ctaphid",
     "fido2-authenticator-api",
     "fido2-authenticator-service",
     "linux/uhid-sys",
@@ -12,6 +12,7 @@ members = [
     "u2f-core",
 ]
 
+# Reduce binary size to reduce RSS at runtime: https://github.com/johnthagen/min-sized-rust
 [profile.release]
 codegen-units = 1
 lto = true

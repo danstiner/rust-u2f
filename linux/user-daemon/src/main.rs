@@ -2,7 +2,7 @@ extern crate alloc;
 extern crate bincode;
 extern crate clap;
 extern crate core;
-extern crate ctaphid_protocol;
+extern crate ctaphid;
 extern crate directories;
 extern crate dirs;
 extern crate futures;
@@ -24,8 +24,6 @@ use std::{
     io,
     path::{Path, PathBuf},
     pin::Pin,
-    rc::Rc,
-    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -40,11 +38,11 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 
-use ctaphid_protocol::{Adapter, Packet, Server};
+use ctaphid::{Adapter, Packet, Server};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
-use u2f_core::{OpenSSLCryptoOperations, U2fService};
+use u2f_core::OpenSSLCryptoOperations;
 use user_presence::NotificationUserPresence;
 
 mod atomic_file;

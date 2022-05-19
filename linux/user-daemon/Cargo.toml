@@ -29,8 +29,8 @@ tracing = { version = "^0.1", features = ["release_max_level_debug"] }
 tracing-journald = "0.3"
 tracing-subscriber = { version = "^0.3", features = ["env-filter"] }
 
-[dependencies.ctaphid-protocol]
-path = "../../ctaphid-protocol"
+[dependencies.ctaphid]
+path = "../../ctaphid"
 
 [dependencies.fido2-authenticator-api]
 path = "../../fido2-authenticator-api"

@@ -1,6 +1,6 @@
 use std::io;
 
-use ctaphid_protocol::REPORT_DESCRIPTOR;
+use ctaphid::REPORT_DESCRIPTOR;
 use futures::{SinkExt, StreamExt};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
@@ -15,8 +15,6 @@ use tokio_serde::formats::Bincode;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, trace, warn};
 use users::get_user_by_uid;
-
-const REPORT_TYPE: u8 = 0;
 
 #[derive(Debug, Error)]
 pub enum Error {

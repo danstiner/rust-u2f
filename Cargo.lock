@@ -490,7 +490,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctaphid-protocol"
+name = "ctaphid"
 version = "0.4.2"
 dependencies = [
  "async-trait",
@@ -2083,7 +2083,7 @@ dependencies = [
  "bincode",
  "bytes",
  "clap",
- "ctaphid-protocol",
+ "ctaphid",
  "futures 0.3.21",
  "hostname",
  "libc",
@@ -2113,7 +2113,7 @@ dependencies = [
  "base64",
  "bincode",
  "clap",
- "ctaphid-protocol",
+ "ctaphid",
  "directories",
  "dirs",
  "fido2-authenticator-api",
