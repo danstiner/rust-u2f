@@ -72,9 +72,21 @@ This project is split into two programs that coordinate to implement such a virt
 
 This program listens on a socket file for connections from user-daemon instances and for each connection uses `/dev/uhid` to create a HID device with a report descriptor defining it as a FIDO Alliance authenticator device. It then forwards HID report data between the device and user-daemon connection. It is essentially a simple broker allowing non-privledged users to create authenticator devices. It is usually run by systemd in a privileged context in order to access `/dev/uhid`, but can also be run manually if desired.
 
+
+crates used:
+- [uhid-tokio](linux/uhid-tokio)
+- [uhid-sys](linux/uhid-sys)
+- [system-daemon](linux/system-daemon)
+
 ### user-daemon
 
 This program runs in the user's session. It connects to the system-daemon's socket file and then reads incoming HID report data, decoding it into the commands as defined by FIDO Client to Authenticator Protocol (CTAP). It responds to those commands, handling all signing and secrets. It verifies user presence by using `libnotify` to show notifications with the option to approve or deny requests to register or authenticate a user.
+
+crates used:
+- [fido2-authenticator-service](fido2-authenticator-service)
+- [fido2-authenticator-api](fido2-authenticator-api)
+- [ctaphid-protocol](ctaphid-protocol)
+- [user-daemon](linux/user-daemon)
 
 ### Diagram
 
@@ -88,13 +100,12 @@ This program runs in the user's session. It connects to the system-daemon's sock
 +-----------+         +---------------+
 |  Browser  |         |  user-daemon  |
 +-----------+         +---------------+
-      | /dev/input/event*    | socket file
-------|----------------------|--------------
+      |                      | socket file
       |                      |       
       |               +---------------+
       |               | system-daemon |
       |               +---------------+
-      |                      | /dev/uhid
+      | /dev/input/event*    | /dev/uhid
       |                      |
 ------|----------------------|-------------
       |                      |       Kernel
@@ -114,6 +125,12 @@ See `Dockerfile.debian` or `Dockerfile.fedora` for pre-requisite packages that m
 Then run `cd linux && make`.
 
 To install run `cd linux && make install`. The install target uses sudo so you will be prompted for your password.
+
+## Testing
+
+* `cargo test`
+* Install locally, then run `cargo run --bin test-authenticator` go through the registration and approval flow.
+* Install locally, then run https://github.com/solokeys/fido2-tests
 
 ### Bump version
 

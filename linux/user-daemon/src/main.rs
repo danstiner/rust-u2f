@@ -24,10 +24,13 @@ use std::{
     io,
     path::{Path, PathBuf},
     pin::Pin,
+    rc::Rc,
+    sync::Arc,
     task::{Context, Poll},
 };
 
 use clap::{Arg, Command};
+use fido2_authenticator_service::Authenticator;
 use futures::{ready, Sink, SinkExt, Stream, StreamExt};
 use pin_project::pin_project;
 use thiserror::Error;
@@ -37,7 +40,7 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 
-use ctaphid_protocol::{Packet, Server};
+use ctaphid_protocol::{Adapter, Packet, Server};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
@@ -73,6 +76,9 @@ pub enum Error {
 
     #[error("{0}")]
     CreateDeviceError(#[from] CreateDeviceError),
+
+    #[error("{0}")]
+    AuthenticatorError(#[from] fido2_authenticator_service::Error),
 
     #[error("Home directory path could not be retrieved from the operating system")]
     HomeDirectoryNotFound,
@@ -119,7 +125,7 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let crypto = OpenSSLCryptoOperations::new(attestation);
     let secrets = secret_store::build(&config)?;
 
-    let u2f_service = U2fService::new(secrets, crypto, user_presence);
+    let authenticator = Adapter::new(Authenticator::new(secrets, crypto, user_presence));
 
     let stream = UnixStream::connect(system_daemon_socket)
         .await
@@ -137,7 +143,8 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let uhid_device = create_uhid_device(&mut system_socket).await?;
     debug!("UHID device created with id: {}", uhid_device.id);
 
-    Server::new(Pipe::new(system_socket, SocketToHid), u2f_service).await
+    Server::new(Pipe::new(system_socket, SocketToHid), authenticator).await?;
+    Ok(())
 }
 
 fn require_root(peer: UCred) -> Result<(), Error> {
@@ -194,7 +201,7 @@ impl Proxy for SocketToHid {
         input: Self::StreamInput,
     ) -> Result<Option<Self::StreamOutput>, Self::Error> {
         match input {
-            Ok(SocketOutput::Report(report)) => Packet::from_bytes(report.as_bytes())
+            Ok(SocketOutput::Report(report)) => Packet::from_bytes(report.data())
                 .map(Option::Some)
                 .map_err(|_| io::Error::new(io::ErrorKind::Other, "TODO")),
             Ok(SocketOutput::CreateDeviceResponse(_)) => {
@@ -209,7 +216,7 @@ impl Proxy for SocketToHid {
         &mut self,
         input: Self::SinkInput,
     ) -> Result<Option<Self::SinkOutput>, Self::Error> {
-        Ok(Some(SocketInput::Report(Report::new(input.to_bytes()))))
+        Ok(Some(SocketInput::Report(Report::new(0, &input.to_bytes()))))
     }
 }
 

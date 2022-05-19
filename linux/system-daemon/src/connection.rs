@@ -16,6 +16,8 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, trace, warn};
 use users::get_user_by_uid;
 
+const REPORT_TYPE: u8 = 0;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("I/O error")]
@@ -111,9 +113,9 @@ async fn pipe_reports(
         (tokio::select! {
             Some(input) = user_socket.next() => match input? {
                 SocketInput::Report(report) => {
-                    trace!(len = report.len(), "Piping report from userspace");
+                    trace!(len = report.data().len(), "Piping report from userspace");
                     uhid_device.send(InputEvent::Input {
-                        data: report.into_bytes(),
+                        data: report.into_raw_bytes(),
                     }).await
                 }
                 SocketInput::CreateDeviceRequest(_) => {
@@ -123,8 +125,8 @@ async fn pipe_reports(
             },
             Some(output) = uhid_device.next() => match output? {
                 OutputEvent::Output { data } => {
-                    let report = Report::new(data);
-                    trace!(len = report.len(), "Piping report from UHID device");
+                    let report = Report::from_raw_bytes(data);
+                    trace!(data_len = report.data().len(), "Piping report from UHID device");
                     user_socket.send(SocketOutput::Report(report)).await.map_err(StreamError::Io)
                 },
                 OutputEvent::Start { .. } => {

@@ -1,6 +1,6 @@
 use std::{
     collections::VecDeque,
-    io,
+    fmt, io,
     marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
@@ -8,14 +8,13 @@ use std::{
 
 use futures::{ready, Future, Sink, Stream};
 use pin_project::pin_project;
-use tracing::trace;
-use u2f_core::Service;
+use tracing::{error, trace};
 
-use crate::{commands::ResponseMessage, packets::Packet, protocol_state_machine::StateMachine};
+use crate::{api::CtapHidApi, message::ResponseMessage, packet::Packet, protocol::Protocol};
 
 #[pin_project]
 pub struct Server<T, Svc, E> {
-    state_machine: StateMachine<Svc, E>,
+    protocol: Protocol<Svc, E>,
     send_buffer: Option<VecDeque<Packet>>,
     #[pin]
     transport: T,
@@ -25,39 +24,40 @@ pub struct Server<T, Svc, E> {
 impl<T, Svc, SinkE, StreamE, E> Server<T, Svc, E>
 where
     T: Sink<Packet, Error = SinkE> + Stream<Item = Result<Packet, StreamE>> + Unpin,
-    Svc: Service<u2f_core::Request, Response = u2f_core::Response>,
-    Svc::Future: 'static,
+    Svc: CtapHidApi<Error = E> + 'static,
+    Svc::Error: 'static,
     E: From<SinkE> + From<StreamE> + From<Svc::Error> + From<io::Error> + 'static,
 {
     pub fn new(transport: T, service: Svc) -> Server<T, Svc, E> {
         Server {
-            state_machine: StateMachine::new(service),
+            protocol: Protocol::new(service),
             transport,
             send_buffer: None,
             _marker: PhantomData,
         }
     }
 
-    fn buffer_send(&mut self, message: ResponseMessage) {
+    fn buffer_send_packet(&mut self, packet: Packet) {
         debug_assert!(self.send_buffer.is_none());
         trace!(
-            channel_id = ?message.channel_id,
-            "CtapHidServer::buffer_send: {:?}", message.response
+            channel_id = ?packet.channel_id(),
+            "CtapHidServer::buffer_send_packet: {:?}", packet
         );
-        self.send_buffer = Some(message.to_packets());
+        self.send_buffer = Some(VecDeque::from(vec![packet]));
     }
 }
 
-impl<T, S, SinkE, StreamE, E> Future for Server<T, S, E>
+impl<T, Svc, SinkE, StreamE, E> Future for Server<T, Svc, E>
 where
     T: Sink<Packet, Error = SinkE> + Stream<Item = Result<Packet, StreamE>> + Unpin,
-    S: Service<u2f_core::Request, Response = u2f_core::Response>,
-    S::Future: 'static,
-    E: From<SinkE> + From<StreamE> + From<S::Error> + From<io::Error> + 'static,
+    Svc: CtapHidApi<Error = E> + Clone + 'static,
+    Svc::Error: 'static,
+    E: From<SinkE> + From<StreamE> + From<Svc::Error> + From<io::Error> + fmt::Debug + 'static,
 {
     type Output = Result<(), E>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        trace!("CtapHidServer::poll: start");
         let this = &mut *self;
         loop {
             // First flush any buffered packets
@@ -105,21 +105,36 @@ where
             }
 
             // At this point the packet buffer is empty, check if there is a new response to send
-            if let Some(response) = ready!(this.state_machine.poll_next(cx))? {
-                this.buffer_send(response);
-                continue;
-            }
+            trace!("CtapHidServer::poll: protocol.poll_next");
+            match Pin::new(&mut this.protocol).poll_next(cx) {
+                Poll::Ready(Some(packet)) => {
+                    this.buffer_send_packet(packet);
+                    continue;
+                }
+                Poll::Ready(None) => {
+                    error!("CtapHidServer::poll: protocol.poll_next returned None");
+                    return Poll::Ready(Ok(()));
+                }
+                Poll::Pending => {
+                    trace!("CtapHidServer::poll: protocol.poll_next pending");
+                }
+            };
 
             // At this point there are no responses waiting to send, check for input
-            match ready!(Pin::new(&mut this.transport).poll_next(cx)?) {
-                Some(packet) => {
-                    trace!(?packet, "Got packet from transport");
-                    if let Some(response) = this.state_machine.accept_packet(packet, cx)? {
-                        this.buffer_send(response);
-                    }
+            trace!("CtapHidServer::poll: protocol.poll_ready");
+            match ready!(Pin::new(&mut this.protocol).poll_ready(cx)) {
+                Ok(()) => {
+                    trace!("CtapHidServer::poll: protocol.poll_ready was ready");
+                    match ready!(Pin::new(&mut this.transport).poll_next(cx)?) {
+                        Some(packet) => {
+                            trace!(?packet, "Got packet from transport");
+                            Pin::new(&mut this.protocol).start_send(packet)?;
+                        }
+                        None => todo!("it's closing time"),
+                    };
                 }
-                None => todo!("it's closing time"),
-            };
+                Err(err) => return Poll::Ready(Err(err.into())),
+            }
         }
     }
 }

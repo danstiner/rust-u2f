@@ -43,27 +43,26 @@ pub enum CreateDeviceError {
 pub struct Report(Vec<u8>);
 
 impl Report {
-    pub fn new(bytes: Vec<u8>) -> Report {
-        Report(bytes)
+    pub fn new(type_: u8, data: &[u8]) -> Self {
+        let mut bytes = Vec::with_capacity(data.len() + 1);
+        bytes.push(type_);
+        bytes.extend_from_slice(data);
+        Self(bytes)
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Report {
-        Report::new(bytes.to_vec())
+    pub fn type_(&self) -> u8 {
+        self.0[0]
     }
 
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0
+    pub fn data(&self) -> &[u8] {
+        &self.0[1..]
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_vec()
+    pub fn from_raw_bytes(bytes: Vec<u8>) -> Self {
+        Self(bytes)
     }
 
-    pub fn into_bytes(self) -> Vec<u8> {
+    pub fn into_raw_bytes(self) -> Vec<u8> {
         self.0
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
     }
 }

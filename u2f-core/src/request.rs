@@ -3,11 +3,14 @@ use std::io::Read;
 use std::result::Result;
 
 use crate::app_id::AppId;
-use crate::constants::*;
 use crate::key_handle::KeyHandle;
 use byteorder::{BigEndian, ReadBytesExt};
 
 use super::Challenge;
+
+const AUTH_CONTROL_CODE_ENFORCE: u8 = 0x03; // Enforce user presence and sign
+const AUTH_CONTROL_CODE_CHECK_ONLY: u8 = 0x07; // Check only
+const AUTH_CONTROL_CODE_DONT_ENFORCE: u8 = 0x08; // Don't enforce user presence and sign
 
 #[derive(Debug)]
 pub enum AuthenticateControlCode {
@@ -120,9 +123,13 @@ impl Request {
 
                 // Control byte (P1).
                 let control_code = match parameter1 {
-                    AUTH_CHECK_ONLY => AuthenticateControlCode::CheckOnly,
-                    AUTH_ENFORCE => AuthenticateControlCode::EnforceUserPresenceAndSign,
-                    AUTH_DONT_ENFORCE => AuthenticateControlCode::DontEnforceUserPresenceAndSign,
+                    AUTH_CONTROL_CODE_CHECK_ONLY => AuthenticateControlCode::CheckOnly,
+                    AUTH_CONTROL_CODE_ENFORCE => {
+                        AuthenticateControlCode::EnforceUserPresenceAndSign
+                    }
+                    AUTH_CONTROL_CODE_DONT_ENFORCE => {
+                        AuthenticateControlCode::DontEnforceUserPresenceAndSign
+                    }
                     _ => panic!("Unknown control code"),
                 };
 

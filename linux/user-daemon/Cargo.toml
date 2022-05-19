@@ -26,11 +26,17 @@ tokio = { version = "^1.15.0", features = ["full"] }
 tokio-serde = { version = "^0.8", features = ["bincode"] }
 tokio-util = { version = "0.7.1", features = ["full"] }
 tracing = { version = "^0.1", features = ["release_max_level_debug"] }
-tracing-journald = "^0.2"
+tracing-journald = "0.3"
 tracing-subscriber = { version = "^0.3", features = ["env-filter"] }
 
 [dependencies.ctaphid-protocol]
 path = "../../ctaphid-protocol"
+
+[dependencies.fido2-authenticator-api]
+path = "../../fido2-authenticator-api"
+
+[dependencies.fido2-authenticator-service]
+path = "../../fido2-authenticator-service"
 
 [dependencies.softu2f-system-daemon]
 path = "../system-daemon"

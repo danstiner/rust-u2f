@@ -36,7 +36,6 @@ use tracing::{debug, error, info, trace};
 pub use crate::app_id::AppId;
 pub use crate::application_key::ApplicationKey;
 use crate::attestation::AttestationCertificate;
-use crate::constants::*;
 pub use crate::key_handle::KeyHandle;
 pub use crate::known_app_ids::try_reverse_app_id;
 use crate::known_app_ids::{BOGUS_APP_ID_HASH_CHROME, BOGUS_APP_ID_HASH_FIREFOX};
@@ -50,7 +49,6 @@ pub use crate::self_signed_attestation::self_signed_attestation;
 mod app_id;
 mod application_key;
 mod attestation;
-mod constants;
 mod key_handle;
 mod known_app_ids;
 mod openssl_crypto;
@@ -60,6 +58,15 @@ mod request;
 mod response;
 mod self_signed_attestation;
 mod serde_base64;
+
+const SW_NO_ERROR: u16 = 0x9000; // The command completed successfully without error.
+const SW_WRONG_DATA: u16 = 0x6A80; // The request was rejected due to an invalid key handle.
+const SW_CONDITIONS_NOT_SATISFIED: u16 = 0x6985; // The request was rejected due to test-of-user-presence being required.
+const _SW_COMMAND_NOT_ALLOWED: u16 = 0x6986;
+const SW_INS_NOT_SUPPORTED: u16 = 0x6D00; // The Instruction of the request is not supported.
+const SW_WRONG_LENGTH: u16 = 0x6700; // The length of the request was invalid.
+const SW_CLA_NOT_SUPPORTED: u16 = 0x6E00; // The Class byte of the request is not supported.
+const SW_UNKNOWN: u16 = 0x6F00; // Response status : No precise diagnosis
 
 #[derive(Debug)]
 pub enum StatusCode {
@@ -117,7 +124,7 @@ pub trait CryptoOperations {
     fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<dyn Signature>, SignError>;
 }
 
-pub trait SecretStore {
+pub trait SecretStore: Send {
     fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()>;
     fn get_and_increment_counter(
         &self,
@@ -283,7 +290,7 @@ where
     }
 
     pub fn version_string(&self) -> String {
-        String::from("U2F_V2")
+        String::from("FIDO_2_1")
     }
 
     async fn authenticate_request(

@@ -1,12 +1,14 @@
 use std::fmt::{self, Debug};
 use std::result::Result;
 
-use crate::constants::{DEFAULT_KEY_HANDLE_LEN, MAX_KEY_HANDLE_LEN};
 use crate::serde_base64::{from_base64, to_base64};
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use subtle::ConstantTimeEq;
+
+const DEFAULT_KEY_HANDLE_LEN: usize = 255;
+const MAX_KEY_HANDLE_LEN: usize = 255;
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct KeyHandle(Vec<u8>);

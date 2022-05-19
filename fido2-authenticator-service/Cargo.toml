@@ -1,27 +1,30 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
-name = "ctaphid-protocol"
+name = "fido2-authenticator-service"
 version = "0.4.2"
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.0"
-bitflags = "^1.1.0"
+assert_matches = "^1.3.0"
+async-trait = "^0.1.51"
+base64 = "^0.13.0"
 byteorder = "^1.3.2"
 futures = "^0.3.17"
-itertools = "^0.10.1"
-lazy_static = "1.4.0"
-pin-project = "^1.0"
+hex = "^0.4.3"
+lazy_static = "^1.3.0"
+openssl = "^0.10.24"
+pkg-version = "^1.0.0"
+rand = "^0.8.4"
+ring = "^0.16.7"
 serde = { version = "1.0", features = ["derive"] }
+subtle = "^2.1.1"
 thiserror = "^1.0"
 tokio = { version = "^1.13.0", features = ["rt", "macros"] }
-tokio-tower = "^0.6.0"
+tower = "^0.4.10"
 tracing = "^0.1"
 
 [dependencies.fido2-authenticator-api]
 path = "../fido2-authenticator-api"
 
-[dev-dependencies]
-rand = "0.8.4"
-tokio = "1.13.0"
-tokio-stream = "0.1.8"
+[dependencies.u2f-core]
+path = "../u2f-core"
