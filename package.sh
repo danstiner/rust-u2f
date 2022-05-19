@@ -33,6 +33,7 @@ if [[ $# -eq 3 ]]; then
     package "$1" "$2" "$3"
 else
     package fedora fedora latest
+    package fedora fedora 36
     package fedora fedora 35
     package fedora fedora 34
     package fedora fedora 33
