@@ -50,6 +50,7 @@ systemctl --user start softu2f
 ## Architecture
 
 ### Background
+
 - [FIDO Specifications](https://fidoalliance.org/specifications/)
 - [UHID - User-space I/O driver support for HID subsystem](https://www.kernel.org/doc/Documentation/hid/uhid.txt)
 - [HID I/O Transport Drivers in the Linux kernel](https://www.kernel.org/doc/html/latest/hid/hid-transport.html)

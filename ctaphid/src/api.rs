@@ -1,7 +1,7 @@
 use std::{rc::Rc, sync::Arc};
 
 use async_trait::async_trait;
-use fido2_authenticator_api::{AuthenticatorAPI, Request, Service};
+use fido2_authenticator_api::{AuthenticatorAPI, Command, Service};
 use tokio::sync::Mutex;
 
 use crate::message::CapabilityFlags;
@@ -46,7 +46,7 @@ pub struct Adapter<A>(Arc<Mutex<A>>);
 
 impl<A> Adapter<A>
 where
-    A: Service<Request> + AuthenticatorAPI,
+    A: Service<Command> + AuthenticatorAPI,
 {
     pub fn new(api: A) -> Self {
         Self(Arc::new(Mutex::new(api)))
@@ -56,7 +56,7 @@ where
 #[async_trait]
 impl<A> CtapHidApi for Adapter<A>
 where
-    A: Service<Request> + AuthenticatorAPI + Send,
+    A: Service<Command> + AuthenticatorAPI + Send,
 {
     type Error = A::Error;
 

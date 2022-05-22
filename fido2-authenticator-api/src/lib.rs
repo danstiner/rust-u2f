@@ -1,24 +1,14 @@
+mod ctap2;
 mod webauthn;
 
-use std::collections::HashMap;
+use minicbor::{Decode, Encode};
 use std::fmt::Debug;
-use std::io;
-use std::pin::Pin;
-use std::rc::Rc;
 use std::result::Result;
-use std::task::Context;
-use std::task::Poll;
 
-use async_trait::async_trait;
-use byteorder::{BigEndian, WriteBytesExt};
-use futures::Future;
-use serde::Deserialize;
-use serde::Serialize;
-use thiserror::Error;
-use tracing::{debug, error, info, trace};
-use webauthn::PublicKeyCredentialParameters;
-
+pub use ctap2::Command;
 pub use tower::Service;
+pub use ctap2::Response;
+
 
 // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
 pub trait AuthenticatorAPI {
@@ -76,37 +66,28 @@ pub struct VersionInfo {
     pub wink_supported: bool,
 }
 
-#[derive(Debug)]
-pub enum Request {
-    GetInfo,
-}
-
-#[derive(Debug)]
-pub enum Response {
-    GetInfo {
-        versions: Vec<String>,
-        extensions: Vec<String>,
-        aaguid: [u8; 16],
-        options: u64,
-        max_msg_size: u64,
-        pin_uv_auth_protocols: Vec<u64>,
-        max_credential_count_in_list: u64,
-        max_credential_id_length: u64,
-        transports: Vec<String>,
-        algorithms: Vec<PublicKeyCredentialParameters>,
-        max_serialized_large_blob_array: u64,
-        force_pin_change: bool,
-        min_pin_length: u64,
-        firmware_version: String,
-        max_cred_blob_len: u64,
-        max_rp_ids_for_set_min_pin_length: u64,
-        preferred_platform_uv_attempts: u64,
-        uv_modality: u64,
-        certifications: HashMap<String, u64>,
-        remaining_discoverable_credentials: u64,
-        vendor_prototype_config_commands: Vec<u64>,
-    },
-}
 
 #[derive(Debug)]
 enum Error {}
+
+/// aaguid is a byte string uniquely identifying the authenticator make and model.
+///
+/// Identical values mean that they refer to the same authenticator model and
+/// different values mean they refer to different authenticator models.
+#[derive(Debug)]
+pub struct Aaguid(pub uuid::Uuid);
+
+#[derive(Debug)]
+pub struct Sha256([u8; 32]);
+
+impl<C> Encode<C> for Sha256 {
+    fn encode<W: minicbor::encode::Write>(&self, e: &mut minicbor::Encoder<W>, ctx: &mut C) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.bytes(&self.0)?.ok()
+    }
+}
+impl<'b, C> Decode<'b, C> for Sha256 {
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        let bytes: minicbor::bytes::ByteArray<32> = Decode::decode(d, ctx)?;
+        Ok(Sha256(bytes.into()))
+    }
+}

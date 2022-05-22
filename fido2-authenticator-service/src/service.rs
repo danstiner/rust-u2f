@@ -9,12 +9,13 @@ use std::task::Poll;
 
 use async_trait::async_trait;
 use byteorder::{BigEndian, WriteBytesExt};
+use fido2_authenticator_api::Aaguid;
 use fido2_authenticator_api::AuthenticatorAPI;
-use fido2_authenticator_api::Request;
+use fido2_authenticator_api::Command;
 use fido2_authenticator_api::Response;
 use futures::Future;
 use thiserror::Error;
-pub use tower::Service;
+use tower::Service;
 use tracing::{debug, error, info, trace};
 use u2f_core::AppId;
 use u2f_core::CryptoOperations;
@@ -23,9 +24,9 @@ use u2f_core::SecretStore;
 use u2f_core::UserPresence;
 
 use crate::attestation::AttestationCertificate;
-pub use crate::private_key::PrivateKey;
+use crate::private_key::PrivateKey;
 use crate::public_key::PublicKey;
-pub use crate::self_signed_attestation::self_signed_attestation;
+use crate::self_signed_attestation::self_signed_attestation;
 use crate::user_presence_byte;
 use crate::AuthenticateError;
 use crate::Authentication;
@@ -33,6 +34,9 @@ use crate::Challenge;
 use crate::Counter;
 use crate::RegisterError;
 use crate::Registration;
+
+// Unique identifier of the "make and model" of this virtual authenticator
+const AAGUID: Aaguid = Aaguid(uuid::uuid!("5fd220bb-7791-4be4-99c3-1f8d26189e92"));
 
 /// Service capable of handling the requests defined in the FIDO2 specification.
 /// TODO
@@ -73,7 +77,7 @@ impl<Secrets, Crypto, Presence> AuthenticatorAPI for Authenticator<Secrets, Cryp
     }
 }
 
-impl<Secrets, Crypto, Presence> Service<Request> for Authenticator<Secrets, Crypto, Presence>
+impl<Secrets, Crypto, Presence> Service<Command> for Authenticator<Secrets, Crypto, Presence>
 where
     Secrets: SecretStore + 'static,
     Crypto: CryptoOperations + 'static,
@@ -87,50 +91,45 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: Request) -> Self::Future {
+    fn call(&mut self, command: Command) -> Self::Future {
         // let u2f = Arc::clone(&self.0);
-        trace!(?req, "U2fService::call");
+        trace!(?command, "U2fService::call");
         Box::pin(async move {
-            match req {
-                // Request::Register {
-                //     challenge,
-                //     application,
-                // } => u2f.register_request(application, challenge).await,
-                // Request::Authenticate {
-                //     control_code,
-                //     challenge,
-                //     application,
-                //     key_handle,
-                // } => {
-                //     u2f.authenticate_request(control_code, challenge, application, key_handle)
-                //         .await
-                // }
-                Request::GetInfo => {
+            match command {
+                Command::MakeCredential {
+                    client_data_hash,
+                    rp,
+                    user,
+                    pub_key_cred_params,
+                    exclude_list,
+                } => todo!(),
+                Command::GetAssertion { rp_id, client_data_hash } => todo!(),
+                Command::GetInfo => {
                     debug!("Get version request");
                     Ok(Response::GetInfo {
-                        versions: todo!(),
-                        extensions: todo!(),
-                        aaguid: todo!(),
-                        options: todo!(),
-                        max_msg_size: todo!(),
-                        pin_uv_auth_protocols: todo!(),
-                        max_credential_count_in_list: todo!(),
-                        max_credential_id_length: todo!(),
-                        transports: todo!(),
-                        algorithms: todo!(),
-                        max_serialized_large_blob_array: todo!(),
-                        force_pin_change: todo!(),
-                        min_pin_length: todo!(),
-                        firmware_version: todo!(),
-                        max_cred_blob_len: todo!(),
-                        max_rp_ids_for_set_min_pin_length: todo!(),
-                        preferred_platform_uv_attempts: todo!(),
-                        uv_modality: todo!(),
-                        certifications: todo!(),
-                        remaining_discoverable_credentials: todo!(),
-                        vendor_prototype_config_commands: todo!(),
+                        versions: vec![String::from("FIDO_2_1"), String::from("U2F_V2")],
+                        extensions: None,
+                        aaguid: AAGUID,
+                        options: None,
+                        max_msg_size: None,
+                        pin_uv_auth_protocols: None,
+                        max_credential_count_in_list: None,
+                        max_credential_id_length: None,
+                        transports: None,
+                        algorithms: None,
+                        max_serialized_large_blob_array: None,
+                        force_pin_change: None,
+                        min_pin_length: None,
+                        firmware_version: None,
+                        max_cred_blob_len: None,
+                        max_rp_ids_for_set_min_pin_length: None,
+                        preferred_platform_uv_attempts: None,
+                        uv_modality: None,
+                        certifications: None,
+                        remaining_discoverable_credentials: Some(0),
+                        vendor_prototype_config_commands: None,
                     })
-                } // Request::Wink => u2f.wink_request().await,
+                }
             }
         })
     }

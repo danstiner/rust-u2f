@@ -731,6 +731,8 @@ dependencies = [
  "futures 0.3.21",
  "hex",
  "lazy_static",
+ "minicbor",
+ "minicbor-derive",
  "openssl",
  "pkg-version",
  "rand 0.8.5",
@@ -741,6 +743,7 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
+ "uuid 1.0.0",
 ]
 
 [[package]]
@@ -766,6 +769,7 @@ dependencies = [
  "tower",
  "tracing",
  "u2f-core",
+ "uuid 1.0.0",
 ]
 
 [[package]]
@@ -1130,7 +1134,7 @@ dependencies = [
  "serde",
  "sha2 0.10.2",
  "thiserror",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1222,6 +1226,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "minicbor"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08de72a57f15d959ab3a3b73fc94572eb954bfcfeb3809cf83cc1bd7d0aa774b"
+
+[[package]]
+name = "minicbor-derive"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66dd6ff7dbe1a10938f8b72c6d0dd81c28fc68283aa79d7ba97c99a96a8e5823"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -2594,6 +2615,12 @@ checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "uuid"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
 
 [[package]]
 name = "valuable"
