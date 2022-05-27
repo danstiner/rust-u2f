@@ -1,12 +1,8 @@
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
 extern crate async_trait;
 extern crate base64;
 extern crate byteorder;
 extern crate futures;
 extern crate hex;
-#[macro_use]
 extern crate lazy_static;
 extern crate openssl;
 extern crate pkg_version;
@@ -17,33 +13,21 @@ extern crate subtle;
 extern crate tokio;
 extern crate tower;
 
-mod attestation;
-mod private_key;
-mod public_key;
-mod self_signed_attestation;
+#[cfg(test)]
+extern crate assert_matches;
+
 mod serde_base64;
 mod service;
 
 use std::fmt::Debug;
 use std::io;
-use std::pin::Pin;
-use std::rc::Rc;
-use std::result::Result;
-use std::task::Context;
-use std::task::Poll;
 
-use async_trait::async_trait;
 use byteorder::{BigEndian, WriteBytesExt};
-use futures::Future;
 use thiserror::Error;
 pub use tower::Service;
-use tracing::{debug, error, info, trace};
-use u2f_core::KeyHandle;
+use tracing::error;
+use u2f_core::{KeyHandle, AttestationCertificate};
 
-use crate::attestation::AttestationCertificate;
-pub use crate::private_key::PrivateKey;
-use crate::public_key::PublicKey;
-pub use crate::self_signed_attestation::self_signed_attestation;
 pub use crate::service::Authenticator;
 
 const SW_NO_ERROR: u16 = 0x9000; // The command completed successfully without error.

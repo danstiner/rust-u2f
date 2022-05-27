@@ -38,6 +38,13 @@ pub const REPORT_DESCRIPTOR: [u8; 34] = [
     0xc0, /*             End Collection                              */
 ];
 
+/// The single type of input reports for [REPORT_DESCRIPTOR](REPORT_DESCRIPTOR)
+pub const REPORT_TYPE_INPUT: u8 = 0;
+
+/// The single type of output reports for [REPORT_DESCRIPTOR](REPORT_DESCRIPTOR)
+pub const REPORT_TYPE_OUTPUT: u8 = 0;
+
+
 lazy_static! {
     /// A CTAPHID_KEEPALIVE command SHOULD be sent at least every 100ms and whenever the status changes
     /// while processing a CTAPHID_MSG. A KEEPALIVE sent by an authenticator does not constitute a

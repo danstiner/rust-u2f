@@ -49,41 +49,40 @@ where
 }
 
 /// Messages from the host to authenticator, called "commands" in the CTAP2 protocol
-#[derive(Debug, Encode)]
+#[derive(Debug)]
 // #[cbor(map)]
 pub enum Command {
     // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorMakeCredential
-    #[n(0x01)]
-    MakeCredential {
-        #[n(0x01)]
-        client_data_hash: Sha256,
-        #[n(0x02)]
-        rp: PublicKeyCredentialRpEntity,
-        #[n(0x03)]
-        user: PublicKeyCredentialUserEntity,
-        #[n(0x04)]
-        pub_key_cred_params: Array<PublicKeyCredentialParameters>,
-        #[n(0x05)]
-        exclude_list: Option<Array<PublicKeyCredentialDescriptor>>,
-    },
-    #[n(0x02)]
+    // #[n(0x01)]
+    MakeCredential(MakeCredentialCommand),
+    // #[n(0x02)]
     GetAssertion {
-        #[n(0x01)]
+        // #[n(0x01)]
         rp_id: RelyingPartyIdentifier,
-        #[n(0x02)]
+        // #[n(0x02)]
         client_data_hash: Sha256,
     },
-    #[n(4)]
+    // #[n(0x04)]
     GetInfo,
+}
+
+#[derive(Debug, Encode)]
+pub struct MakeCredentialCommand {
+    #[n(0x01)]
+    pub client_data_hash: Sha256,
+    #[n(0x02)]
+    pub rp: PublicKeyCredentialRpEntity,
+    #[n(0x03)]
+    pub user: PublicKeyCredentialUserEntity,
+    #[n(0x04)]
+    pub pub_key_cred_params: Array<PublicKeyCredentialParameters>,
+    #[n(0x05)]
+    pub exclude_list: Option<Array<PublicKeyCredentialDescriptor>>,
 }
 
 #[derive(Debug)]
 pub enum Response {
-    MakeCredential {
-        fmt: String,
-        auth_data: Vec<u8>,
-        att_stmt: AttestationStatement,
-    },
+    MakeCredential(MakeCredentialResponse),
     GetAssertion {
         credential: PublicKeyCredentialDescriptor,
         auth_data: Vec<u8>,
@@ -112,6 +111,16 @@ pub enum Response {
         remaining_discoverable_credentials: Option<u64>,
         vendor_prototype_config_commands: Option<Vec<u64>>,
     },
+}
+
+#[derive(Debug)]
+pub struct MakeCredentialResponse {
+    // #[n(0x01)]
+    pub fmt: String,
+    // #[n(0x02)]
+    pub auth_data: Vec<u8>,
+    // #[n(0x03)]
+    pub att_stmt: AttestationStatement,
 }
 
 #[derive(Debug)]

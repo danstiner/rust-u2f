@@ -35,7 +35,7 @@ use tracing::{debug, error, info, trace};
 
 pub use crate::app_id::AppId;
 pub use crate::application_key::ApplicationKey;
-use crate::attestation::AttestationCertificate;
+pub use crate::attestation::{Attestation, AttestationCertificate};
 pub use crate::key_handle::KeyHandle;
 pub use crate::known_app_ids::try_reverse_app_id;
 use crate::known_app_ids::{BOGUS_APP_ID_HASH_CHROME, BOGUS_APP_ID_HASH_FIREFOX};
@@ -101,6 +101,12 @@ pub type Counter = u32;
 
 #[derive(Clone, Debug)]
 pub struct Challenge([u8; 32]);
+
+impl Challenge {
+    pub fn from(bytes: [u8; 32]) -> Self {
+        Challenge(bytes)
+    }
+}
 
 impl AsRef<[u8]> for Challenge {
     fn as_ref(&self) -> &[u8] {

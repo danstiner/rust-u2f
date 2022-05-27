@@ -59,6 +59,7 @@ systemctl --user start softu2f
 ### FIDO
 
 Conceptually FIDO consists of three pieces:
+
 - A remote server that wants to verify a user's identity
 - A user device running a browser or other client application
 - An authenticator device that can store keys and attest the user's identify
@@ -136,9 +137,9 @@ To install run `cd linux && make install`. The install target uses sudo so you w
 
 ## Testing
 
-* `cargo test`
-* Install locally, then run `cargo run --bin test-authenticator` go through the registration and approval flow.
-* Install locally, then run https://github.com/solokeys/fido2-tests
+- `cargo test`
+- Install locally, then run `cargo run --bin test-authenticator` go through the registration and approval flow.
+- Install locally, then run https://github.com/solokeys/fido2-tests
 
 ### Bump version
 

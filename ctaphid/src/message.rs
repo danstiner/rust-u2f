@@ -133,6 +133,7 @@ impl RequestMessage {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Request {
     Ping { data: Vec<u8> },
     Msg { data: Vec<u8> },

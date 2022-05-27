@@ -38,7 +38,7 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 
-use ctaphid::{Adapter, Packet, Server};
+use ctaphid::{Adapter, Packet, Server, REPORT_TYPE_INPUT};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
@@ -214,7 +214,7 @@ impl Proxy for SocketToHid {
         &mut self,
         input: Self::SinkInput,
     ) -> Result<Option<Self::SinkOutput>, Self::Error> {
-        Ok(Some(SocketInput::Report(Report::new(0, &input.to_bytes()))))
+        Ok(Some(SocketInput::Report(Report::new(REPORT_TYPE_INPUT, &input.to_bytes()))))
     }
 }
 

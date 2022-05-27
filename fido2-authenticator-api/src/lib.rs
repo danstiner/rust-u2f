@@ -5,27 +5,16 @@ use minicbor::{Decode, Encode};
 use std::fmt::Debug;
 use std::result::Result;
 
-pub use ctap2::Command;
+pub use ctap2::*;
 pub use tower::Service;
 pub use ctap2::Response;
 
 
 // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
-pub trait AuthenticatorAPI {
+pub trait AuthenticatorAPI : Service<Command> {
     fn version(&self) -> VersionInfo;
-    // fn make_credential(
-    //     &self,
-    //     client_data_hash: Hash,
-    //     rp: PublicKeyCredentialRpEntity,
-    //     user: PublicKeyCredentialUserEntity,
-    //     pub_key_cred_params: [PublicKeyCredentialParameters],
-    //     exclude_list: [PublicKeyCredentialDescriptor],
-    //     extensions: u32,
-    //     options: MakeCredentialOptions,
-    //     pin_uv_auth_param: ByteString,
-    //     pin_uv_auth_protocol: u32,
-    //     enterprise_attestation: u32,
-    // ) -> Result<MakeCredentialResponse, Error>;
+
+    fn make_credential(&self, cmd: MakeCredentialCommand) -> Result<MakeCredentialResponse, Error>;
 
     // fn get_assertion(
     //     &self,
@@ -68,7 +57,12 @@ pub struct VersionInfo {
 
 
 #[derive(Debug)]
-enum Error {}
+pub enum Error {
+    OperationDenied,
+    PinNotSet,
+    PinInvalid,
+    InvalidParameter,
+}
 
 /// aaguid is a byte string uniquely identifying the authenticator make and model.
 ///

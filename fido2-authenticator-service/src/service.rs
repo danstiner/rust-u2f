@@ -1,39 +1,20 @@
-use std::fmt::Debug;
-use std::io;
 use std::pin::Pin;
-use std::rc::Rc;
 use std::result::Result;
-use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
-use async_trait::async_trait;
-use byteorder::{BigEndian, WriteBytesExt};
 use fido2_authenticator_api::Aaguid;
 use fido2_authenticator_api::AuthenticatorAPI;
 use fido2_authenticator_api::Command;
+use fido2_authenticator_api::MakeCredentialCommand;
+use fido2_authenticator_api::MakeCredentialResponse;
 use fido2_authenticator_api::Response;
 use futures::Future;
-use thiserror::Error;
 use tower::Service;
-use tracing::{debug, error, info, trace};
-use u2f_core::AppId;
+use tracing::{debug, trace};
 use u2f_core::CryptoOperations;
-use u2f_core::KeyHandle;
 use u2f_core::SecretStore;
 use u2f_core::UserPresence;
-
-use crate::attestation::AttestationCertificate;
-use crate::private_key::PrivateKey;
-use crate::public_key::PublicKey;
-use crate::self_signed_attestation::self_signed_attestation;
-use crate::user_presence_byte;
-use crate::AuthenticateError;
-use crate::Authentication;
-use crate::Challenge;
-use crate::Counter;
-use crate::RegisterError;
-use crate::Registration;
 
 // Unique identifier of the "make and model" of this virtual authenticator
 const AAGUID: Aaguid = Aaguid(uuid::uuid!("5fd220bb-7791-4be4-99c3-1f8d26189e92"));
@@ -66,14 +47,73 @@ where
     }
 }
 
-impl<Secrets, Crypto, Presence> AuthenticatorAPI for Authenticator<Secrets, Crypto, Presence> {
+impl<Secrets, Crypto, Presence> AuthenticatorAPI for Authenticator<Secrets, Crypto, Presence>
+where
+    Secrets: SecretStore + 'static,
+    Crypto: CryptoOperations + 'static,
+    Presence: UserPresence + 'static,
+{
     fn version(&self) -> fido2_authenticator_api::VersionInfo {
         fido2_authenticator_api::VersionInfo {
             version_major: pkg_version::pkg_version_major!(),
             version_minor: pkg_version::pkg_version_minor!(),
             version_build: pkg_version::pkg_version_patch!(),
-            wink_supported: true,
+            wink_supported: false,
         }
+    }
+
+    fn make_credential(
+        &self,
+        cmd: MakeCredentialCommand,
+    ) -> Result<MakeCredentialResponse, fido2_authenticator_api::Error> {
+        let MakeCredentialCommand {
+            client_data_hash,
+            rp,
+            user,
+            pub_key_cred_params,
+            exclude_list,
+        } = cmd;
+        debug!(rp = ?rp, user = ?user, "make_credential");
+
+        // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-makeCred-platf-actions
+
+        // let user_present = self
+        //     .presence
+        //     .approve_authentication(&application_key.application)
+        //     .await?;
+
+        // let application_key = self
+        //     .secrets
+        //     .retrieve_application_key(&application, &key_handle)?
+        //     .ok_or(AuthenticateError::InvalidKeyHandle)?;
+
+        // if !user_present {
+        //     return Err(AuthenticateError::ApprovalRequired);
+        // }
+
+        // let counter = self
+        //     .secrets
+        //     .get_and_increment_counter(&application_key.application, &application_key.handle)?;
+
+        // let user_presence_byte = user_presence_byte(user_present);
+
+        // let signature = self.crypto.sign(
+        //     application_key.key(),
+        //     &message_to_sign_for_authenticate(
+        //         &application_key.application,
+        //         &challenge,
+        //         user_presence_byte,
+        //         counter,
+        //     ),
+        // )?;
+
+        // Ok(Authentication {
+        //     counter,
+        //     signature,
+        //     user_present,
+        // })
+
+        todo!()
     }
 }
 
@@ -96,14 +136,17 @@ where
         trace!(?command, "U2fService::call");
         Box::pin(async move {
             match command {
-                Command::MakeCredential {
+                Command::MakeCredential(MakeCredentialCommand {
                     client_data_hash,
                     rp,
                     user,
                     pub_key_cred_params,
                     exclude_list,
+                }) => todo!(),
+                Command::GetAssertion {
+                    rp_id,
+                    client_data_hash,
                 } => todo!(),
-                Command::GetAssertion { rp_id, client_data_hash } => todo!(),
                 Command::GetInfo => {
                     debug!("Get version request");
                     Ok(Response::GetInfo {
@@ -138,24 +181,51 @@ where
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::io;
     use std::sync::Mutex;
 
     use async_trait::async_trait;
     use openssl::hash::MessageDigest;
-    use openssl::pkey::{HasPublic, PKey, PKeyRef};
+    use openssl::pkey::{HasPublic, PKeyRef};
     use openssl::sign::Verifier;
-    use u2f_core::{AppId, ApplicationKey};
+    use u2f_core::{
+        AppId, ApplicationKey, Attestation, AttestationCertificate, Challenge, Counter, KeyHandle,
+        OpenSSLCryptoOperations, PrivateKey,
+    };
 
     use super::*;
-    use crate::attestation::Attestation;
     use crate::Signature;
+
+    #[tokio::test]
+    async fn version() {
+        let authenticator = fake_authenticator();
+
+        let version = authenticator.version();
+
+        assert_eq!(version.version_major, pkg_version::pkg_version_major!());
+        assert_eq!(version.version_minor, pkg_version::pkg_version_minor!());
+        assert_eq!(version.version_build, pkg_version::pkg_version_patch!());
+        assert_eq!(version.wink_supported, false);
+    }
+
+    #[tokio::test]
+    async fn make_credential() {}
+
+    fn fake_authenticator(
+    ) -> Authenticator<InMemorySecretStore, OpenSSLCryptoOperations, FakeUserPresence> {
+        Authenticator::new(
+            InMemorySecretStore::new(),
+            OpenSSLCryptoOperations::new(fake_attestation()),
+            FakeUserPresence::always_approve(),
+        )
+    }
 
     fn fake_app_id() -> AppId {
         AppId::from_bytes(&[0u8; 32])
     }
 
     fn fake_challenge() -> Challenge {
-        Challenge([0u8; 32])
+        Challenge::from([0u8; 32])
     }
 
     fn fake_key_handle() -> KeyHandle {
@@ -247,7 +317,7 @@ mod tests {
         }
     }
 
-    fn get_test_attestation() -> Attestation {
+    fn fake_attestation() -> Attestation {
         Attestation {
             certificate: AttestationCertificate::from_pem(
                 "-----BEGIN CERTIFICATE-----

@@ -1,6 +1,6 @@
 use std::io;
 
-use ctaphid::REPORT_DESCRIPTOR;
+use ctaphid::{REPORT_DESCRIPTOR, REPORT_TYPE_OUTPUT};
 use futures::{SinkExt, StreamExt};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
@@ -125,6 +125,7 @@ async fn pipe_reports(
                 OutputEvent::Output { data } => {
                     let report = Report::from_raw_bytes(data);
                     trace!(data_len = report.data().len(), "Piping report from UHID device");
+                    assert_eq!(report.type_(), REPORT_TYPE_OUTPUT);
                     user_socket.send(SocketOutput::Report(report)).await.map_err(StreamError::Io)
                 },
                 OutputEvent::Start { .. } => {

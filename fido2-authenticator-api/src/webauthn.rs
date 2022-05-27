@@ -1,5 +1,6 @@
 use minicbor::{Decode, Encode};
 
+#[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
 enum COSEAlgorithmIdentifier {
     ES256 = -7,
@@ -12,13 +13,13 @@ impl<C> Encode<C> for COSEAlgorithmIdentifier {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
+        _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.i8(*self as i8)?.ok()
     }
 }
 impl<'b, C> Decode<'b, C> for COSEAlgorithmIdentifier {
-    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+    fn decode(d: &mut minicbor::Decoder<'b>, _ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         match d.i8()? {
             -7 => Ok(COSEAlgorithmIdentifier::ES256),
             _ => Err(minicbor::decode::Error::message("Unrecognized algorithm identifier")),
@@ -37,7 +38,7 @@ impl<C> Encode<C> for PublicKeyCredentialDescriptor {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
+        _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.map(2)?
             .str("id")?
@@ -87,7 +88,7 @@ impl<C> Encode<C> for PublicKeyCredentialParameters {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
+        _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.map(2)?
             .str("alg")?
@@ -142,7 +143,7 @@ impl<C> Encode<C> for PublicKeyCredentialRpEntity {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
+        _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.map(2)?
             .str("id")?
@@ -200,7 +201,7 @@ impl<C> Encode<C> for PublicKeyCredentialUserEntity {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
+        _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.map(3)?
             .str("id")?
@@ -263,7 +264,7 @@ impl<C> Encode<C> for UserHandle {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
+        _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.bytes(&self.0)?.ok()
     }
@@ -281,7 +282,7 @@ impl<C> Encode<C> for CredentialId {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
+        _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.bytes(&self.0)?.ok()
     }
@@ -307,7 +308,7 @@ impl<C> Encode<C> for RelyingPartyIdentifier {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
+        _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.str(&self.0)?.ok()
     }

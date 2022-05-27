@@ -5,15 +5,15 @@ use crate::private_key::PrivateKey;
 
 #[derive(Clone)]
 pub struct Attestation {
-    pub(crate) certificate: AttestationCertificate,
-    pub(crate) key: PrivateKey,
+    pub certificate: AttestationCertificate,
+    pub key: PrivateKey,
 }
 
 #[derive(Clone)]
 pub struct AttestationCertificate(pub(crate) X509);
 
 impl AttestationCertificate {
-    pub(crate) fn from_pem(pem: &str) -> AttestationCertificate {
+    pub fn from_pem(pem: &str) -> AttestationCertificate {
         AttestationCertificate(X509::from_pem(pem.as_bytes()).unwrap())
     }
 
