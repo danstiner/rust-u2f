@@ -1,20 +1,25 @@
 mod ctap2;
+mod status_code;
 mod webauthn;
 
 use minicbor::{Decode, Encode};
 use std::fmt::Debug;
 use std::result::Result;
 
+pub use ctap2::Response;
 pub use ctap2::*;
 pub use tower::Service;
-pub use ctap2::Response;
-
+pub use webauthn::*;
+pub use status_code::StatusCode;
 
 // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
-pub trait AuthenticatorAPI : Service<Command> {
+pub trait AuthenticatorAPI: Service<Command> {
     fn version(&self) -> VersionInfo;
 
-    fn make_credential(&self, cmd: MakeCredentialCommand) -> Result<MakeCredentialResponse, Error>;
+    fn make_credential(
+        &self,
+        cmd: MakeCredentialCommand,
+    ) -> Result<MakeCredentialResponse, Self::Error>;
 
     // fn get_assertion(
     //     &self,
@@ -29,7 +34,7 @@ pub trait AuthenticatorAPI : Service<Command> {
 
     // fn get_next_assertion(&self) -> Result<GetNextAssertionResponse, Error>;
 
-    // fn get_info(&self) -> Result<GetInfoResponse, Error>;
+    fn get_info(&self) -> Result<GetInfoResponse, Self::Error>;
 
     // // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorClientPIN
     // fn client_pin(
@@ -55,27 +60,22 @@ pub struct VersionInfo {
     pub wink_supported: bool,
 }
 
-
-#[derive(Debug)]
-pub enum Error {
-    OperationDenied,
-    PinNotSet,
-    PinInvalid,
-    InvalidParameter,
-}
-
 /// aaguid is a byte string uniquely identifying the authenticator make and model.
 ///
 /// Identical values mean that they refer to the same authenticator model and
 /// different values mean they refer to different authenticator models.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Aaguid(pub uuid::Uuid);
 
 #[derive(Debug)]
 pub struct Sha256([u8; 32]);
 
 impl<C> Encode<C> for Sha256 {
-    fn encode<W: minicbor::encode::Write>(&self, e: &mut minicbor::Encoder<W>, ctx: &mut C) -> Result<(), minicbor::encode::Error<W::Error>> {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.bytes(&self.0)?.ok()
     }
 }

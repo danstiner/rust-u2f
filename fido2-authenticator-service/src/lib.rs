@@ -23,6 +23,7 @@ use std::fmt::Debug;
 use std::io;
 
 use byteorder::{BigEndian, WriteBytesExt};
+use fido2_authenticator_api::StatusCode;
 use thiserror::Error;
 pub use tower::Service;
 use tracing::error;
@@ -30,44 +31,25 @@ use u2f_core::{KeyHandle, AttestationCertificate};
 
 pub use crate::service::Authenticator;
 
-const SW_NO_ERROR: u16 = 0x9000; // The command completed successfully without error.
-const SW_WRONG_DATA: u16 = 0x6A80; // The request was rejected due to an invalid key handle.
-const SW_CONDITIONS_NOT_SATISFIED: u16 = 0x6985; // The request was rejected due to test-of-user-presence being required.
-const _SW_COMMAND_NOT_ALLOWED: u16 = 0x6986;
-const SW_INS_NOT_SUPPORTED: u16 = 0x6D00; // The Instruction of the request is not supported.
-const SW_WRONG_LENGTH: u16 = 0x6700; // The length of the request was invalid.
-const SW_CLA_NOT_SUPPORTED: u16 = 0x6E00; // The Class byte of the request is not supported.
-const SW_UNKNOWN: u16 = 0x6F00; // Response status : No precise diagnosis
-
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
+
+    #[error("Unsupported algorithm")]
+    UnsupportedAlgorithm,
+
+    #[error("Invalid Parameter")]
+    InvalidParameter,
 }
 
-#[derive(Debug)]
-pub enum StatusCode {
-    NoError,
-    TestOfUserPresenceNotSatisfied,
-    InvalidKeyHandle,
-    RequestLengthInvalid,
-    RequestClassNotSupported,
-    RequestInstructionNotSuppored,
-    UnknownError,
-}
-
-impl StatusCode {
-    pub fn write<W: WriteBytesExt>(&self, write: &mut W) {
-        let value = match self {
-            StatusCode::NoError => SW_NO_ERROR,
-            StatusCode::TestOfUserPresenceNotSatisfied => SW_CONDITIONS_NOT_SATISFIED,
-            StatusCode::InvalidKeyHandle => SW_WRONG_DATA,
-            StatusCode::RequestLengthInvalid => SW_WRONG_LENGTH,
-            StatusCode::RequestClassNotSupported => SW_CLA_NOT_SUPPORTED,
-            StatusCode::RequestInstructionNotSuppored => SW_INS_NOT_SUPPORTED,
-            StatusCode::UnknownError => SW_UNKNOWN,
-        };
-        write.write_u16::<BigEndian>(value).unwrap();
+impl Into<StatusCode> for Error {
+    fn into(self) -> StatusCode {
+        match self {
+            Error::Io(_) => StatusCode::Other,
+            Error::UnsupportedAlgorithm => StatusCode::UnsupportedAlgorithm,
+            Error::InvalidParameter => StatusCode::InvalidParameter,
+        }
     }
 }
 

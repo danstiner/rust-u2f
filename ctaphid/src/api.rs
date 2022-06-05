@@ -42,6 +42,7 @@ pub struct VersionInfo {
     pub capabilities: CapabilityFlags,
 }
 
+// TODO convert errors to status codes per https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#error-responses
 pub struct Adapter<A>(Arc<Mutex<A>>);
 
 impl<A> Adapter<A>

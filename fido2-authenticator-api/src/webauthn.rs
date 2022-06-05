@@ -1,8 +1,8 @@
 use minicbor::{Decode, Encode};
 
 #[allow(dead_code)]
-#[derive(Copy, Clone, Debug)]
-enum COSEAlgorithmIdentifier {
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum COSEAlgorithmIdentifier {
     ES256 = -7,
     ES384 = -35,
     ES512 = -36,
@@ -19,10 +19,15 @@ impl<C> Encode<C> for COSEAlgorithmIdentifier {
     }
 }
 impl<'b, C> Decode<'b, C> for COSEAlgorithmIdentifier {
-    fn decode(d: &mut minicbor::Decoder<'b>, _ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
         match d.i8()? {
             -7 => Ok(COSEAlgorithmIdentifier::ES256),
-            _ => Err(minicbor::decode::Error::message("Unrecognized algorithm identifier")),
+            _ => Err(minicbor::decode::Error::message(
+                "Unrecognized algorithm identifier",
+            )),
         }
     }
 }
@@ -78,10 +83,21 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialDescriptor {
     }
 }
 
+/// Parameters for Credential Generation from WebAuthn spec
+/// https://www.w3.org/TR/webauthn-2/#dictionary-credential-params
 #[derive(Debug)]
 pub struct PublicKeyCredentialParameters {
-    alg: COSEAlgorithmIdentifier,
-    type_: String,
+    pub alg: COSEAlgorithmIdentifier,
+    pub type_: PublicKeyCredentialType,
+}
+
+impl PublicKeyCredentialParameters {
+    pub fn es256() -> Self {
+        Self {
+            alg: COSEAlgorithmIdentifier::ES256,
+            type_: PublicKeyCredentialType::PublicKey,
+        }
+    }
 }
 
 impl<C> Encode<C> for PublicKeyCredentialParameters {
@@ -94,7 +110,7 @@ impl<C> Encode<C> for PublicKeyCredentialParameters {
             .str("alg")?
             .encode(&self.alg)?
             .str("type")?
-            .str(&self.type_)?
+            .encode(&self.type_)?
             .ok()
     }
 }
@@ -120,12 +136,38 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialParameters {
                 "Expected map key \"type\"",
             ));
         }
-        let type_: &'b str = d.str()?;
+        let type_ = Decode::decode(d, ctx)?;
 
-        Ok(PublicKeyCredentialParameters {
-            alg: alg,
-            type_: type_.to_string(),
-        })
+        Ok(PublicKeyCredentialParameters { alg, type_ })
+    }
+}
+
+/// https://www.w3.org/TR/webauthn-2/#enumdef-publickeycredentialtype
+#[derive(Debug)]
+pub enum PublicKeyCredentialType {
+    PublicKey,
+    Unknown(String),
+}
+
+impl<C> Encode<C> for PublicKeyCredentialType {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        match self {
+            PublicKeyCredentialType::PublicKey => e.str("public-key")?,
+            PublicKeyCredentialType::Unknown(s) => e.str(s)?,
+        };
+        Ok(())
+    }
+}
+impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        match d.str()? {
+            "public-key" => Ok(PublicKeyCredentialType::PublicKey),
+            type_ => Ok(PublicKeyCredentialType::Unknown(type_.to_owned())),
+        }
     }
 }
 
@@ -173,7 +215,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialRpEntity {
                 "Expected map key \"name\"",
             ));
         }
-        let name: &'b str  = Decode::decode(d, ctx)?;
+        let name: &'b str = Decode::decode(d, ctx)?;
 
         Ok(PublicKeyCredentialRpEntity {
             id: id.to_string(),

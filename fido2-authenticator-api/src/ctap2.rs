@@ -5,14 +5,10 @@ use crate::webauthn::PublicKeyCredentialUserEntity;
 use crate::webauthn::RelyingPartyIdentifier;
 use crate::Aaguid;
 use crate::Sha256;
-use async_trait::async_trait;
-use futures::Future;
-use minicbor_derive::Decode;
+
 use minicbor_derive::Encode;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use thiserror::Error;
-use tracing::{debug, error, info, trace};
 
 ///! CTAP2 protocol
 ///!
@@ -78,7 +74,26 @@ pub struct MakeCredentialCommand {
     pub pub_key_cred_params: Array<PublicKeyCredentialParameters>,
     #[n(0x05)]
     pub exclude_list: Option<Array<PublicKeyCredentialDescriptor>>,
+    #[n(0x06)]
+    pub extensions: Option<Extensions>,
+    #[n(0x07)]
+    pub options: Option<Options>,
+    #[n(0x08)]
+    pub pin_uv_auth_param: Option<PinUvAuthParam>,
+    #[n(0x09)]
+    pub pin_uv_auth_protocol: Option<PinUvAuthProtocol>,
+    #[n(0x0a)]
+    pub enterprise_attestation: Option<u8>,
 }
+
+#[derive(Debug)]
+pub struct Extensions;
+
+#[derive(Debug)]
+pub struct Options;
+
+#[derive(Debug)]
+pub struct PinUvAuthParam;
 
 #[derive(Debug)]
 pub enum Response {
@@ -88,29 +103,7 @@ pub enum Response {
         auth_data: Vec<u8>,
         signature: Vec<u8>,
     },
-    GetInfo {
-        versions: Vec<String>,
-        extensions: Option<Vec<String>>,
-        aaguid: Aaguid,
-        options: Option<HashMap<String, u64>>,
-        max_msg_size: Option<u64>,
-        pin_uv_auth_protocols: Option<Vec<u64>>,
-        max_credential_count_in_list: Option<u64>,
-        max_credential_id_length: Option<u64>,
-        transports: Option<Vec<String>>,
-        algorithms: Option<Vec<PublicKeyCredentialParameters>>,
-        max_serialized_large_blob_array: Option<u64>,
-        force_pin_change: Option<bool>,
-        min_pin_length: Option<u64>,
-        firmware_version: Option<String>,
-        max_cred_blob_len: Option<u64>,
-        max_rp_ids_for_set_min_pin_length: Option<u64>,
-        preferred_platform_uv_attempts: Option<u64>,
-        uv_modality: Option<u64>,
-        certifications: Option<HashMap<String, u64>>,
-        remaining_discoverable_credentials: Option<u64>,
-        vendor_prototype_config_commands: Option<Vec<u64>>,
-    },
+    GetInfo(GetInfoResponse),
 }
 
 #[derive(Debug)]
@@ -121,6 +114,31 @@ pub struct MakeCredentialResponse {
     pub auth_data: Vec<u8>,
     // #[n(0x03)]
     pub att_stmt: AttestationStatement,
+}
+
+#[derive(Debug)]
+pub struct GetInfoResponse {
+    pub versions: Vec<String>,
+    pub extensions: Option<Vec<String>>,
+    pub aaguid: Aaguid,
+    pub options: Option<HashMap<String, u64>>,
+    pub max_msg_size: Option<u64>,
+    pub pin_uv_auth_protocols: Option<Vec<u64>>,
+    pub max_credential_count_in_list: Option<u64>,
+    pub max_credential_id_length: Option<u64>,
+    pub transports: Option<Vec<String>>,
+    pub algorithms: Option<Vec<PublicKeyCredentialParameters>>,
+    pub max_serialized_large_blob_array: Option<u64>,
+    pub force_pin_change: Option<bool>,
+    pub min_pin_length: Option<u64>,
+    pub firmware_version: Option<String>,
+    pub max_cred_blob_len: Option<u64>,
+    pub max_rp_ids_for_set_min_pin_length: Option<u64>,
+    pub preferred_platform_uv_attempts: Option<u64>,
+    pub uv_modality: Option<u64>,
+    pub certifications: Option<HashMap<String, u64>>,
+    pub remaining_discoverable_credentials: Option<u64>,
+    pub vendor_prototype_config_commands: Option<Vec<u64>>,
 }
 
 #[derive(Debug)]
