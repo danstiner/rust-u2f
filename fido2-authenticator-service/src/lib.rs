@@ -27,7 +27,7 @@ use fido2_authenticator_api::StatusCode;
 use thiserror::Error;
 pub use tower::Service;
 use tracing::error;
-use u2f_core::{KeyHandle, AttestationCertificate};
+use u2f_core::{AttestationCertificate, KeyHandle};
 
 pub use crate::service::Authenticator;
 

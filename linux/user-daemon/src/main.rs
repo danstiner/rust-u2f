@@ -214,7 +214,10 @@ impl Proxy for SocketToHid {
         &mut self,
         input: Self::SinkInput,
     ) -> Result<Option<Self::SinkOutput>, Self::Error> {
-        Ok(Some(SocketInput::Report(Report::new(REPORT_TYPE_INPUT, &input.to_bytes()))))
+        Ok(Some(SocketInput::Report(Report::new(
+            REPORT_TYPE_INPUT,
+            &input.to_bytes(),
+        ))))
     }
 }
 

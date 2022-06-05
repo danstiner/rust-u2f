@@ -167,7 +167,6 @@ where
             return Err(Error::InvalidParameter);
         }
 
-
         // let user_present = self
         //     .presence
         //     .approve_authentication(&application_key.application)
@@ -237,6 +236,11 @@ where
                     user,
                     pub_key_cred_params,
                     exclude_list,
+                    extensions,
+                    options,
+                    pin_uv_auth_param,
+                    pin_uv_auth_protocol,
+                    enterprise_attestation,
                 }) => todo!(),
                 Command::GetAssertion {
                     rp_id,

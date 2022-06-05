@@ -8,9 +8,9 @@ use std::result::Result;
 
 pub use ctap2::Response;
 pub use ctap2::*;
+pub use status_code::StatusCode;
 pub use tower::Service;
 pub use webauthn::*;
-pub use status_code::StatusCode;
 
 // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
 pub trait AuthenticatorAPI: Service<Command> {

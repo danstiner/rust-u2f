@@ -86,14 +86,17 @@ pub struct MakeCredentialCommand {
     pub enterprise_attestation: Option<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Encode)]
 pub struct Extensions;
 
-#[derive(Debug)]
+#[derive(Debug, Encode)]
 pub struct Options;
 
-#[derive(Debug)]
+#[derive(Debug, Encode)]
 pub struct PinUvAuthParam;
+
+#[derive(Debug, Encode)]
+pub struct PinUvAuthProtocol;
 
 #[derive(Debug)]
 pub enum Response {
