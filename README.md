@@ -12,13 +12,13 @@ This program is basically complete, I am not currently planning to add new featu
 
 Disclaimer: This is a personal project, I am not a security expert and make no guarantee of security.
 
-Like any U2F authenticator this program provides a degree of protection against phishing and poorly chosen passwords. It does **not** provide the same level of protection against malware that a hardware authenticator does.
+A hardware authenticator from [SoloKeys](https://solokeys.com/) or [yubico](https://www.yubico.com/) provides a 2nd-factor for authentication that is both phishing resistant and difficult to clone. They have been audited by independent experts and I used them instead of this software for more sensitive accounts.
 
-If your machine is compromised by malware, the attacker could steal a copy of the secret keys stored by this authenticator. In this situation you should immediately unregister this authenticator anywhere it is registered in addition to changing the passwords of any potentially compromised accounts. With a hardware authenticator secret keys never leave the device, so in the case of malware you can simply unplug from the infected machine and be confident your accounts are safe from further compromise.
+This software-only authenticator is phishing resistant, but because it stores [secret keys](https://fidoalliance.org/specs/fido-u2f-v1.2-ps-20170411/fido-u2f-overview-v1.2-ps-20170411.html#site-specific-public-private-key-pairs) and [usage counters](https://fidoalliance.org/specs/fido-u2f-v1.2-ps-20170411/fido-u2f-overview-v1.2-ps-20170411.html#counters-as-a-signal-for-detecting-cloned-u2f-devices) in your [keychain](https://askubuntu.com/questions/1700/what-is-the-keyring-or-keychain) it is *not* clone resistant. If your machine is compromised by malware, the attacker could steal this data and use it together with your account passwords to sign in any time they desire.
 
 ## Installation
 
-After installing, test your new virtual U2F device on a site supporting it such as: https://demo.yubico.com/webauthn-technical/registration
+After installing, test your new virtual FIDO2 device on a site supporting it such as: https://demo.yubico.com/webauthn-technical/registration
 
 ### Arch
 
@@ -60,19 +60,19 @@ systemctl --user start softu2f
 
 Conceptually FIDO consists of three pieces:
 
-- A remote server that wants to verify a user's identity
-- A user device running a browser or other client application
-- An authenticator device that can store keys and attest the user's identify
+- A *remote server* that wants to verify a user's identity
+- A *user device* that runs a web browser or other client application
+- An *authenticator device* that can store keys and attest the user's identify
 
-Hardware authenticators commonly present as Human Interface Devices (HID) utilizing a USB transport.
-However, the HID subsystem of the Linux kernel also allows defining HID transports and devices from
-user-space. This project takes advantage of that support (UHID) to create virtual HID authenticator devices that, to browsers and other client applications, appear identical to a real hardware authenticator (modulo not having certain metadata such as a USB bus id).
+This project creates a virtual authenticator device that, to web browsers and other client applications, appears nearly identical to a hardware authenticator. Specifically, a hardware authenticator presents itself as a Human Interface Device over a USB transport (USB-HID), while this software creates a virtual HID driven by a service process.
+
+On Linux this is done using [UHID](https://www.kernel.org/doc/Documentation/hid/uhid.txt), a kernel module that allows creating HID devices and controlling them from userspace. One limitation is that our virtual HID devices may not having certain metadata, such as a bus id which is inherit to the USB transport.
 
 This project is split into two programs that coordinate to implement such a virtual HID authenticator.
 
 ### system-daemon
 
-This program listens on a socket file for connections from *user-daemon* instances and for each connection uses `/dev/uhid` to create a HID device with a report descriptor defining it as a FIDO Alliance authenticator device. It then forwards HID report data between the device and *user-daemon* connection. It is essentially a simple broker allowing non-privileged users to create authenticator devices. It is usually run by systemd in a privileged context in order to access `/dev/uhid`, but can also be run manually if desired.
+This program listens on a socket file for connections from *user-daemon* instances and for each connection uses the `/dev/uhid` character misc-device provided by the `UHID` kernel module to create a HID device with a report descriptor defining it as a FIDO Alliance authenticator device. It then forwards HID report data between the device and *user-daemon* connection. It is essentially a simple broker to allow the *user-daemon* proccess to create authenticator devices. It is usually run by systemd in a privileged context in order to access `/dev/uhid`, but can also be run manually if desired.
 
 It is broken down into the following crates:
 - [system-daemon](linux/system-daemon) is the binary itself
