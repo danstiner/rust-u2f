@@ -47,7 +47,7 @@ pub struct Adapter<A>(Arc<Mutex<A>>);
 
 impl<A> Adapter<A>
 where
-    A: Service<Command> + AuthenticatorAPI,
+    A: AuthenticatorAPI,
 {
     pub fn new(api: A) -> Self {
         Self(Arc::new(Mutex::new(api)))
@@ -57,7 +57,7 @@ where
 #[async_trait]
 impl<A> CtapHidApi for Adapter<A>
 where
-    A: Service<Command> + AuthenticatorAPI + Send,
+    A: AuthenticatorAPI + Send,
 {
     type Error = A::Error;
 

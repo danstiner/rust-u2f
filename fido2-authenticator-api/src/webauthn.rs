@@ -175,10 +175,10 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
 #[derive(Debug)]
 pub struct PublicKeyCredentialRpEntity {
     // A unique identifier for the Relying Party entity, used as the RP ID
-    id: String,
+    pub id: String,
 
     // A human-palatable name for the Relying Party, intended only for display
-    name: String,
+    pub name: String,
 }
 
 impl<C> Encode<C> for PublicKeyCredentialRpEntity {
@@ -229,14 +229,14 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialRpEntity {
 pub struct PublicKeyCredentialUserEntity {
     /// The user handle of the user account. Authentication and authorization
     /// decisions MUST be made on the basis of this member, not displayName or name
-    id: UserHandle,
+    pub id: UserHandle,
 
-    display_name: String,
+    pub display_name: String,
 
     /// Human-palatable identifier for a user account, intended only for display.
     /// May be used to help the user differentiate accounts with similar display names.
     /// Fox example "alexm", "alex.mueller@example.com" or "+14255551234".
-    name: String,
+    pub name: String,
 }
 
 impl<C> Encode<C> for PublicKeyCredentialUserEntity {
@@ -301,6 +301,14 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialUserEntity {
 /// MUST NOT be empty.
 #[derive(Debug)]
 pub struct UserHandle(Vec<u8>);
+
+impl UserHandle {
+    pub fn new(id: Vec<u8>) -> Self {
+        assert!(id.len() > 0);
+        assert!(id.len() <= 64);
+        UserHandle(id)
+    }
+}
 
 impl<C> Encode<C> for UserHandle {
     fn encode<W: minicbor::encode::Write>(

@@ -3,6 +3,7 @@ mod status_code;
 mod webauthn;
 
 use minicbor::{Decode, Encode};
+use ring::digest;
 use std::fmt::Debug;
 use std::result::Result;
 
@@ -13,7 +14,9 @@ pub use tower::Service;
 pub use webauthn::*;
 
 // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
-pub trait AuthenticatorAPI: Service<Command> {
+pub trait AuthenticatorAPI {
+    type Error;
+
     fn version(&self) -> VersionInfo;
 
     fn make_credential(
@@ -69,6 +72,17 @@ pub struct Aaguid(pub uuid::Uuid);
 
 #[derive(Debug)]
 pub struct Sha256([u8; 32]);
+
+impl Sha256 {
+    pub fn digest(data: &[u8]) -> Self {
+        Self(
+            digest::digest(&digest::SHA256, data)
+                .as_ref()
+                .try_into()
+                .expect("SHA256 is 32 bytes"),
+        )
+    }
+}
 
 impl<C> Encode<C> for Sha256 {
     fn encode<W: minicbor::encode::Write>(

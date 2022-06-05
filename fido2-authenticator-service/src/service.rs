@@ -84,6 +84,8 @@ where
     Crypto: CryptoOperations + 'static,
     Presence: UserPresence + 'static,
 {
+    type Error = super::Error;
+
     fn version(&self) -> fido2_authenticator_api::VersionInfo {
         fido2_authenticator_api::VersionInfo {
             version_major: pkg_version::pkg_version_major!(),
@@ -167,6 +169,42 @@ where
             return Err(Error::InvalidParameter);
         }
 
+        // 12. If the excludeList parameter is present and contains a credential ID created by this authenticator, that is bound to the specified rp.id:
+        // TODO
+
+        // 13. If evidence of user interaction was provided as part of Step 11 (i.e., by invoking performBuiltInUv()):
+        // TODO evidence of user interaction
+        // Set the "up" bit to true in the response.
+        up = true;
+        // Go to Step 15
+        // TODO
+
+        // 14. If the "up" option is set to true:
+        if up {
+            todo!();
+        }
+
+        // 15. If the extensions parameter is present:
+        // TODO
+
+        // 16. Generate a new credential key pair for the algorithm chosen in step 3
+        // TODO
+
+        // 17. If the "rk" option is set to true:
+        // TODO
+
+        // 18. Otherwise, if the "rk" option is false: the authenticator MUST create a non-discoverable credential.
+        // TODO
+
+        // 19. Generate an attestation statement for the newly-created credential using clientDataHash, taking into account the value of the enterpriseAttestation parameter, if present, as described above in Step 9.
+
+        // On success, the authenticator returns the following authenticatorMakeCredential response structure which contains an attestation object plus additional information.
+        Ok(MakeCredentialResponse {
+            fmt: todo!(),
+            auth_data: todo!(),
+            att_stmt: todo!(),
+        })
+
         // let user_present = self
         //     .presence
         //     .approve_authentication(&application_key.application)
@@ -202,78 +240,10 @@ where
         //     signature,
         //     user_present,
         // })
-
-        todo!()
     }
 
     fn get_info(&self) -> Result<GetInfoResponse, Error> {
         Ok(self.get_info_internal())
-    }
-}
-
-impl<Secrets, Crypto, Presence> Service<Command> for Authenticator<Secrets, Crypto, Presence>
-where
-    Secrets: SecretStore + 'static,
-    Crypto: CryptoOperations + 'static,
-    Presence: UserPresence + 'static,
-{
-    type Response = Response;
-    type Error = super::Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, command: Command) -> Self::Future {
-        // let u2f = Arc::clone(&self.0);
-        trace!(?command, "U2fService::call");
-        Box::pin(async move {
-            match command {
-                Command::MakeCredential(MakeCredentialCommand {
-                    client_data_hash,
-                    rp,
-                    user,
-                    pub_key_cred_params,
-                    exclude_list,
-                    extensions,
-                    options,
-                    pin_uv_auth_param,
-                    pin_uv_auth_protocol,
-                    enterprise_attestation,
-                }) => todo!(),
-                Command::GetAssertion {
-                    rp_id,
-                    client_data_hash,
-                } => todo!(),
-                Command::GetInfo => {
-                    debug!("Get version request");
-                    Ok(Response::GetInfo(GetInfoResponse {
-                        versions: vec![String::from("FIDO_2_1"), String::from("U2F_V2")],
-                        extensions: None,
-                        aaguid: AAGUID,
-                        options: None,
-                        max_msg_size: None,
-                        pin_uv_auth_protocols: None,
-                        max_credential_count_in_list: None,
-                        max_credential_id_length: None,
-                        transports: None,
-                        algorithms: None,
-                        max_serialized_large_blob_array: None,
-                        force_pin_change: None,
-                        min_pin_length: None,
-                        firmware_version: None,
-                        max_cred_blob_len: None,
-                        max_rp_ids_for_set_min_pin_length: None,
-                        preferred_platform_uv_attempts: None,
-                        uv_modality: None,
-                        certifications: None,
-                        remaining_discoverable_credentials: Some(0),
-                        vendor_prototype_config_commands: None,
-                    }))
-                }
-            }
-        })
     }
 }
 
@@ -284,6 +254,10 @@ mod tests {
     use std::sync::Mutex;
 
     use async_trait::async_trait;
+    use fido2_authenticator_api::{
+        Array, PublicKeyCredentialRpEntity, PublicKeyCredentialType, PublicKeyCredentialUserEntity,
+        Sha256, UserHandle,
+    };
     use openssl::hash::MessageDigest;
     use openssl::pkey::{HasPublic, PKeyRef};
     use openssl::sign::Verifier;
@@ -308,12 +282,75 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_info_command() {
+    async fn get_info() {
         let authenticator = fake_authenticator();
 
         let info = authenticator.get_info().unwrap();
 
         assert_eq!(info.aaguid, AAGUID);
+    }
+
+    #[tokio::test]
+    async fn make_credential_fails_no_algorithm() {
+        let authenticator = fake_authenticator();
+
+        let result = authenticator.make_credential(MakeCredentialCommand {
+            client_data_hash: Sha256::digest(b"client data"),
+            rp: PublicKeyCredentialRpEntity {
+                id: "example.com".into(),
+                name: "Example RP".into(),
+            },
+            user: PublicKeyCredentialUserEntity {
+                id: UserHandle::new(vec![0x01]),
+                name: "user@example.com".into(),
+                display_name: "Test User".into(),
+            },
+            pub_key_cred_params: Array(vec![]),
+            exclude_list: None,
+            extensions: None,
+            options: None,
+            pin_uv_auth_param: None,
+            pin_uv_auth_protocol: None,
+            enterprise_attestation: None,
+        });
+
+        match result {
+            Err(Error::UnsupportedAlgorithm) => {}
+            r => panic!("expected Error::UnsupportedAlgorithm, got {:?}", r),
+        }
+    }
+
+    #[tokio::test]
+    async fn make_credential_denies_enterprise_attestation() {
+        let authenticator = fake_authenticator();
+
+        let result = authenticator.make_credential(MakeCredentialCommand {
+            client_data_hash: Sha256::digest(b"client data"),
+            rp: PublicKeyCredentialRpEntity {
+                id: "example.com".into(),
+                name: "Example RP".into(),
+            },
+            user: PublicKeyCredentialUserEntity {
+                id: UserHandle::new(vec![0x01]),
+                name: "user@example.com".into(),
+                display_name: "Test User".into(),
+            },
+            pub_key_cred_params: Array(vec![PublicKeyCredentialParameters {
+                alg: COSEAlgorithmIdentifier::ES256,
+                type_: PublicKeyCredentialType::PublicKey,
+            }]),
+            exclude_list: None,
+            extensions: None,
+            options: None,
+            pin_uv_auth_param: None,
+            pin_uv_auth_protocol: None,
+            enterprise_attestation: Some(1),
+        });
+
+        match result {
+            Err(Error::InvalidParameter) => {}
+            r => panic!("expected Error::InvalidParameter, got {:?}", r),
+        }
     }
 
     fn fake_authenticator(
