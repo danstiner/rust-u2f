@@ -9,5 +9,3 @@ PrivateTmp=true
 
 [Install]
 WantedBy=default.target
-Wants=dbus.socket
-After=dbus.socket
