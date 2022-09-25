@@ -98,6 +98,7 @@ pub struct PinUvAuthParam;
 #[derive(Debug, Encode)]
 pub struct PinUvAuthProtocol;
 
+/// Messages from authenticator to the host, called a "response" in the CTAP2 protocol
 #[derive(Debug)]
 pub enum Response {
     MakeCredential(MakeCredentialResponse),
