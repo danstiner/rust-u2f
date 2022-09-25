@@ -132,8 +132,6 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
             socket_path: system_daemon_socket.to_owned(),
         })?;
 
-    require_root(stream.peer_cred()?)?;
-
     let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
     let mut system_socket: SocketTransport =
         tokio_serde::Framed::new(length_delimited, Bincode::default());
@@ -143,18 +141,6 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
 
     Server::new(Pipe::new(system_socket, SocketToHid), authenticator).await?;
     Ok(())
-}
-
-fn require_root(peer: UCred) -> Result<(), Error> {
-    if peer.uid() != 0 {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "Expected socket peer to be running as root user",
-        )
-        .into())
-    } else {
-        Ok(())
-    }
 }
 
 type SocketTransport = tokio_serde::Framed<
