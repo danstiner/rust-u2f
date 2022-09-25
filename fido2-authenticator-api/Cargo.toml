@@ -23,5 +23,5 @@ tokio = { version = "^1.13.0", features = ["rt", "macros"] }
 tower = "^0.4.10"
 tracing = "^0.1"
 uuid = "^1.0"
-minicbor = "^0.16"
-minicbor-derive = "^0.10"
+minicbor = "0.18.0"
+minicbor-derive = "0.12.0"

@@ -1230,15 +1230,15 @@ dependencies = [
 
 [[package]]
 name = "minicbor"
-version = "0.16.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08de72a57f15d959ab3a3b73fc94572eb954bfcfeb3809cf83cc1bd7d0aa774b"
+checksum = "2a20020e8e2d1881d8736f64011bb5ff99f1db9947ce3089706945c8915695cb"
 
 [[package]]
 name = "minicbor-derive"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66dd6ff7dbe1a10938f8b72c6d0dd81c28fc68283aa79d7ba97c99a96a8e5823"
+checksum = "8608fb1c805b5b6b3d5ab7bd95c40c396df622b64d77b2d621a5eae1eed050ee"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2121,7 +2121,7 @@ dependencies = [
  "tokio-util",
  "tower",
  "tracing",
- "tracing-journald 0.2.4",
+ "tracing-journald",
  "tracing-subscriber",
  "users",
 ]
@@ -2156,7 +2156,7 @@ dependencies = [
  "tokio-serde",
  "tokio-util",
  "tracing",
- "tracing-journald 0.3.0",
+ "tracing-journald",
  "tracing-subscriber",
  "u2f-core",
 ]
@@ -2483,17 +2483,6 @@ checksum = "6dfce9f3241b150f36e8e54bb561a742d5daa1a47b5dd9a5ce369fd4a4db2210"
 dependencies = [
  "lazy_static",
  "valuable",
-]
-
-[[package]]
-name = "tracing-journald"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ba49f4829f4e95702943ec6b2fad8936b369d20fa27036caf01329fb230e460"
-dependencies = [
- "libc",
- "tracing-core",
- "tracing-subscriber",
 ]
 
 [[package]]
