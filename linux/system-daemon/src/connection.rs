@@ -61,7 +61,7 @@ async fn handle_create_device_request(
                     data: REPORT_DESCRIPTOR.to_vec(),
                 };
 
-                info!(name = %create_params.name, "Creating UHID virtual authenticator device");
+                info!(name = %create_params.name, "Creating FIDO virtual authenticator device");
                 return UhidDevice::create(create_params).await;
             }
             _ => {

@@ -59,7 +59,7 @@ enum Error {
 
 #[tokio::main]
 async fn main() {
-    let args = Command::new("Rust-U2F System Daemon")
+    let args = Command::new("Rust-Fido System Daemon")
         .version(VERSION)
         .author(AUTHORS)
         .about(DESCRIPTION)
@@ -81,7 +81,7 @@ async fn main() {
         tracing_subscriber::fmt::init();
     }
 
-    info!(version = VERSION, "Starting rust-u2f system daemon");
+    info!(version = VERSION, "Starting rust-fido system daemon");
 
     if let Err(ref err) = run(socket_path).await {
         error!(error = ?err, "Error encountered, exiting");

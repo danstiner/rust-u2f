@@ -84,7 +84,7 @@ pub enum Error {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
-    let args = Command::new("Rust-U2F User Daemon")
+    let args = Command::new("Rust-Fido User Daemon")
         .version(VERSION)
         .author(AUTHORS)
         .about(DESCRIPTION)
@@ -109,7 +109,7 @@ async fn main() {
         tracing_subscriber::fmt::init();
     }
 
-    info!(version = VERSION, "Starting rust-u2f user daemon");
+    info!(version = VERSION, "Starting rust-fido user daemon");
 
     if let Err(ref err) = run(system_daemon_socket).await {
         error!("Error encountered, exiting: {}", err);
