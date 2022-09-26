@@ -49,6 +49,12 @@ systemctl --user start softu2f
 
 ## Architecture
 
+The first part of this project is an authenticator service that allows a user to register their identity with websites/applications in the form of private keys that are stored on the local keychain or filesystem. The user can then later authenticate their identity using those private keys.
+
+The second part is a virtual Human Interface Device (HID), which is used to allow web browsers or other applications to access the authenticator service through the FIDO2 CTAPHID protocol, much the same way they would access a physical authenticator over USB-HID.
+
+On Linux the [UHID](https://www.kernel.org/doc/Documentation/hid/uhid.txt) kernel module is required, it exposes an API for creating virtual HID devices and controlling them from userspace. The project is split into two programs. The `linux/system-daemon` program has elevated permissions to use UHID, but it simply forwards data over a socket to the `linux/user-daemon` program that handles authentication and key management.
+
 ### Background
 
 - [FIDO Specifications](https://fidoalliance.org/specifications/)
@@ -64,11 +70,11 @@ Conceptually FIDO consists of three pieces:
 - A *user device* that runs a web browser or other client application
 - An *authenticator device* that can store keys and attest the user's identify
 
-This project creates a virtual authenticator device that, to web browsers and other client applications, appears nearly identical to a hardware authenticator. Specifically, a hardware authenticator presents itself as a Human Interface Device over a USB transport (USB-HID), while this software creates a virtual HID driven by a service process.
+The *authenticator device* itself consists of three parts:
 
-On Linux this is done using [UHID](https://www.kernel.org/doc/Documentation/hid/uhid.txt), a kernel module that allows creating HID devices and controlling them from userspace. One limitation is that our virtual HID devices may not having certain metadata, such as a bus id which is inherit to the USB transport.
-
-This project is split into two programs that coordinate to implement such a virtual HID authenticator.
+- *Authenticator Service*: Manages cryptographic login credentials for the user. Can ask the user for approval before a credential is used. Implements the Authenticator API.
+- *Authenticator API*: Authenticator operations defined in terms of input parameters and corresponding output or error code.
+- *CTAPHID Protocol*: Provides a way for client applications to invoke Authenticator API methods. Each invocation is structered as a transaction, a request message followed by a response message. Messages are encoded and framed into individual packets that can be sent as input/output HID reports.
 
 ### system-daemon
 

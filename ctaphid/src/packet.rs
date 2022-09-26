@@ -106,6 +106,8 @@ impl Packet {
 
                 // 7      (s-7)  DATA     Payload data (s is equal to the fixed packet size)
                 bytes.extend_from_slice(&data);
+
+                // Zero-pad to expected initial packet length
                 for _ in data.len()..INITIAL_PACKET_DATA_LEN {
                     bytes.push(0u8);
                 }
@@ -125,6 +127,8 @@ impl Packet {
 
                 // 5      (s-5)  DATA     Payload data (s is equal to the fixed packet size)
                 bytes.extend_from_slice(&data);
+
+                // Zero-pad to expected continuation packet length
                 for _ in data.len()..CONTINUATION_PACKET_DATA_LEN {
                     bytes.push(0u8);
                 }
