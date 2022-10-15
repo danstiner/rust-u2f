@@ -22,7 +22,6 @@ const CTAPHID_VENDOR_FIRST: u8 = 0x40; // First vendor defined command
 const CTAPHID_VENDOR_LAST: u8 = 0x7f; // Last vendor defined command
 
 const COMMAND_INIT_DATA_LEN: usize = 8;
-const COMMAND_WINK_DATA_LEN: usize = 0;
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub enum CommandType {
@@ -74,7 +73,7 @@ impl CommandType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct RequestMessage {
     pub channel_id: ChannelId,
     pub request: Request,
@@ -132,7 +131,7 @@ impl RequestMessage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[allow(dead_code)]
 pub enum Request {
     Ping { data: Vec<u8> },
@@ -172,18 +171,7 @@ impl Request {
             CommandType::Cancel => todo!(),
             CommandType::KeepAlive => todo!(),
             CommandType::Wink => Ok(Request::Wink),
-            CommandType::Lock => {
-                if data.len() != COMMAND_WINK_DATA_LEN {
-                    Err(RequestDecodeError::PayloadLength {
-                        expected_len: COMMAND_WINK_DATA_LEN,
-                        actual_len: data.len(),
-                    })
-                } else {
-                    Ok(Request::Lock {
-                        lock_time: Duration::from_secs(data[0].into()),
-                    })
-                }
-            }
+            CommandType::Lock => Err(RequestDecodeError::InvalidCommand(command)),
             CommandType::Error => Err(RequestDecodeError::InvalidCommand(command)),
             CommandType::Vendor { .. } => Err(RequestDecodeError::InvalidCommand(command)),
             CommandType::Unknown { .. } => {
@@ -302,7 +290,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum RequestMessageDecodeError {
     #[error("Incomplete message")]
     Incomplete,
@@ -317,7 +305,7 @@ pub enum RequestMessageDecodeError {
     RequestDecodeError(#[from] RequestDecodeError),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum RequestDecodeError {
     #[error("Payload length ({actual_len}) longer than expected ({expected_len})")]
     PayloadLength {
@@ -334,5 +322,149 @@ bitflags! {
         const WINK = 0b0000_0001; // If set, authenticator implements CTAPHID_WINK function
         const CBOR = 0b0000_0100; // If set, authenticator implements CTAPHID_CBOR function
         const NMSG = 0b0000_1000; // If set, authenticator DOES NOT implement CTAPHID_MSG function
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn request_decode_ping() {
+        assert_eq!(
+            Request::decode(CommandType::Ping, &vec![0, 1, 2, 3, 4, 5, 6, 7]),
+            Ok(Request::Ping {
+                data: vec![0, 1, 2, 3, 4, 5, 6, 7]
+            })
+        );
+    }
+
+    #[test]
+    fn request_decode_msg() {
+        assert_eq!(
+            Request::decode(CommandType::Msg, &vec![0, 1, 2, 3, 4, 5, 6, 7]),
+            Ok(Request::Msg {
+                data: vec![0, 1, 2, 3, 4, 5, 6, 7]
+            })
+        );
+    }
+
+    #[test]
+    fn request_decode_init() {
+        assert_eq!(
+            Request::decode(CommandType::Init, &vec![0, 1, 2, 3, 4, 5, 6, 7]),
+            Ok(Request::Init {
+                nonce: [0, 1, 2, 3, 4, 5, 6, 7]
+            })
+        );
+    }
+
+    #[test]
+    fn request_decode_init_invalid_data() {
+        assert_eq!(
+            Request::decode(CommandType::Init, &vec![0, 1]),
+            Err(RequestDecodeError::PayloadLength {
+                expected_len: COMMAND_INIT_DATA_LEN,
+                actual_len: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn request_decode_cbor() {
+        assert_eq!(
+            Request::decode(CommandType::Cbor, &vec![0, 1, 2, 3, 4, 5, 6, 7]),
+            Ok(Request::Cbor {
+                data: vec![0, 1, 2, 3, 4, 5, 6, 7]
+            })
+        );
+    }
+
+    #[test]
+    fn request_decode_wink() {
+        assert_eq!(
+            Request::decode(CommandType::Wink, &vec![]),
+            Ok(Request::Wink)
+        );
+    }
+
+    #[test]
+    fn request_message_decode_init() {
+        assert_eq!(
+            RequestMessage::decode(&vec![Packet::Initialization {
+                channel_id: crate::channel::BROADCAST_CHANNEL_ID,
+                command: CommandType::Init,
+                data: vec![0, 1, 2, 3, 4, 5, 6, 7],
+                payload_len: 8,
+            }]),
+            Ok(RequestMessage {
+                channel_id: crate::channel::BROADCAST_CHANNEL_ID,
+                request: Request::Init {
+                    nonce: [0, 1, 2, 3, 4, 5, 6, 7]
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn request_message_decode_multi_packet_msg() {
+        assert_eq!(
+            RequestMessage::decode(&vec![
+                Packet::Initialization {
+                    channel_id: ChannelId(1),
+                    command: CommandType::Msg,
+                    data: vec![0, 1, 2],
+                    payload_len: 8,
+                },
+                Packet::Continuation {
+                    channel_id: ChannelId(1),
+                    sequence_number: 0,
+                    data: vec![3, 4, 5]
+                },
+                Packet::Continuation {
+                    channel_id: ChannelId(1),
+                    sequence_number: 1,
+                    data: vec![6, 7]
+                }
+            ]),
+            Ok(RequestMessage {
+                channel_id: ChannelId(1),
+                request: Request::Msg {
+                    data: vec![0, 1, 2, 3, 4, 5, 6, 7]
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn response_message_encode_multi_packet_msg() {
+        assert_eq!(
+            ResponseMessage {
+                channel_id: ChannelId(1),
+                response: Response::Msg {
+                    data: (0u8..128).collect()
+                }
+            }
+            .to_packets(),
+            vec![
+                Packet::Initialization {
+                    channel_id: ChannelId(1),
+                    command: CommandType::Msg,
+                    data: (0u8..57).collect(),
+                    payload_len: 128,
+                },
+                Packet::Continuation {
+                    channel_id: ChannelId(1),
+                    sequence_number: 0,
+                    data: (57u8..116).collect()
+                },
+                Packet::Continuation {
+                    channel_id: ChannelId(1),
+                    sequence_number: 1,
+                    data: (116u8..128).collect()
+                }
+            ]
+        );
     }
 }
