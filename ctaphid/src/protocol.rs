@@ -18,23 +18,6 @@ use std::task::Poll;
 use std::task::Waker;
 use tracing::{debug, info, trace};
 
-enum ChannelState<Error> {
-    Receiving {
-        packets: Vec<Packet>,
-    },
-    Processing {
-        future: Pin<Box<dyn Future<Output = Result<Response, Error>>>>,
-    },
-}
-
-impl<E> Default for ChannelState<E> {
-    fn default() -> Self {
-        ChannelState::Receiving {
-            packets: Vec::new(),
-        }
-    }
-}
-
 #[pin_project]
 pub struct Protocol<S, E> {
     channel_state: HashMap<ChannelId, ChannelState<E>>,
@@ -222,6 +205,23 @@ where
         } else {
             this.output_waker.replace(cx.waker().clone());
             Poll::Pending
+        }
+    }
+}
+
+enum ChannelState<Error> {
+    Receiving {
+        packets: Vec<Packet>,
+    },
+    Processing {
+        future: Pin<Box<dyn Future<Output = Result<Response, Error>>>>,
+    },
+}
+
+impl<E> Default for ChannelState<E> {
+    fn default() -> Self {
+        ChannelState::Receiving {
+            packets: Vec::new(),
         }
     }
 }
