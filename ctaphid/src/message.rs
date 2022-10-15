@@ -184,14 +184,14 @@ impl Request {
                     })
                 }
             }
-            CommandType::Error => Err(RequestDecodeError::UnsupportedCommand(command)),
-            CommandType::Vendor { .. } => Err(RequestDecodeError::UnsupportedCommand(command)),
+            CommandType::Error => Err(RequestDecodeError::InvalidCommand(command)),
+            CommandType::Vendor { .. } => Err(RequestDecodeError::InvalidCommand(command)),
             CommandType::Unknown { .. } => {
                 // The Fido v2.0 specification is backwards compatible with U2F
                 // authenticators if they responded to unknown messages with
                 // the error message InvalidCommand (0x01).
                 // https://fidoalliance.org/specs/fido-v2.0-rd-20170927/fido-client-to-authenticator-protocol-v2.0-rd-20170927.html#interoperating-with-ctap1-u2f-authenticators
-                Err(RequestDecodeError::UnsupportedCommand(command))
+                Err(RequestDecodeError::InvalidCommand(command))
             }
         }
     }
@@ -325,8 +325,8 @@ pub enum RequestDecodeError {
         actual_len: usize,
     },
 
-    #[error("Unsupported command: {0:?}")]
-    UnsupportedCommand(CommandType),
+    #[error("Invalid command: {0:?}")]
+    InvalidCommand(CommandType),
 }
 
 bitflags! {
