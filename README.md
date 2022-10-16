@@ -26,10 +26,8 @@ Install the AUR package maintained by [@grawity](https://github.com/grawity): ht
 
 Then enable and start the installed services:
 ```bash
-systemctl --system enable softu2f.socket
-systemctl --user   enable softu2f.service
-systemctl --system start softu2f.socket
-systemctl --user   start softu2f.service
+systemctl --system enable --now softu2f.socket
+systemctl --user   enable --now softu2f.service
 ```
 
 ### Fedora
