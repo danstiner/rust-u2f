@@ -129,6 +129,21 @@ impl RequestMessage {
             request,
         })
     }
+
+    pub fn to_packets(&self) -> VecDeque<Packet> {
+        let channel_id = self.channel_id;
+        match &self.request {
+            Request::Ping { data } => Packet::encode_message(channel_id, CommandType::Ping, data),
+            Request::Msg { data } => Packet::encode_message(channel_id, CommandType::Msg, data),
+            Request::Init { nonce } => Packet::encode_message(channel_id, CommandType::Init, nonce),
+            Request::Cbor { data } => Packet::encode_message(channel_id, CommandType::Cbor, data),
+            Request::Cancel => Packet::encode_message(channel_id, CommandType::Error, &[]),
+            Request::Lock { lock_time } => {
+                Packet::encode_message(channel_id, CommandType::Lock, &[lock_time.as_secs() as u8])
+            }
+            Request::Wink => Packet::encode_message(channel_id, CommandType::Wink, &[]),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -191,7 +206,7 @@ pub struct ResponseMessage {
     pub response: Response,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Response {
     Ping {
         data: Vec<u8>,
@@ -219,6 +234,36 @@ pub enum Response {
     },
     Wink,
     Lock,
+}
+
+impl Response {
+    pub fn decode(command: CommandType, data: &[u8]) -> Result<Response, ResponseDecodeError> {
+        match command {
+            CommandType::Msg => Ok(Response::Msg {
+                data: data.to_vec(),
+            }),
+            CommandType::Ping => Ok(Response::Ping {
+                data: data.to_vec(),
+            }),
+            CommandType::Init => Err(unimplemented!()),
+            CommandType::Cbor => Ok(Response::Cbor {
+                data: data.to_vec(),
+            }),
+            CommandType::Cancel => todo!(),
+            CommandType::KeepAlive => todo!(),
+            CommandType::Wink => Ok(Response::Wink),
+            CommandType::Lock => Err(ResponseDecodeError::InvalidCommand(command)),
+            CommandType::Error => Err(ResponseDecodeError::InvalidCommand(command)),
+            CommandType::Vendor { .. } => Err(ResponseDecodeError::InvalidCommand(command)),
+            CommandType::Unknown { .. } => {
+                // The Fido v2.0 specification is backwards compatible with U2F
+                // authenticators if they responded to unknown messages with
+                // the error message InvalidCommand (0x01).
+                // https://fidoalliance.org/specs/fido-v2.0-rd-20170927/fido-client-to-authenticator-protocol-v2.0-rd-20170927.html#interoperating-with-ctap1-u2f-authenticators
+                Err(ResponseDecodeError::InvalidCommand(command))
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -270,7 +315,7 @@ impl ResponseMessage {
 
 #[allow(dead_code)]
 #[repr(u8)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ErrorCode {
     None = 0x00,
     InvalidCommand = 0x01,
@@ -313,6 +358,12 @@ pub enum RequestDecodeError {
         actual_len: usize,
     },
 
+    #[error("Invalid command: {0:?}")]
+    InvalidCommand(CommandType),
+}
+
+#[derive(Debug, Error, PartialEq)]
+pub enum ResponseDecodeError {
     #[error("Invalid command: {0:?}")]
     InvalidCommand(CommandType),
 }
