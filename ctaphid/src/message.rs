@@ -245,7 +245,7 @@ impl Response {
             CommandType::Ping => Ok(Response::Ping {
                 data: data.to_vec(),
             }),
-            CommandType::Init => Err(unimplemented!()),
+            CommandType::Init => unimplemented!(),
             CommandType::Cbor => Ok(Response::Cbor {
                 data: data.to_vec(),
             }),
@@ -300,7 +300,7 @@ impl ResponseMessage {
                 Packet::encode_message(channel_id, CommandType::Init, &data)
             }
             Response::Cbor { data } => Packet::encode_message(channel_id, CommandType::Cbor, &data),
-            Response::KeepAlive { status } => {
+            Response::KeepAlive { status: _ } => {
                 Packet::encode_message(channel_id, CommandType::KeepAlive, &[])
             }
             Response::Error { code } => {

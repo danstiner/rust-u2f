@@ -9,6 +9,7 @@ use futures::Future;
 use futures::Sink;
 use futures::Stream;
 use pin_project::pin_project;
+use replace_with::replace_with_or_abort_and_return;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt;
@@ -17,42 +18,207 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
-use tracing::{debug, info, trace};
+use tracing::info;
 
 #[pin_project]
-pub struct Protocol<S, E> {
-    channels: HashMap<ChannelId, ChannelState<E>>,
+pub struct Protocol<'a, Api, Error> {
+    service_state: ServiceState<'a, Api, Error>,
+    channels: HashMap<ChannelId, ChannelState>,
     channel_allocator: Channels,
-    service: S,
     output: VecDeque<Packet>,
     output_waker: Option<Waker>,
 }
 
-impl<Api, Error> Protocol<Api, Error>
+enum ServiceState<'a, Service, Error> {
+    Ready(Service),
+    Processing {
+        channel_id: ChannelId,
+        future: Pin<Box<dyn Future<Output = (Service, Result<Response, Error>)> + 'a>>,
+    },
+}
+
+impl<'a, Service, Error> ServiceState<'a, Service, Error>
 where
-    Api: CtapHidApi<Error = Error>,
+    Error: fmt::Debug,
+{
+    fn process_request(
+        &mut self,
+        channel_id: ChannelId,
+        command: CommandType,
+        data: &[u8],
+        output: &mut VecDeque<Packet>,
+        output_waker: &mut Option<Waker>,
+    ) -> Result<(), Error>
+    where
+        Service: CtapHidApi<Error = Error> + 'a,
+        Error: From<Service::Error> + 'static,
+    {
+        let request = match Request::decode(command, data) {
+            Ok(request) => request,
+            Err(_err) => todo!("return (self, Err(err.into()))"),
+        };
+
+        replace_with_or_abort_and_return(self, |self_| {
+            self_.process_request_move(channel_id, request, output, output_waker)
+        })
+    }
+
+    fn process_request_move(
+        self,
+        channel_id: ChannelId,
+        request: Request,
+        output: &mut VecDeque<Packet>,
+        output_waker: &mut Option<Waker>,
+    ) -> (Result<(), Error>, Self)
+    where
+        Service: CtapHidApi<Error = Error> + 'a,
+        Error: From<Service::Error> + 'static,
+    {
+        let service = match self {
+            ServiceState::Ready(service) => service,
+            _ => todo!("return error, bad state"),
+        };
+
+        let next_state = match request {
+            Request::Ping { data } => {
+                output.append(
+                    &mut ResponseMessage {
+                        channel_id,
+                        response: Response::Ping { data },
+                    }
+                    .to_packets(),
+                );
+                output_waker.take().map(|waker| waker.wake());
+                ServiceState::Ready(service)
+            }
+            Request::Msg { data } => ServiceState::Processing {
+                channel_id,
+                future: Box::pin(async move {
+                    match service.msg(data).await {
+                        Ok(data) => (service, Ok(Response::Msg { data })),
+                        Err(err) => (service, Err(err)),
+                    }
+                }),
+            },
+            Request::Init { nonce: _ } => {
+                todo!("Err: init messages only valid on broadcast channel");
+            }
+            Request::Cbor { data } => ServiceState::Processing {
+                channel_id,
+                future: Box::pin(async move {
+                    match service.cbor(data).await {
+                        Ok(data) => (service, Ok(Response::Cbor { data })),
+                        Err(err) => (service, Err(err)),
+                    }
+                }),
+            },
+            Request::Cancel => todo!(),
+            Request::Lock { lock_time: _ } => todo!(),
+            Request::Wink => ServiceState::Processing {
+                channel_id,
+                future: Box::pin(async move {
+                    match service.wink().await {
+                        Ok(()) => (service, Ok(Response::Wink)),
+                        Err(err) => (service, Err(err)),
+                    }
+                }),
+            },
+        };
+
+        (Ok(()), next_state)
+    }
+
+    fn try_produce_output(
+        &mut self,
+        cx: &mut Context<'_>,
+        output: &mut VecDeque<Packet>,
+    ) -> Poll<()> {
+        replace_with_or_abort_and_return(self, |self_| self_.try_produce_output_move(cx, output))
+    }
+
+    fn try_produce_output_move(
+        self,
+        cx: &mut Context<'_>,
+        output: &mut VecDeque<Packet>,
+    ) -> (Poll<()>, Self) {
+        match self {
+            ServiceState::Processing {
+                channel_id,
+                mut future,
+            } => match future.as_mut().poll(cx) {
+                Poll::Ready((service, Ok(response))) => {
+                    output.append(
+                        &mut ResponseMessage {
+                            channel_id,
+                            response,
+                        }
+                        .to_packets(),
+                    );
+                    (Poll::Ready(()), ServiceState::Ready(service))
+                }
+                Poll::Pending => (
+                    Poll::Pending,
+                    ServiceState::Processing { channel_id, future },
+                ),
+                Poll::Ready((service, Err(e))) => {
+                    info!("Error processing request: {:?}", e);
+                    output.append(
+                        &mut ResponseMessage {
+                            channel_id,
+                            response: Response::Error {
+                                code: ErrorCode::Other,
+                            },
+                        }
+                        .to_packets(),
+                    );
+                    (Poll::Ready(()), ServiceState::Ready(service))
+                }
+            },
+            ServiceState::Ready(service) => (Poll::Ready(()), ServiceState::Ready(service)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+enum ChannelState {
+    Ready,
+    Receiving {
+        command: CommandType,
+        payload: Vec<u8>,
+        payload_len: u16,
+        next_sequence_number: u8,
+    },
+}
+
+impl<'a, Api, Error> Protocol<'a, Api, Error>
+where
+    Api: CtapHidApi<Error = Error> + 'a,
     Error: From<Api::Error> + From<io::Error> + 'static,
 {
-    pub fn new(service: Api) -> Protocol<Api, Error> {
+    pub fn new(service: Api) -> Self {
         Protocol {
+            service_state: ServiceState::Ready(service),
             channels: HashMap::new(),
             channel_allocator: Channels::new(),
-            service,
             output: VecDeque::new(),
             output_waker: None,
         }
     }
 }
 
-impl<S, E> Sink<Packet> for Protocol<S, E>
+impl<'a, Api, Error> Sink<Packet> for Protocol<'a, Api, Error>
 where
-    S: CtapHidApi + Clone + 'static,
-    E: From<S::Error> + 'static,
+    Api: CtapHidApi<Error = Error> + 'a,
+    Error: From<Api::Error> + From<io::Error> + fmt::Debug + 'static,
 {
-    type Error = E;
+    type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+        let this = self.project();
+        match this.service_state {
+            ServiceState::Ready(_) => Poll::Ready(Ok(())),
+            ServiceState::Processing { .. } => Poll::Pending, // todo register waker
+        }
     }
 
     fn start_send(self: Pin<&mut Self>, packet: Packet) -> Result<(), Self::Error> {
@@ -66,7 +232,11 @@ where
                     request,
                 }) => match request {
                     Request::Init { nonce } => {
-                        let version = this.service.version().unwrap_or_else(|_| todo!());
+                        let service = match this.service_state {
+                            ServiceState::Ready(service) => service,
+                            ServiceState::Processing { .. } => todo!("Error, not ready"),
+                        };
+                        let version = service.version().unwrap_or_else(|_| todo!());
 
                         let new_channel_id = this
                             .channel_allocator
@@ -93,9 +263,9 @@ where
                         this.output_waker.take().map(|waker| waker.wake());
                         Ok(())
                     }
-                    _ => Err(todo!("Bad packet for broadcast channel")),
+                    _ => todo!("Err: Bad packet for broadcast channel"),
                 },
-                Err(..) => Err(todo!("Bad init packet")),
+                Err(..) => todo!("Err: Bad init packet"),
             };
         }
 
@@ -109,58 +279,14 @@ where
                     data,
                     payload_len,
                 } => {
-                    if data.len() == payload_len.into() {
-                        match Request::decode(command, &data) {
-                            Ok(request) => match request {
-                                Request::Ping { data } => {
-                                    this.output.append(
-                                        &mut ResponseMessage {
-                                            channel_id,
-                                            response: Response::Ping { data },
-                                        }
-                                        .to_packets(),
-                                    );
-                                    this.output_waker.take().map(|waker| waker.wake());
-                                }
-                                Request::Msg { data } => {
-                                    let service = this.service.clone();
-                                    *state = ChannelState::Processing {
-                                        future: Box::pin(async move {
-                                            Ok(Response::Msg {
-                                                data: service.msg(&data).await?,
-                                            })
-                                        }),
-                                    };
-                                }
-                                Request::Init { nonce } => {
-                                    return Err(todo!(
-                                        "init messages only valid on broadcast channel"
-                                    ));
-                                }
-                                Request::Cbor { data } => {
-                                    let service = this.service.clone();
-                                    *state = ChannelState::Processing {
-                                        future: Box::pin(async move {
-                                            Ok(Response::Cbor {
-                                                data: service.cbor(&data).await?,
-                                            })
-                                        }),
-                                    };
-                                }
-                                Request::Cancel => todo!(),
-                                Request::Lock { lock_time } => todo!(),
-                                Request::Wink => {
-                                    let service = this.service.clone();
-                                    *state = ChannelState::Processing {
-                                        future: Box::pin(async move {
-                                            service.wink().await?;
-                                            Ok(Response::Wink)
-                                        }),
-                                    };
-                                }
-                            },
-                            Err(err) => todo!("Unhandled error {:?}", err),
-                        }
+                    if data.len() >= payload_len.into() {
+                        this.service_state.process_request(
+                            channel_id,
+                            command,
+                            &data[0..payload_len.into()],
+                            this.output,
+                            this.output_waker,
+                        )
                     } else {
                         *state = ChannelState::Receiving {
                             command,
@@ -168,15 +294,15 @@ where
                             payload_len,
                             next_sequence_number: 0,
                         };
-                    }
 
-                    Ok(())
+                        Ok(())
+                    }
                 }
-                Packet::Continuation { .. } => Err(todo!("Unexpected Continuation packet")),
+                Packet::Continuation { .. } => todo!("Err: Unexpected Continuation packet"),
             },
             ChannelState::Receiving {
                 command,
-                ref mut payload,
+                payload: ref mut payload_buffer,
                 payload_len,
                 ref mut next_sequence_number,
             } => match packet {
@@ -188,67 +314,22 @@ where
                     assert_eq!(sequence_number, *next_sequence_number);
                     *next_sequence_number += 1;
 
-                    payload.append(&mut data);
+                    payload_buffer.append(&mut data);
 
-                    if payload.len() == (*payload_len).into() {
-                        match Request::decode(*command, &payload) {
-                            Ok(request) => match request {
-                                Request::Ping { data } => {
-                                    this.output.append(
-                                        &mut ResponseMessage {
-                                            channel_id,
-                                            response: Response::Ping { data },
-                                        }
-                                        .to_packets(),
-                                    );
-                                    this.output_waker.take().map(|waker| waker.wake());
-                                }
-                                Request::Msg { data } => {
-                                    let service = this.service.clone();
-                                    *state = ChannelState::Processing {
-                                        future: Box::pin(async move {
-                                            Ok(Response::Msg {
-                                                data: service.msg(&data).await?,
-                                            })
-                                        }),
-                                    };
-                                }
-                                Request::Init { nonce } => {
-                                    return Err(todo!(
-                                        "init messages only valid on broadcast channel"
-                                    ));
-                                }
-                                Request::Cbor { data } => {
-                                    let service = this.service.clone();
-                                    *state = ChannelState::Processing {
-                                        future: Box::pin(async move {
-                                            Ok(Response::Cbor {
-                                                data: service.cbor(&data).await?,
-                                            })
-                                        }),
-                                    };
-                                }
-                                Request::Cancel => todo!(),
-                                Request::Lock { lock_time } => todo!(),
-                                Request::Wink => {
-                                    let service = this.service.clone();
-                                    *state = ChannelState::Processing {
-                                        future: Box::pin(async move {
-                                            service.wink().await?;
-                                            Ok(Response::Wink)
-                                        }),
-                                    };
-                                }
-                            },
-                            Err(err) => todo!("Unhandled error {:?}", err),
-                        }
+                    if payload_buffer.len() >= (*payload_len).into() {
+                        this.service_state.process_request(
+                            channel_id,
+                            *command,
+                            &(*payload_buffer)[0..(*payload_len).into()],
+                            this.output,
+                            this.output_waker,
+                        )
+                    } else {
+                        Ok(())
                     }
-
-                    Ok(())
                 }
-                Packet::Initialization { .. } => Err(todo!("Unexpected Initialization packet")),
+                Packet::Initialization { .. } => todo!("Err: Unexpected Initialization packet"),
             },
-            ChannelState::Processing { .. } => Err(todo!("Channel busy")),
         }
     }
 
@@ -263,7 +344,7 @@ where
     }
 }
 
-impl<S, E> Stream for Protocol<S, E>
+impl<'a, S, E> Stream for Protocol<'a, S, E>
 where
     E: fmt::Debug,
 {
@@ -273,39 +354,10 @@ where
         let this = self.project();
 
         if this.output.is_empty() {
-            // Try to produce some output by polling all channels
-            for (channel_id, state) in this.channels.iter_mut() {
-                match state {
-                    ChannelState::Processing { future } => match future.as_mut().poll(cx) {
-                        Poll::Ready(Ok(response)) => {
-                            this.output.append(
-                                &mut ResponseMessage {
-                                    channel_id: *channel_id,
-                                    response,
-                                }
-                                .to_packets(),
-                            );
-                            *state = ChannelState::Ready;
-                        }
-                        Poll::Pending => return Poll::Pending,
-                        Poll::Ready(Err(e)) => {
-                            info!("Error processing request: {:?}", e);
-                            this.output.append(
-                                &mut ResponseMessage {
-                                    channel_id: *channel_id,
-                                    response: Response::Error {
-                                        code: ErrorCode::Other,
-                                    },
-                                }
-                                .to_packets(),
-                            );
-                            *state = ChannelState::Ready;
-                        }
-                    },
-                    ChannelState::Ready { .. } => {}
-                    ChannelState::Receiving { .. } => {}
-                }
-            }
+            match this.service_state.try_produce_output(cx, this.output) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(()) => {}
+            };
         }
 
         if let Some(packet) = this.output.pop_front() {
@@ -316,25 +368,6 @@ where
             this.output_waker.replace(cx.waker().clone());
             Poll::Pending
         }
-    }
-}
-
-enum ChannelState<Error> {
-    Ready,
-    Receiving {
-        command: CommandType,
-        payload: Vec<u8>,
-        payload_len: u16,
-        next_sequence_number: u8,
-    },
-    Processing {
-        future: Pin<Box<dyn Future<Output = Result<Response, Error>>>>,
-    },
-}
-
-impl<E> Default for ChannelState<E> {
-    fn default() -> Self {
-        ChannelState::Ready
     }
 }
 
@@ -351,7 +384,7 @@ mod tests {
 
     struct FakeApi;
 
-    #[async_trait]
+    #[async_trait(?Send)]
     impl CtapHidApi for FakeApi {
         type Error = io::Error;
 
@@ -366,15 +399,15 @@ mod tests {
         async fn wink(&self) -> Result<(), Self::Error> {
             Ok(())
         }
-        async fn msg(&self, _msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
+        async fn msg(&self, _msg: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
             Ok(vec!['m' as u8, 's' as u8, 'g' as u8])
         }
-        async fn cbor(&self, _cbor: &[u8]) -> Result<Vec<u8>, Self::Error> {
+        async fn cbor(&self, _cbor: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
             Ok(vec!['c' as u8, 'b' as u8, 'o' as u8, 'r' as u8])
         }
     }
 
-    async fn init_channel(protocol: &mut Protocol<Arc<FakeApi>, io::Error>) -> ChannelId {
+    async fn init_channel<'a>(protocol: &mut Protocol<'a, Arc<FakeApi>, io::Error>) -> ChannelId {
         send_request(
             BROADCAST_CHANNEL_ID,
             Request::Init {
@@ -397,10 +430,10 @@ mod tests {
         ChannelId(1)
     }
 
-    async fn send_request(
+    async fn send_request<'a>(
         channel_id: ChannelId,
         request: Request,
-        protocol: &mut Protocol<Arc<FakeApi>, io::Error>,
+        protocol: &mut Protocol<'a, Arc<FakeApi>, io::Error>,
     ) {
         let request_message = RequestMessage {
             channel_id,
@@ -412,9 +445,9 @@ mod tests {
         }
     }
 
-    async fn next_response(
+    async fn next_response<'a>(
         expected_channel_id: ChannelId,
-        protocol: &mut Protocol<Arc<FakeApi>, io::Error>,
+        protocol: &mut Protocol<'a, Arc<FakeApi>, io::Error>,
     ) -> Response {
         let (command, mut payload, payload_len) = match protocol.next().await {
             Some(Packet::Initialization {

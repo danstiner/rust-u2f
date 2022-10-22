@@ -8,7 +8,7 @@ mod server;
 use lazy_static::lazy_static;
 use std::time::Duration;
 
-pub use api::Adapter;
+pub use api::SimpleAdapter;
 pub use packet::Packet;
 pub use server::Server;
 

@@ -1,22 +1,22 @@
-use std::{rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use fido2_authenticator_api::{AuthenticatorAPI, Command, Service};
+use fido2_authenticator_api::AuthenticatorAPI;
 use tokio::sync::Mutex;
 
 use crate::message::CapabilityFlags;
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait CtapHidApi {
     type Error;
 
     fn version(&self) -> Result<VersionInfo, Self::Error>;
     async fn wink(&self) -> Result<(), Self::Error>;
-    async fn msg(&self, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
-    async fn cbor(&self, cbor: &[u8]) -> Result<Vec<u8>, Self::Error>;
+    async fn msg(&self, msg: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
+    async fn cbor(&self, cbor: Vec<u8>) -> Result<Vec<u8>, Self::Error>;
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<Api: CtapHidApi + Send + Sync> CtapHidApi for Arc<Api> {
     type Error = Api::Error;
 
@@ -27,10 +27,10 @@ impl<Api: CtapHidApi + Send + Sync> CtapHidApi for Arc<Api> {
     async fn wink(&self) -> Result<(), Self::Error> {
         self.as_ref().wink().await
     }
-    async fn msg(&self, msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
+    async fn msg(&self, msg: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         self.as_ref().msg(msg).await
     }
-    async fn cbor(&self, cbor: &[u8]) -> Result<Vec<u8>, Self::Error> {
+    async fn cbor(&self, cbor: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         self.as_ref().cbor(cbor).await
     }
 }
@@ -43,58 +43,46 @@ pub struct VersionInfo {
 }
 
 // TODO convert errors to status codes per https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#error-responses
-pub struct Adapter<A>(Arc<Mutex<A>>);
+pub struct SimpleAdapter<A>(A);
 
-impl<A> Adapter<A>
+impl<A> SimpleAdapter<A>
 where
     A: AuthenticatorAPI,
 {
     pub fn new(api: A) -> Self {
-        Self(Arc::new(Mutex::new(api)))
+        Self(api)
     }
 }
 
-#[async_trait]
-impl<A> CtapHidApi for Adapter<A>
+#[async_trait(?Send)]
+impl<A> CtapHidApi for SimpleAdapter<A>
 where
-    A: AuthenticatorAPI + Send,
+    A: AuthenticatorAPI,
 {
     type Error = A::Error;
 
     fn version(&self) -> Result<VersionInfo, Self::Error> {
-        // TODO let info = self.0.blocking_lock().version();
-        let info = fido2_authenticator_api::VersionInfo {
-            version_major: 1,
-            version_minor: 0,
-            version_build: 0,
-            wink_supported: true,
-        };
-        let wink_capabitlity = if info.wink_supported {
+        let version = self.0.version();
+        let wink_capabitlity = if version.wink_supported {
             CapabilityFlags::WINK
         } else {
             CapabilityFlags::empty()
         };
         Ok(VersionInfo {
-            major: info.version_major,
-            minor: info.version_minor,
-            build: info.version_build,
+            major: version.version_major,
+            minor: version.version_minor,
+            build: version.version_build,
             capabilities: CapabilityFlags::CBOR | wink_capabitlity,
         })
     }
 
     async fn wink(&self) -> Result<(), Self::Error> {
+        self.0.wink().await
+    }
+    async fn msg(&self, _msg: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         todo!()
     }
-    async fn msg(&self, msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
+    async fn cbor(&self, _cbor: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         todo!()
-    }
-    async fn cbor(&self, cbor: &[u8]) -> Result<Vec<u8>, Self::Error> {
-        todo!()
-    }
-}
-
-impl<A> Clone for Adapter<A> {
-    fn clone(&self) -> Self {
-        Self(Arc::clone(&self.0))
     }
 }

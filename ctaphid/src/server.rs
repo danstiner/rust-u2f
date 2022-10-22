@@ -10,25 +10,24 @@ use futures::{ready, Future, Sink, Stream};
 use pin_project::pin_project;
 use tracing::{error, trace};
 
-use crate::{api::CtapHidApi, message::ResponseMessage, packet::Packet, protocol::Protocol};
+use crate::{api::CtapHidApi, packet::Packet, protocol::Protocol};
 
 #[pin_project]
-pub struct Server<T, Svc, E> {
-    protocol: Protocol<Svc, E>,
+pub struct Server<'a, T, Svc, E> {
+    protocol: Protocol<'a, Svc, E>,
     send_buffer: Option<VecDeque<Packet>>,
     #[pin]
     transport: T,
     _marker: PhantomData<E>,
 }
 
-impl<T, Svc, SinkE, StreamE, E> Server<T, Svc, E>
+impl<'a, T, Svc, SinkE, StreamE, E> Server<'a, T, Svc, E>
 where
     T: Sink<Packet, Error = SinkE> + Stream<Item = Result<Packet, StreamE>> + Unpin,
-    Svc: CtapHidApi<Error = E> + 'static,
-    Svc::Error: 'static,
-    E: From<SinkE> + From<StreamE> + From<Svc::Error> + From<io::Error> + 'static,
+    Svc: CtapHidApi<Error = E> + 'a,
+    E: From<SinkE> + From<StreamE> + From<Svc::Error> + From<io::Error> + fmt::Debug + 'static,
 {
-    pub fn new(transport: T, service: Svc) -> Server<T, Svc, E> {
+    pub fn new(transport: T, service: Svc) -> Server<'a, T, Svc, E> {
         Server {
             protocol: Protocol::new(service),
             transport,
@@ -47,11 +46,10 @@ where
     }
 }
 
-impl<T, Svc, SinkE, StreamE, E> Future for Server<T, Svc, E>
+impl<'a, T, Svc, SinkE, StreamE, E> Future for Server<'a, T, Svc, E>
 where
     T: Sink<Packet, Error = SinkE> + Stream<Item = Result<Packet, StreamE>> + Unpin,
-    Svc: CtapHidApi<Error = E> + Clone + 'static,
-    Svc::Error: 'static,
+    Svc: CtapHidApi<Error = E> + 'a,
     E: From<SinkE> + From<StreamE> + From<Svc::Error> + From<io::Error> + fmt::Debug + 'static,
 {
     type Output = Result<(), E>;

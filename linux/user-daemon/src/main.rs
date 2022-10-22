@@ -32,13 +32,13 @@ use fido2_authenticator_service::Authenticator;
 use futures::{ready, Sink, SinkExt, Stream, StreamExt};
 use pin_project::pin_project;
 use thiserror::Error;
-use tokio::net::{unix::UCred, UnixStream};
+use tokio::net::UnixStream;
 use tokio_serde::formats::Bincode;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 
-use ctaphid::{Adapter, Packet, Server, REPORT_TYPE_INPUT};
+use ctaphid::{Packet, Server, SimpleAdapter, REPORT_TYPE_INPUT};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
@@ -123,7 +123,7 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let crypto = OpenSSLCryptoOperations::new(attestation);
     let secrets = secret_store::build(&config)?;
 
-    let authenticator = Adapter::new(Authenticator::new(secrets, crypto, user_presence));
+    let authenticator = SimpleAdapter::new(Authenticator::new(secrets, crypto, user_presence));
 
     let stream = UnixStream::connect(system_daemon_socket)
         .await

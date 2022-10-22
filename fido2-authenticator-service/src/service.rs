@@ -3,6 +3,7 @@ use std::result::Result;
 use std::task::Context;
 use std::task::Poll;
 
+use async_trait::async_trait;
 use fido2_authenticator_api::Aaguid;
 use fido2_authenticator_api::AuthenticatorAPI;
 use fido2_authenticator_api::COSEAlgorithmIdentifier;
@@ -78,6 +79,7 @@ where
     }
 }
 
+#[async_trait(?Send)]
 impl<Secrets, Crypto, Presence> AuthenticatorAPI for Authenticator<Secrets, Crypto, Presence>
 where
     Secrets: SecretStore + 'static,
@@ -244,6 +246,10 @@ where
 
     fn get_info(&self) -> Result<GetInfoResponse, Error> {
         Ok(self.get_info_internal())
+    }
+
+    async fn wink(&self) -> Result<(), Self::Error> {
+        todo!()
     }
 }
 

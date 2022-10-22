@@ -2,6 +2,7 @@ mod ctap2;
 mod status_code;
 mod webauthn;
 
+use async_trait::async_trait;
 use minicbor::{Decode, Encode};
 use ring::digest;
 use std::fmt::Debug;
@@ -14,6 +15,7 @@ pub use tower::Service;
 pub use webauthn::*;
 
 // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
+#[async_trait(?Send)]
 pub trait AuthenticatorAPI {
     type Error;
 
@@ -53,6 +55,8 @@ pub trait AuthenticatorAPI {
     // ) -> Result<ClientPinResponse, Error>;
 
     // fn reset(&self) -> Result<ResetResponse, Error>;
+
+    async fn wink(&self) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug)]
@@ -88,7 +92,7 @@ impl<C> Encode<C> for Sha256 {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
+        _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.bytes(&self.0)?.ok()
     }
