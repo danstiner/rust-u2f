@@ -1,6 +1,11 @@
 use bitflags::bitflags;
+use byteorder::ReadBytesExt;
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, time::Duration};
+use std::{
+    collections::VecDeque,
+    io::{Cursor, Read},
+    time::Duration,
+};
 use thiserror::Error;
 
 use crate::{channel::ChannelId, packet::Packet};
@@ -200,7 +205,7 @@ impl Request {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ResponseMessage {
     pub channel_id: ChannelId,
     pub response: Response,
@@ -245,7 +250,21 @@ impl Response {
             CommandType::Ping => Ok(Response::Ping {
                 data: data.to_vec(),
             }),
-            CommandType::Init => unimplemented!(),
+            CommandType::Init => {
+                assert_eq!(data.len(), 17);
+                let mut cursor = Cursor::new(data);
+                let mut nonce = [0u8; 8];
+                cursor.read_exact(&mut nonce).unwrap();
+                Ok(Response::Init {
+                    nonce,
+                    new_channel_id: ChannelId::read(&mut cursor).unwrap(),
+                    ctaphid_protocol_version: cursor.read_u8().unwrap(),
+                    major_device_version_number: cursor.read_u8().unwrap(),
+                    minor_device_version_number: cursor.read_u8().unwrap(),
+                    build_device_version_number: cursor.read_u8().unwrap(),
+                    capabilities: CapabilityFlags::from_bits_truncate(cursor.read_u8().unwrap()),
+                })
+            }
             CommandType::Cbor => Ok(Response::Cbor {
                 data: data.to_vec(),
             }),
@@ -274,6 +293,56 @@ pub enum KeepAliveStatus {
 }
 
 impl ResponseMessage {
+    pub fn decode(packets: &[Packet]) -> Result<Self, ResponseMessageDecodeError> {
+        if packets.is_empty() {
+            return Err(ResponseMessageDecodeError::Incomplete);
+        }
+
+        let mut payload = Vec::new();
+        let mut expected_sequence_number = 0;
+
+        let (channel_id, command, payload_len) = match &packets[0] {
+            Packet::Initialization {
+                channel_id,
+                command,
+                data,
+                payload_len,
+            } => {
+                payload.extend_from_slice(&data);
+                (*channel_id, *command, *payload_len as usize)
+            }
+            Packet::Continuation { .. } => {
+                return Err(ResponseMessageDecodeError::InvalidFirstPacket)
+            }
+        };
+
+        for packet in packets[1..].iter() {
+            match packet {
+                Packet::Initialization { .. } => {
+                    return Err(ResponseMessageDecodeError::InvalidPacketOrder);
+                }
+                Packet::Continuation {
+                    channel_id,
+                    data,
+                    sequence_number,
+                } => {
+                    assert_eq!(*channel_id, packets[0].channel_id());
+                    assert_eq!(*sequence_number, expected_sequence_number);
+                    expected_sequence_number += 1;
+
+                    payload.extend_from_slice(&data);
+                }
+            }
+        }
+
+        let response = Response::decode(command, &payload[0..payload_len])?;
+
+        Ok(Self {
+            channel_id,
+            response,
+        })
+    }
+
     pub fn to_packets(&self) -> VecDeque<Packet> {
         let channel_id = self.channel_id;
         match &self.response {
@@ -366,6 +435,21 @@ pub enum RequestDecodeError {
 pub enum ResponseDecodeError {
     #[error("Invalid command: {0:?}")]
     InvalidCommand(CommandType),
+}
+
+#[derive(Debug, Error, PartialEq)]
+pub enum ResponseMessageDecodeError {
+    #[error("Incomplete message")]
+    Incomplete,
+
+    #[error("InvalidFirstPacket")]
+    InvalidFirstPacket,
+
+    #[error("InvalidPacketOrder")]
+    InvalidPacketOrder,
+
+    #[error("Response decode error: {0:?}")]
+    ResponseDecodeError(#[from] ResponseDecodeError),
 }
 
 bitflags! {

@@ -1,4 +1,4 @@
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize};
 use std::io;
 
@@ -23,6 +23,10 @@ impl ChannelId {
                 Some(ChannelId(id))
             }
         })
+    }
+
+    pub fn read<R: ReadBytesExt>(read: &mut R) -> io::Result<ChannelId> {
+        Ok(ChannelId::new(read.read_u32::<BigEndian>()?))
     }
 
     pub fn write<W: WriteBytesExt>(&self, write: &mut W) -> io::Result<()> {
