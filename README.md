@@ -84,7 +84,7 @@ It is broken down into the following crates:
 - [system-daemon](linux/system-daemon) is the binary itself
 - [uhid-tokio](linux/uhid-tokio) provides a [tokio](https://tokio.rs/)-based async interface to the [Linux UHID driver](https://www.kernel.org/doc/Documentation/hid/uhid.txt). It is published to [crates.io](https://crates.io/crates/tokio-linux-uhid) for use independent from this project
 - [uhid-sys](linux/uhid-sys) provides FFI bindings to `<linux/uhid.h>` used by *uhid-tokio*. It is also published to [crates.io](https://crates.io/crates/uhid-sys)
-- [ctaphid](ctaphid) provides the HID report descriptor that says the virtual HID is an authenticator
+- [ctap-hid](ctap-hid) provides the HID report descriptor that says the virtual HID is an authenticator
 
 ### user-daemon
 
@@ -92,8 +92,8 @@ This program runs in the user's session. It connects to the system-daemon's sock
 
 It is broken down into the following crates:
 - [user-daemon](linux/user-daemon) is the binary itself
-- [ctaphid](ctaphid) implements the client to authenticator protocol as defined by the FIDO2 specification. As USB authenticators can only receive data as fixed-size HID reports, this protocol lets clients send large messages by packetizing them into a series of HID reports. It also handles potentially concurrent access from multiple clients. So to emulate a USB/HID authenticator, this crate handles decoding the reports back to larger messages, which are themselves encoded authentication requests/responses using either CBOR or a legacy U2F encoding
-- [fido2-authenticator-api](fido2-authenticator-api) defines the API for authentication requests and responses, following the FIDO2 specification. *ctaphid* depends on this API and *fido2-authenticator-service* implements this API. It also handles serialization of CBOR messages and the legacy U2F message encoding
+- [ctap-hid](ctap-hid) implements the client to authenticator protocol as defined by the FIDO2 specification. As USB authenticators can only receive data as fixed-size HID reports, this protocol lets clients send large messages by packetizing them into a series of HID reports. It also handles potentially concurrent access from multiple clients. So to emulate a USB/HID authenticator, this crate handles decoding the reports back to larger messages, which are themselves encoded authentication requests/responses using either CBOR or a legacy U2F encoding
+- [fido2-authenticator-api](fido2-authenticator-api) defines the API for authentication requests and responses, following the FIDO2 specification. *ctap-hid* depends on this API and *fido2-authenticator-service* implements this API. It also handles serialization of CBOR messages and the legacy U2F message encoding
 - [fido2-authenticator-service](fido2-authenticator-service) implements the actual authentication operations. It does not directly implement secret storage or user presence verification, specific implementations of these are injected as dependencies when the `user-daemon` intializes an authenticator instance
 
 ### Diagram

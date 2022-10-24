@@ -2,7 +2,7 @@ extern crate alloc;
 extern crate bincode;
 extern crate clap;
 extern crate core;
-extern crate ctaphid;
+extern crate ctap_hid;
 extern crate directories;
 extern crate dirs;
 extern crate futures;
@@ -38,7 +38,7 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::prelude::*;
 
-use ctaphid::{Packet, Server, SimpleAdapter, REPORT_TYPE_INPUT};
+use ctap_hid::{Packet, Server, SimpleAdapter, REPORT_TYPE_INPUT};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };

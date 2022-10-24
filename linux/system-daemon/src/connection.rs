@@ -1,6 +1,6 @@
 use std::io;
 
-use ctaphid::{REPORT_DESCRIPTOR, REPORT_TYPE_OUTPUT};
+use ctap_hid::{REPORT_DESCRIPTOR, REPORT_TYPE_OUTPUT};
 use futures::{SinkExt, StreamExt};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,

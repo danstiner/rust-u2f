@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "ctaphid",
+    "ctap-hid",
     "fido2-authenticator-api",
     "fido2-authenticator-service",
     "linux/uhid-sys",

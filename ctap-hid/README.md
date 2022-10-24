@@ -1,4 +1,4 @@
-# ctaphid
+# ctap-hid
 
 The Client to Authenticator (CTAP) Protocol allows the [Authenticator API](../fido2-authenticator-api/) to be accessed over a USB transport using the HID (Human Interface Device) protocol. The highest level of the protocol is a transaction, a pair of request and response messages. Messages are in turn fragmented into individual packets which can be encoded as HID reports and sent over the USB transport.
 

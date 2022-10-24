@@ -490,7 +490,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctaphid"
+name = "ctap-hid"
 version = "0.4.2"
 dependencies = [
  "async-trait",
@@ -2105,7 +2105,7 @@ dependencies = [
  "bincode",
  "bytes",
  "clap",
- "ctaphid",
+ "ctap-hid",
  "futures 0.3.21",
  "hostname",
  "libc",
@@ -2135,7 +2135,7 @@ dependencies = [
  "base64",
  "bincode",
  "clap",
- "ctaphid",
+ "ctap-hid",
  "directories",
  "dirs",
  "fido2-authenticator-api",

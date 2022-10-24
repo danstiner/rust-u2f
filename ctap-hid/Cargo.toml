@@ -1,6 +1,6 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
-name = "ctaphid"
+name = "ctap-hid"
 version = "0.4.2"
 edition = "2021"
 
