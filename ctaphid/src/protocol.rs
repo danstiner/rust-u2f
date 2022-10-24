@@ -9,7 +9,6 @@ use futures::Future;
 use futures::Sink;
 use futures::Stream;
 use pin_project::pin_project;
-use replace_with::replace_with_or_abort_and_return;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt;
@@ -36,6 +35,8 @@ enum ServiceState<'a, Service, Error> {
         channel_id: ChannelId,
         future: Pin<Box<dyn Future<Output = (Service, Result<Response, Error>)> + 'a>>,
     },
+    /// Invalid state, used if a panic occurs while transitioning between states
+    Invalid,
 }
 
 impl<'a, Service, Error> ServiceState<'a, Service, Error>
@@ -59,9 +60,14 @@ where
             Err(_err) => todo!("return (self, Err(err.into()))"),
         };
 
-        replace_with_or_abort_and_return(self, |self_| {
-            self_.process_request_move(channel_id, request, output, output_waker)
-        })
+        let this = std::mem::replace(self, ServiceState::Invalid);
+
+        let (result, new_state) =
+            this.process_request_move(channel_id, request, output, output_waker);
+
+        *self = new_state;
+
+        result
     }
 
     fn process_request_move(
@@ -134,7 +140,10 @@ where
         cx: &mut Context<'_>,
         output: &mut VecDeque<Packet>,
     ) -> Poll<()> {
-        replace_with_or_abort_and_return(self, |self_| self_.try_produce_output_move(cx, output))
+        let this = std::mem::replace(self, ServiceState::Invalid);
+        let (result, new_state) = this.try_produce_output_move(cx, output);
+        *self = new_state;
+        result
     }
 
     fn try_produce_output_move(
@@ -219,6 +228,7 @@ where
         match this.service_state {
             ServiceState::Ready(_) => Poll::Ready(Ok(())),
             ServiceState::Processing { .. } => Poll::Pending, // todo register waker
+            ServiceState::Invalid => unreachable!(),
         }
     }
 
@@ -238,6 +248,7 @@ where
                         let service = match this.service_state {
                             ServiceState::Ready(service) => service,
                             ServiceState::Processing { .. } => todo!("Error, not ready"),
+                            ServiceState::Invalid => unreachable!(),
                         };
                         let version = service.version().unwrap_or_else(|_| todo!());
 
