@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fido2_authenticator_api::AuthenticatorAPI;
+use tracing::trace;
 
-use crate::CapabilityFlags;
+use crate::{u2f, CapabilityFlags};
 
 #[async_trait(?Send)]
 pub trait CtapHidApi {
@@ -71,17 +72,44 @@ where
             major: version.version_major,
             minor: version.version_minor,
             build: version.version_build,
-            capabilities: CapabilityFlags::CBOR | wink_capabitlity,
+            capabilities: wink_capabitlity,
         })
     }
 
     async fn wink(&self) -> Result<(), Self::Error> {
         self.0.wink().await
     }
-    async fn msg(&self, _msg: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-        todo!()
+    async fn msg(&self, msg: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
+        let request = u2f::Request::decode(&msg).unwrap();
+        trace!("msg: Request: {:?}", request);
+
+        match request {
+            u2f::Request::Register {
+                application,
+                challenge,
+            } => todo!(),
+            u2f::Request::Authenticate {
+                application,
+                challenge,
+                control_code,
+                key_handle,
+            } => todo!(),
+            u2f::Request::GetVersion => {
+                let version = self.0.version();
+                Ok(u2f::Response::Version {
+                    u2f_version_string: String::from("U2F_V2"),
+                    device_version_major: version.version_major,
+                    device_version_minor: version.version_minor,
+                    device_version_build: version.version_build,
+                }
+                .into_bytes())
+            }
+            u2f::Request::Wink => todo!(),
+        }
     }
-    async fn cbor(&self, _cbor: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
+
+    async fn cbor(&self, cbor: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
+        trace!("cbor: {:?}", cbor);
         todo!()
     }
 }
