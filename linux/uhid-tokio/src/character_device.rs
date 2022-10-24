@@ -84,8 +84,9 @@ impl futures::AsyncRead for CharacterDevice {
                         let mut read = vec![0u8; buf.len()];
                         *this.state = State::Reading(task::spawn_blocking(move || {
                             trace!("CharacterDevice::poll_read: Blocking read start");
-                            (&*file).read(&mut read)?;
-                            trace!("CharacterDevice::poll_read: Blocking read end");
+                            let size = (&*file).read(&mut read)?;
+                            trace!("CharacterDevice::poll_read: Blocking read end: {}", size);
+                            read.resize(size, 0);
                             Ok(read)
                         }));
                     }
