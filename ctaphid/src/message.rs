@@ -3,7 +3,7 @@ use byteorder::ReadBytesExt;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,
-    io::{Cursor, Read},
+    io::{Cursor, Read, Write},
     time::Duration,
 };
 use thiserror::Error;
@@ -358,7 +358,7 @@ impl ResponseMessage {
                 capabilities,
             } => {
                 let mut data = Vec::with_capacity(17);
-                data.extend_from_slice(nonce);
+                data.write_all(nonce).unwrap();
                 new_channel_id.write(&mut data).unwrap();
                 data.push(*ctaphid_protocol_version);
                 data.push(*major_device_version_number);
