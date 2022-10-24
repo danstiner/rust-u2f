@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fido2_authenticator_api::AuthenticatorAPI;
-use tokio::sync::Mutex;
 
-use crate::message::CapabilityFlags;
+use crate::CapabilityFlags;
 
 #[async_trait(?Send)]
 pub trait CtapHidApi {

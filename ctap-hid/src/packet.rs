@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use std::io::{Cursor, Read};
 
 use crate::channel::ChannelId;
-use crate::message::CommandType;
+use crate::CommandType;
 
 pub(crate) const HID_REPORT_LEN: usize = 64;
 const INITIAL_PACKET_DATA_LEN: usize = HID_REPORT_LEN - 7;

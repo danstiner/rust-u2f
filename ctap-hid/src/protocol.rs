@@ -2,8 +2,13 @@ use crate::api::CtapHidApi;
 use crate::channel::ChannelId;
 use crate::channel::Channels;
 use crate::channel::BROADCAST_CHANNEL_ID;
-use crate::message::*;
 use crate::packet::*;
+use crate::request::Request;
+use crate::request::RequestMessage;
+use crate::response::Response;
+use crate::response::ResponseMessage;
+use crate::CommandType;
+use crate::ErrorCode;
 use crate::CTAPHID_PROTOCOL_VERSION;
 use futures::Future;
 use futures::Sink;
@@ -400,7 +405,7 @@ mod tests {
     use async_trait::async_trait;
     use futures::{SinkExt, StreamExt};
 
-    use crate::{api::VersionInfo, channel::BROADCAST_CHANNEL_ID};
+    use crate::{api::VersionInfo, channel::BROADCAST_CHANNEL_ID, CapabilityFlags, CommandType};
 
     use super::*;
 

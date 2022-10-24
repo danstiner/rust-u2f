@@ -155,7 +155,9 @@ mod integration_tests {
     use crate::{
         api::VersionInfo,
         channel::{ChannelId, BROADCAST_CHANNEL_ID},
-        message::{CapabilityFlags, Request, RequestMessage, Response, ResponseMessage},
+        request::{Request, RequestMessage},
+        response::{Response, ResponseMessage},
+        CapabilityFlags,
     };
 
     use super::*;
