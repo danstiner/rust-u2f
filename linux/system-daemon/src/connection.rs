@@ -113,7 +113,7 @@ async fn pipe_reports(
                 SocketInput::Report(report) => {
                     trace!(len = report.data().len(), "Piping report from userspace: type:{}, len:{}, data:{}", report.type_(), report.data().len(), base64::encode(&report.data()[..]));
                     uhid_device.send(InputEvent::Input {
-                        data: report.into_raw_bytes(),
+                        data: report.data().to_vec(),
                     }).await
                 }
                 SocketInput::CreateDeviceRequest(_) => {
