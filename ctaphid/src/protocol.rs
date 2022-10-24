@@ -251,7 +251,7 @@ where
                         let response = Response::Init {
                             nonce,
                             new_channel_id,
-                            ctaphid_protocol_version: 1,
+                            ctaphid_protocol_version: CTAPHID_PROTOCOL_VERSION,
                             major_device_version_number: version.major,
                             minor_device_version_number: version.minor,
                             build_device_version_number: version.build,
