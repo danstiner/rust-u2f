@@ -2108,6 +2108,7 @@ dependencies = [
 name = "softu2f-system-daemon"
 version = "0.4.2"
 dependencies = [
+ "base64",
  "bincode",
  "bytes",
  "clap",

@@ -161,6 +161,7 @@ impl InputEvent {
                 country,
                 data,
             } => {
+                trace!("InputEvent::into_uhid_event Create data.len:{}", data.len());
                 event.type_ = sys::uhid_event_type_UHID_CREATE2 as u32;
                 unsafe {
                     let payload = &mut event.u.create2;
@@ -179,6 +180,7 @@ impl InputEvent {
                 event.type_ = sys::uhid_event_type_UHID_DESTROY as u32;
             }
             InputEvent::Input { data } => {
+                trace!("InputEvent::into_uhid_event Input data.len:{}", data.len());
                 event.type_ = sys::uhid_event_type_UHID_INPUT2 as u32;
                 unsafe {
                     let payload = &mut event.u.input2;
@@ -355,6 +357,8 @@ impl Encoder<InputEvent> for Codec {
         dst.extend_from_slice(encode_event(&event));
 
         debug_assert_eq!(dst.len(), UHID_EVENT_SIZE);
+
+        trace!("Codec::encode, len:{}", dst.len());
 
         Ok(())
     }

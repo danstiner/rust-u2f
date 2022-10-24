@@ -35,7 +35,7 @@ use thiserror::Error;
 use tokio::net::UnixStream;
 use tokio_serde::formats::Bincode;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::prelude::*;
 
 use ctaphid::{Packet, Server, SimpleAdapter, REPORT_TYPE_INPUT};
@@ -132,7 +132,7 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
             socket_path: system_daemon_socket.to_owned(),
         })?;
 
-    let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
+    let length_delimited = Framed::with_capacity(stream, LengthDelimitedCodec::new(), 100);
     let mut system_socket: SocketTransport =
         tokio_serde::Framed::new(length_delimited, Bincode::default());
 
@@ -184,6 +184,7 @@ impl Proxy for SocketToHid {
         &mut self,
         input: Self::StreamInput,
     ) -> Result<Option<Self::StreamOutput>, Self::Error> {
+        trace!("SocketToHid::try_map_stream");
         match input {
             Ok(SocketOutput::Report(report)) => Packet::from_bytes(report.data())
                 .map(Option::Some)
@@ -200,6 +201,10 @@ impl Proxy for SocketToHid {
         &mut self,
         input: Self::SinkInput,
     ) -> Result<Option<Self::SinkOutput>, Self::Error> {
+        trace!(
+            "SocketToHid::try_map_sink: data:{}",
+            base64::encode(input.to_bytes())
+        );
         Ok(Some(SocketInput::Report(Report::new(
             REPORT_TYPE_INPUT,
             &input.to_bytes(),

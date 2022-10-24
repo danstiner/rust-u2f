@@ -60,10 +60,15 @@ impl futures::AsyncRead for CharacterDevice {
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
         let this = self.project();
+        trace!("CharacterDevice::poll_read: begin, buf.len:{}", buf.len());
         loop {
             match this.state {
                 State::Ready(ref mut prev_read) => {
                     if prev_read.len() > 0 {
+                        trace!(
+                            "CharacterDevice::poll_read: Leftover bytes from previous read: {}",
+                            prev_read.len()
+                        );
                         // Return leftover bytes from a previous read
                         let n = cmp::min(prev_read.len(), buf.len());
                         let mut remaining = prev_read.split_off(n);
@@ -86,9 +91,10 @@ impl futures::AsyncRead for CharacterDevice {
                     }
                 }
                 State::Reading(ref mut handle) => {
+                    trace!("CharacterDevice::poll_read: Check if read is complete");
                     // Check if read is complete
                     let mut read = ready!(handle.poll_unpin(cx))??;
-                    trace!("CharacterDevice::poll_read: Read complete");
+                    trace!("CharacterDevice::poll_read: Read complete: {}", read.len());
 
                     // If it is, copy as many bytes as fit into buf and split off the rest
                     let n = cmp::min(read.len(), buf.len());
@@ -115,7 +121,9 @@ impl futures::AsyncWrite for CharacterDevice {
         trace!("CharacterDevice::write; buf.len:{}", buf.len());
         // TODO: Async writes
         let file = Arc::clone(&mut self.project().file);
-        Poll::Ready((&*file).write(buf))
+        let res = (&*file).write(buf);
+        trace!("CharacterDevice::write; complete");
+        Poll::Ready(res)
     }
 
     fn poll_write_vectored(
@@ -131,6 +139,7 @@ impl futures::AsyncWrite for CharacterDevice {
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         let file = Arc::clone(self.project().file);
         // TODO: Async flush
+        trace!("CharacterDevice::flush");
         Poll::Ready((&*file).flush())
     }
 

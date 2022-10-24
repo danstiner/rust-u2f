@@ -111,7 +111,7 @@ async fn pipe_reports(
         (tokio::select! {
             Some(input) = user_socket.next() => match input? {
                 SocketInput::Report(report) => {
-                    trace!(len = report.data().len(), "Piping report from userspace");
+                    trace!(len = report.data().len(), "Piping report from userspace: type:{}, len:{}, data:{}", report.type_(), report.data().len(), base64::encode(&report.data()[..]));
                     uhid_device.send(InputEvent::Input {
                         data: report.into_raw_bytes(),
                     }).await

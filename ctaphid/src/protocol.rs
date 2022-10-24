@@ -19,6 +19,7 @@ use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 use tracing::info;
+use tracing::trace;
 
 #[pin_project]
 pub struct Protocol<'a, Api, Error> {
@@ -224,6 +225,8 @@ where
     fn start_send(self: Pin<&mut Self>, packet: Packet) -> Result<(), Self::Error> {
         let this = self.project();
 
+        trace!("start_send packet:{:?}", packet);
+
         if packet.channel_id() == BROADCAST_CHANNEL_ID {
             // Only initialization messages are valid on the broadcast channel
             return match RequestMessage::decode(&[packet]) {
@@ -245,18 +248,26 @@ where
 
                         this.channels.insert(new_channel_id, ChannelState::Ready);
 
+                        let response = Response::Init {
+                            nonce,
+                            new_channel_id,
+                            ctaphid_protocol_version: 1,
+                            major_device_version_number: version.major,
+                            minor_device_version_number: version.minor,
+                            build_device_version_number: version.build,
+                            capabilities: version.capabilities,
+                        };
+
+                        trace!(
+                            "start_send on broadcast_channel request:{:?} response:{:?}",
+                            request,
+                            response
+                        );
+
                         this.output.append(
                             &mut ResponseMessage {
                                 channel_id,
-                                response: Response::Init {
-                                    nonce,
-                                    new_channel_id,
-                                    ctaphid_protocol_version: CTAPHID_PROTOCOL_VERSION,
-                                    major_device_version_number: version.major,
-                                    minor_device_version_number: version.minor,
-                                    build_device_version_number: version.build,
-                                    capabilities: version.capabilities,
-                                },
+                                response,
                             }
                             .to_packets(),
                         );
