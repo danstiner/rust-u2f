@@ -74,6 +74,16 @@ pub struct VersionInfo {
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Aaguid(pub uuid::Uuid);
 
+impl<C> Encode<C> for Aaguid {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.bytes(self.0.as_bytes())?.ok()
+    }
+}
+
 #[derive(Debug)]
 pub struct Sha256([u8; 32]);
 

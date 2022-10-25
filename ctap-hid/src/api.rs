@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fido2_authenticator_api::AuthenticatorAPI;
+use fido2_authenticator_api::{AuthenticatorAPI, Command, Response};
 use tracing::trace;
 
 use crate::{u2f, CapabilityFlags};
@@ -110,6 +110,15 @@ where
 
     async fn cbor(&self, cbor: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
         trace!("cbor: {:?}", cbor);
-        todo!()
+        let command = Command::decode_cbor(&cbor).unwrap();
+        trace!("command: {:?}", command);
+        let response = match command {
+            Command::GetInfo => {
+                let info = self.0.get_info()?;
+                Response::GetInfo(info)
+            }
+        };
+        trace!("response: {:?}", response);
+        Ok(response.to_cbor())
     }
 }

@@ -6,7 +6,7 @@ use crate::webauthn::RelyingPartyIdentifier;
 use crate::Aaguid;
 use crate::Sha256;
 
-use minicbor_derive::Encode;
+use minicbor_derive::{Decode, Encode};
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -45,24 +45,52 @@ where
 }
 
 /// Messages from the host to authenticator, called "commands" in the CTAP2 protocol
-#[derive(Debug)]
-// #[cbor(map)]
+#[derive(Debug, Encode, Decode, PartialEq)]
+#[cbor(index_only)]
 pub enum Command {
     // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorMakeCredential
     // #[n(0x01)]
-    MakeCredential(MakeCredentialCommand),
+    // MakeCredential {
+    //     #[n(0x01)]
+    //     client_data_hash: Sha256,
+    //     #[n(0x02)]
+    //     rp: PublicKeyCredentialRpEntity,
+    //     #[n(0x03)]
+    //     user: PublicKeyCredentialUserEntity,
+    //     #[n(0x04)]
+    //     pub_key_cred_params: Array<PublicKeyCredentialParameters>,
+    //     #[n(0x05)]
+    //     exclude_list: Option<Array<PublicKeyCredentialDescriptor>>,
+    //     #[n(0x06)]
+    //     extensions: Option<Extensions>,
+    //     #[n(0x07)]
+    //     options: Option<Options>,
+    //     #[n(0x08)]
+    //     pin_uv_auth_param: Option<PinUvAuthParam>,
+    //     #[n(0x09)]
+    //     pin_uv_auth_protocol: Option<PinUvAuthProtocol>,
+    //     #[n(0x0a)]
+    //     enterprise_attestation: Option<u8>,
+    // },
     // #[n(0x02)]
-    GetAssertion {
-        // #[n(0x01)]
-        rp_id: RelyingPartyIdentifier,
-        // #[n(0x02)]
-        client_data_hash: Sha256,
-    },
-    // #[n(0x04)]
+    // GetAssertion {
+    //     #[n(0x01)]
+    //     rp_id: RelyingPartyIdentifier,
+    //     #[n(0x02)]
+    //     client_data_hash: Sha256,
+    // },
+    #[n(0x04)]
     GetInfo,
 }
 
-#[derive(Debug, Encode)]
+impl Command {
+    pub fn decode_cbor(data: &[u8]) -> Result<Self, minicbor::decode::Error> {
+        minicbor::decode(data)
+    }
+}
+
+// TODO dedupe with MakeCredential command type
+#[derive(Debug, Encode, Decode)]
 pub struct MakeCredentialCommand {
     #[n(0x01)]
     pub client_data_hash: Sha256,
@@ -86,28 +114,52 @@ pub struct MakeCredentialCommand {
     pub enterprise_attestation: Option<u8>,
 }
 
-#[derive(Debug, Encode)]
+#[derive(Debug, Encode, Decode, PartialEq)]
 pub struct Extensions;
 
-#[derive(Debug, Encode)]
+#[derive(Debug, Encode, Decode, PartialEq)]
 pub struct Options;
 
-#[derive(Debug, Encode)]
+#[derive(Debug, Encode, Decode, PartialEq)]
 pub struct PinUvAuthParam;
 
-#[derive(Debug, Encode)]
+#[derive(Debug, Encode, Decode, PartialEq)]
 pub struct PinUvAuthProtocol;
 
 /// Messages from authenticator to the host, called a "response" in the CTAP2 protocol
 #[derive(Debug)]
 pub enum Response {
-    MakeCredential(MakeCredentialResponse),
-    GetAssertion {
-        credential: PublicKeyCredentialDescriptor,
-        auth_data: Vec<u8>,
-        signature: Vec<u8>,
-    },
+    // MakeCredential(MakeCredentialResponse),
+    // GetAssertion {
+    //     credential: PublicKeyCredentialDescriptor,
+    //     auth_data: Vec<u8>,
+    //     signature: Vec<u8>,
+    // },
     GetInfo(GetInfoResponse),
+}
+
+impl<C> minicbor::Encode<C> for Response {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        match self {
+            Response::GetInfo(info) => {
+                e.i8(4)?;
+                e.encode(info)?
+            }
+        };
+        Ok(())
+    }
+}
+
+impl Response {
+    pub fn to_cbor(&self) -> Vec<u8> {
+        let mut buffer = [0u8; 256]; // TODO better sized allocation
+        minicbor::encode(self, buffer.as_mut()).unwrap();
+        buffer.to_vec()
+    }
 }
 
 #[derive(Debug)]
@@ -120,30 +172,62 @@ pub struct MakeCredentialResponse {
     pub att_stmt: AttestationStatement,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Encode)]
+#[cbor(map)]
 pub struct GetInfoResponse {
+    #[n(0x01)]
     pub versions: Vec<String>,
+    #[n(0x02)]
     pub extensions: Option<Vec<String>>,
+    #[n(0x03)]
     pub aaguid: Aaguid,
+    #[n(0x04)]
     pub options: Option<HashMap<String, u64>>,
+    #[n(0x05)]
     pub max_msg_size: Option<u64>,
+    #[n(0x06)]
     pub pin_uv_auth_protocols: Option<Vec<u64>>,
+    #[n(0x07)]
     pub max_credential_count_in_list: Option<u64>,
+    #[n(0x08)]
     pub max_credential_id_length: Option<u64>,
+    #[n(0x09)]
     pub transports: Option<Vec<String>>,
+    #[n(0x0A)]
     pub algorithms: Option<Vec<PublicKeyCredentialParameters>>,
+    #[n(0x0B)]
     pub max_serialized_large_blob_array: Option<u64>,
+    #[n(0x0C)]
     pub force_pin_change: Option<bool>,
+    #[n(0x0D)]
     pub min_pin_length: Option<u64>,
+    #[n(0x0E)]
     pub firmware_version: Option<String>,
+    #[n(0x0F)]
     pub max_cred_blob_len: Option<u64>,
+    #[n(0x10)]
     pub max_rp_ids_for_set_min_pin_length: Option<u64>,
+    #[n(0x11)]
     pub preferred_platform_uv_attempts: Option<u64>,
+    #[n(0x12)]
     pub uv_modality: Option<u64>,
+    #[n(0x13)]
     pub certifications: Option<HashMap<String, u64>>,
+    #[n(0x14)]
     pub remaining_discoverable_credentials: Option<u64>,
+    #[n(0x15)]
     pub vendor_prototype_config_commands: Option<Vec<u64>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode)]
 pub struct AttestationStatement {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_command_getinfo() {
+        assert_eq!(Command::decode_cbor(&[4]).unwrap(), Command::GetInfo);
+    }
+}

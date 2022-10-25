@@ -85,7 +85,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialDescriptor {
 
 /// Parameters for Credential Generation from WebAuthn spec
 /// https://www.w3.org/TR/webauthn-2/#dictionary-credential-params
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PublicKeyCredentialParameters {
     pub alg: COSEAlgorithmIdentifier,
     pub type_: PublicKeyCredentialType,
@@ -143,7 +143,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialParameters {
 }
 
 /// https://www.w3.org/TR/webauthn-2/#enumdef-publickeycredentialtype
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum PublicKeyCredentialType {
     PublicKey,
     Unknown(String),
