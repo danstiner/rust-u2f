@@ -87,13 +87,13 @@ where
             u2f::Request::Register {
                 application,
                 challenge,
-            } => todo!(),
+            } => todo!("map to make_credential"),
             u2f::Request::Authenticate {
                 application,
                 challenge,
                 control_code,
                 key_handle,
-            } => todo!(),
+            } => todo!("map to get_assertion"),
             u2f::Request::GetVersion => {
                 let version = self.0.version();
                 Ok(u2f::Response::Version {
