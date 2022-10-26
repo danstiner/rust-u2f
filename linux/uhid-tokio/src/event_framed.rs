@@ -114,7 +114,7 @@ where
                 }
                 Poll::Ready(Err(err)) => return Poll::Ready(Err(err.into())),
                 Poll::Pending => {
-                    debug_assert!(this.write_buffer.replace(buf).is_none());
+                    assert!(this.write_buffer.replace(buf).is_none());
                     return Poll::Pending;
                 }
             }
@@ -127,7 +127,7 @@ where
         let this = self.project();
         let mut buf = BytesMut::new();
         this.codec.encode(item, &mut buf)?;
-        debug_assert!(this.write_buffer.replace(buf).is_none());
+        assert!(this.write_buffer.replace(buf).is_none());
         Ok(())
     }
 
