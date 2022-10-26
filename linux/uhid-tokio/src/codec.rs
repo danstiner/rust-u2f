@@ -23,6 +23,9 @@ pub enum StreamError {
     #[error("Unknown/Unsupported event type: {0}")]
     UnknownEventType(u32),
 
+    #[error("Unknown/Unsupported report type: {0}")]
+    UnknownReportType(u8),
+
     #[error("Buffer overflow, size {data_size} exceeds max size {max_size}")]
     BufferOverflow { data_size: usize, max_size: usize },
 
@@ -47,6 +50,19 @@ pub enum ReportType {
     Feature = 0,
     Output = 1,
     Input = 2,
+}
+
+impl TryFrom<u8> for ReportType {
+    type Error = StreamError;
+
+    fn try_from(t: u8) -> Result<Self, Self::Error> {
+        match t {
+            t if t == ReportType::Feature as u8 => Ok(ReportType::Feature),
+            t if t == ReportType::Output as u8 => Ok(ReportType::Output),
+            t if t == ReportType::Input as u8 => Ok(ReportType::Input),
+            _ => Err(StreamError::UnknownReportType(t)),
+        }
+    }
 }
 
 #[allow(non_camel_case_types)]
@@ -228,7 +244,7 @@ fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
         match event_type {
             sys::uhid_event_type_UHID_START => Ok(unsafe {
                 OutputEvent::Start {
-                    dev_flags: mem::transmute(event.u.start.dev_flags),
+                    dev_flags: DevFlags::from_bits_truncate(event.u.start.dev_flags),
                 }
             }),
             sys::uhid_event_type_UHID_STOP => Ok(OutputEvent::Stop),
@@ -253,7 +269,7 @@ fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
                 OutputEvent::GetReport {
                     id: payload.id,
                     report_number: payload.rnum,
-                    report_type: mem::transmute(payload.rtype),
+                    report_type: payload.rtype.try_into()?,
                 }
             }),
             sys::uhid_event_type_UHID_SET_REPORT => Ok(unsafe {
@@ -261,7 +277,7 @@ fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
                 OutputEvent::SetReport {
                     id: payload.id,
                     report_number: payload.rnum,
-                    report_type: mem::transmute(payload.rtype),
+                    report_type: payload.rtype.try_into()?,
                     data: slice::from_raw_parts(
                         &payload.data[0] as *const u8,
                         payload.size as usize,
