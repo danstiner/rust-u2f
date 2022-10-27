@@ -88,18 +88,18 @@ async fn main() {
         .version(VERSION)
         .author(AUTHORS)
         .about(DESCRIPTION)
-        .arg(Arg::new(SOCKET_PATH_ARG)
-            .short('s')
-            .long("socket")
-            .takes_value(true)
-            .help("Bind to specified socket path instead of file-descriptor from systemd"))
-        .after_help("By default expects to be run via systemd as root and passed a socket file-descriptor to listen on.")
+        .arg(
+            Arg::new(SOCKET_PATH_ARG)
+                .short('s')
+                .long("socket")
+                .num_args(1)
+                .value_parser(clap::builder::NonEmptyStringValueParser::new())
+                .default_value(softu2f_system_daemon::DEFAULT_SOCKET_PATH)
+                .help("Socket path to use for connecting to the system daemon"),
+        )
         .get_matches();
 
-    let system_daemon_socket = Path::new(
-        args.value_of(SOCKET_PATH_ARG)
-            .unwrap_or(softu2f_system_daemon::DEFAULT_SOCKET_PATH),
-    );
+    let system_daemon_socket = Path::new(args.get_one::<String>(SOCKET_PATH_ARG).unwrap());
 
     if libsystemd::logging::connected_to_journal() {
         tracing_subscriber::registry()

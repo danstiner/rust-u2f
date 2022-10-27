@@ -40,7 +40,7 @@ mod socket_server;
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const PATH_ARG: &str = "path";
+const SOCKET_PATH_ARG: &str = "socket_path";
 
 #[derive(Debug, Error)]
 enum Error {
@@ -63,15 +63,15 @@ async fn main() {
         .version(VERSION)
         .author(AUTHORS)
         .about(DESCRIPTION)
-        .arg(Arg::new(PATH_ARG)
+        .arg(Arg::new(SOCKET_PATH_ARG)
             .short('s')
             .long("socket")
-            .takes_value(true)
-            .help("Bind to specified socket path instead of file-descriptor from systemd"))
-        .after_help("By default expects to be run via systemd as root and passed a socket file-descriptor to listen on.")
+            .num_args(1)
+            .value_parser(clap::builder::NonEmptyStringValueParser::new())
+            .help("Bind to specified socket path instead of expecting a file descriptor from systemd"))
         .get_matches();
 
-    let socket_path = args.value_of(PATH_ARG);
+    let socket_path = args.get_one::<String>(SOCKET_PATH_ARG);
 
     if libsystemd::logging::connected_to_journal() {
         tracing_subscriber::registry()
@@ -83,7 +83,7 @@ async fn main() {
 
     info!(version = VERSION, "Starting rust-fido system daemon");
 
-    if let Err(ref err) = run(socket_path).await {
+    if let Err(ref err) = run(socket_path.map(|x| &**x)).await {
         error!(error = ?err, "Error encountered, exiting");
     }
 }
