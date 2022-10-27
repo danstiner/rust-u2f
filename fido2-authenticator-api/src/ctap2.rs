@@ -127,7 +127,7 @@ pub struct PinUvAuthParam;
 pub struct PinUvAuthProtocol;
 
 /// Messages from authenticator to the host, called a "response" in the CTAP2 protocol
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Response {
     // MakeCredential(MakeCredentialResponse),
     // GetAssertion {
@@ -145,10 +145,7 @@ impl<C> minicbor::Encode<C> for Response {
         _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         match self {
-            Response::GetInfo(info) => {
-                e.i8(4)?;
-                e.encode(info)?
-            }
+            Response::GetInfo(info) => e.encode(info)?,
         };
         Ok(())
     }
@@ -156,9 +153,9 @@ impl<C> minicbor::Encode<C> for Response {
 
 impl Response {
     pub fn to_cbor(&self) -> Vec<u8> {
-        let mut buffer = [0u8; 256]; // TODO better sized allocation
-        minicbor::encode(self, buffer.as_mut()).unwrap();
-        buffer.to_vec()
+        let mut buffer = Vec::new();
+        minicbor::encode(self, &mut buffer).unwrap();
+        buffer
     }
 }
 
@@ -172,51 +169,78 @@ pub struct MakeCredentialResponse {
     pub att_stmt: AttestationStatement,
 }
 
-#[derive(Debug, PartialEq, Encode)]
-#[cbor(map)]
+#[derive(Debug, PartialEq)]
+// #[cbor(map)]
 pub struct GetInfoResponse {
-    #[n(0x01)]
+    // #[n(0x01)]
     pub versions: Vec<String>,
-    #[n(0x02)]
+    // #[n(0x02)]
     pub extensions: Option<Vec<String>>,
-    #[n(0x03)]
+    // #[n(0x03)]
     pub aaguid: Aaguid,
-    #[n(0x04)]
+    // #[n(0x04)]
     pub options: Option<HashMap<String, u64>>,
-    #[n(0x05)]
+    // #[n(0x05)]
     pub max_msg_size: Option<u64>,
-    #[n(0x06)]
+    // #[n(0x06)]
     pub pin_uv_auth_protocols: Option<Vec<u64>>,
-    #[n(0x07)]
+    // #[n(0x07)]
     pub max_credential_count_in_list: Option<u64>,
-    #[n(0x08)]
+    // #[n(0x08)]
     pub max_credential_id_length: Option<u64>,
-    #[n(0x09)]
+    // #[n(0x09)]
     pub transports: Option<Vec<String>>,
-    #[n(0x0A)]
+    // #[n(0x0A)]
     pub algorithms: Option<Vec<PublicKeyCredentialParameters>>,
-    #[n(0x0B)]
+    // #[n(0x0B)]
     pub max_serialized_large_blob_array: Option<u64>,
-    #[n(0x0C)]
+    // #[n(0x0C)]
     pub force_pin_change: Option<bool>,
-    #[n(0x0D)]
+    // #[n(0x0D)]
     pub min_pin_length: Option<u64>,
-    #[n(0x0E)]
+    // #[n(0x0E)]
     pub firmware_version: Option<String>,
-    #[n(0x0F)]
+    // #[n(0x0F)]
     pub max_cred_blob_len: Option<u64>,
-    #[n(0x10)]
+    // #[n(0x10)]
     pub max_rp_ids_for_set_min_pin_length: Option<u64>,
-    #[n(0x11)]
+    // #[n(0x11)]
     pub preferred_platform_uv_attempts: Option<u64>,
-    #[n(0x12)]
+    // #[n(0x12)]
     pub uv_modality: Option<u64>,
-    #[n(0x13)]
+    // #[n(0x13)]
     pub certifications: Option<HashMap<String, u64>>,
-    #[n(0x14)]
+    // #[n(0x14)]
     pub remaining_discoverable_credentials: Option<u64>,
-    #[n(0x15)]
+    // #[n(0x15)]
     pub vendor_prototype_config_commands: Option<Vec<u64>>,
+}
+
+impl<C> minicbor::Encode<C> for GetInfoResponse {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        let mut len = 2;
+        if self.algorithms.is_some() {
+            len += 1;
+        }
+        e.map(len)?;
+
+        e.u8(0x01)?;
+        e.encode(&self.versions)?;
+
+        e.u8(0x03)?;
+        e.encode(&self.aaguid)?;
+
+        if let Some(ref algorithms) = self.algorithms {
+            e.u8(0x0A)?;
+            e.encode(algorithms)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Encode, Decode)]
@@ -225,9 +249,62 @@ pub struct AttestationStatement {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::uuid;
 
     #[test]
-    fn decode_command_getinfo() {
+    fn decode_getinfo_command() {
         assert_eq!(Command::decode_cbor(&[4]).unwrap(), Command::GetInfo);
+    }
+
+    #[test]
+    fn encode_getinfo_response() {
+        assert_eq!(
+            Response::GetInfo(GetInfoResponse {
+                versions: vec![],
+                extensions: None,
+                aaguid: Aaguid(uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8")),
+                options: None,
+                max_msg_size: None,
+                pin_uv_auth_protocols: None,
+                max_credential_count_in_list: None,
+                max_credential_id_length: None,
+                transports: None,
+                algorithms: None,
+                max_serialized_large_blob_array: None,
+                force_pin_change: None,
+                min_pin_length: None,
+                firmware_version: None,
+                max_cred_blob_len: None,
+                max_rp_ids_for_set_min_pin_length: None,
+                preferred_platform_uv_attempts: None,
+                uv_modality: None,
+                certifications: None,
+                remaining_discoverable_credentials: None,
+                vendor_prototype_config_commands: None
+            })
+            .to_cbor(),
+            vec![
+                162, 1, 128, 3, 80, 103, 229, 80, 68, 16, 177, 66, 111, 146, 71, 187, 104, 14, 95,
+                224, 200
+            ]
+        );
+    }
+
+    // Test basic data types follow the CTAP2 canonical CBOR encoding form as defined in section 6 of
+    // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#ctap2-canonical-cbor-encoding-form
+    #[test]
+    fn encode_basic_cbor_types() {
+        assert_eq!(encode(Vec::<String>::new()), [0x80]);
+        assert_eq!(encode(vec![1, 2, 3]), [0x83, 0x01, 0x02, 0x03]);
+        assert_eq!(encode("IETF"), [0x64, 0x49, 0x45, 0x54, 0x46]);
+        assert_eq!(encode(0), [0x00]);
+        assert_eq!(encode(65535), [0x19, 0xff, 0xff]);
+        assert_eq!(encode(-24), [0x37]);
+    }
+
+    fn encode<T: minicbor::Encode<()>>(x: T) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        minicbor::encode(x, &mut buffer).unwrap();
+        buffer
     }
 }
