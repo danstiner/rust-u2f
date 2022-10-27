@@ -1,5 +1,5 @@
 pwd := $(shell pwd)
-targetdir := ${pwd}/../target/fedora
+targetdir := ${pwd}/../target
 selinuxpolicydir := ${pwd}/system-daemon/selinux-policy
 systemdaemondir := ${pwd}/system-daemon
 userdaemondir := ${pwd}/user-daemon
