@@ -82,7 +82,7 @@ pub enum Error {
     HomeDirectoryNotFound,
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() {
     let args = Command::new("Rust-Fido User Daemon")
         .version(VERSION)

@@ -57,7 +57,7 @@ enum Error {
     WrongListenFdCount { count: usize },
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() {
     let args = Command::new("Rust-Fido System Daemon")
         .version(VERSION)
