@@ -44,7 +44,7 @@ lazy_static! {
         map.insert(from_url("https://lastpass.com"), "lastpass.com");
         map.insert(from_url("https://u2f.aws.amazon.com/app-id.json"), "aws.amazon.com");
 
-        // Additional known app IDs not yet in KnownFacets.swift
+        // Additional known app IDs
         map.insert(from_url("bin.coffee"), "bin.coffee");
         map.insert(from_url("coinbase.com"), "coinbase.com");
         map.insert(from_url("demo.yubico.com"), "demo.yubico.com");
