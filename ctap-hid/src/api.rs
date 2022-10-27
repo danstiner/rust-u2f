@@ -72,7 +72,7 @@ where
             major: version.version_major,
             minor: version.version_minor,
             build: version.version_build,
-            capabilities: wink_capabitlity,
+            capabilities: CapabilityFlags::CBOR | wink_capabitlity,
         })
     }
 
