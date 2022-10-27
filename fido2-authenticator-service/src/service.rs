@@ -15,6 +15,7 @@ use fido2_authenticator_api::PublicKeyCredentialParameters;
 use fido2_authenticator_api::Response;
 use futures::Future;
 use tower::Service;
+use tracing::warn;
 use tracing::{debug, trace};
 use u2f_core::CryptoOperations;
 use u2f_core::SecretStore;
@@ -23,6 +24,7 @@ use u2f_core::UserPresence;
 use crate::Error;
 
 // Unique identifier of the "make and model" of this virtual authenticator
+// TODO move to user-daemon
 const AAGUID: Aaguid = Aaguid(uuid::uuid!("5fd220bb-7791-4be4-99c3-1f8d26189e92"));
 
 /// Service capable of handling the requests defined in the FIDO2 specification.
@@ -93,7 +95,7 @@ where
             version_major: pkg_version::pkg_version_major!(),
             version_minor: pkg_version::pkg_version_minor!(),
             version_build: pkg_version::pkg_version_patch!(),
-            wink_supported: false,
+            wink_supported: true,
         }
     }
 
@@ -129,7 +131,6 @@ where
         // If the element specifies an algorithm that is supported by the authenticator, and no algorithm has yet been chosen by this loop, then let the algorithm specified by the current element be the chosen algorithm.
         // If the loop completes and no algorithm was chosen then return CTAP2_ERR_UNSUPPORTED_ALGORITHM.
         let algorithm = pub_key_cred_params
-            .0
             .iter()
             .filter(|param| param.alg == COSEAlgorithmIdentifier::ES256) // TODO filter other algorithm types
             .next()
@@ -249,7 +250,9 @@ where
     }
 
     async fn wink(&self) -> Result<(), Self::Error> {
-        todo!()
+        // TODO show actual user notification
+        warn!("Wink!");
+        Ok(())
     }
 }
 
@@ -261,7 +264,7 @@ mod tests {
 
     use async_trait::async_trait;
     use fido2_authenticator_api::{
-        Array, PublicKeyCredentialRpEntity, PublicKeyCredentialType, PublicKeyCredentialUserEntity,
+        PublicKeyCredentialRpEntity, PublicKeyCredentialType, PublicKeyCredentialUserEntity,
         Sha256, UserHandle,
     };
     use openssl::hash::MessageDigest;
@@ -284,7 +287,7 @@ mod tests {
         assert_eq!(version.version_major, pkg_version::pkg_version_major!());
         assert_eq!(version.version_minor, pkg_version::pkg_version_minor!());
         assert_eq!(version.version_build, pkg_version::pkg_version_patch!());
-        assert_eq!(version.wink_supported, false);
+        assert_eq!(version.wink_supported, true);
     }
 
     #[tokio::test]
@@ -311,7 +314,7 @@ mod tests {
                 name: "user@example.com".into(),
                 display_name: "Test User".into(),
             },
-            pub_key_cred_params: Array(vec![]),
+            pub_key_cred_params: vec![],
             exclude_list: None,
             extensions: None,
             options: None,
@@ -341,10 +344,10 @@ mod tests {
                 name: "user@example.com".into(),
                 display_name: "Test User".into(),
             },
-            pub_key_cred_params: Array(vec![PublicKeyCredentialParameters {
+            pub_key_cred_params: vec![PublicKeyCredentialParameters {
                 alg: COSEAlgorithmIdentifier::ES256,
                 type_: PublicKeyCredentialType::PublicKey,
-            }]),
+            }],
             exclude_list: None,
             extensions: None,
             options: None,

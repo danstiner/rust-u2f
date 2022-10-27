@@ -84,7 +84,7 @@ impl<C> Encode<C> for Aaguid {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Sha256([u8; 32]);
 
 impl Sha256 {

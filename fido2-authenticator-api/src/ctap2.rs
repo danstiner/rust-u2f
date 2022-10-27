@@ -8,49 +8,21 @@ use crate::Sha256;
 
 use minicbor_derive::{Decode, Encode};
 use std::collections::HashMap;
+use std::fmt::format;
 use std::fmt::Debug;
 
 ///! CTAP2 protocol
 ///!
 ///! Messages are encoded as CTAP2 canonical CBOR: https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#ctap2-canonical-cbor-encoding-form
 
-#[derive(Debug)]
-pub struct Array<T>(pub Vec<T>);
-
-impl<C, T: minicbor::Encode<C>> minicbor::Encode<C> for Array<T> {
-    fn encode<W: minicbor::encode::Write>(
-        &self,
-        e: &mut minicbor::Encoder<W>,
-        ctx: &mut C,
-    ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.array(self.0.len().try_into().unwrap())?;
-        for item in self.0.iter() {
-            e.encode_with(item, ctx)?;
-        }
-        Ok(())
-    }
-}
-
-impl<'b, C, T> minicbor::Decode<'b, C> for Array<T>
-where
-    T: minicbor::Decode<'b, ()>,
-{
-    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        let mut res = Vec::new();
-        for item in d.array_iter()? {
-            res.push(item?);
-        }
-        Ok(Array(res))
-    }
-}
-
 /// Messages from the host to authenticator, called "commands" in the CTAP2 protocol
-#[derive(Debug, Encode, Decode, PartialEq)]
-#[cbor(index_only)]
+#[derive(Debug, PartialEq)]
+// #[cbor(index_only)]
 pub enum Command {
     // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorMakeCredential
     // #[n(0x01)]
-    // MakeCredential {
+    MakeCredential(MakeCredentialCommand),
+    //  {
     //     #[n(0x01)]
     //     client_data_hash: Sha256,
     //     #[n(0x02)]
@@ -73,14 +45,29 @@ pub enum Command {
     //     enterprise_attestation: Option<u8>,
     // },
     // #[n(0x02)]
-    // GetAssertion {
+    // GetAssertion(GetAssertionCommand)
+    //  {
     //     #[n(0x01)]
     //     rp_id: RelyingPartyIdentifier,
     //     #[n(0x02)]
     //     client_data_hash: Sha256,
     // },
-    #[n(0x04)]
+    // #[n(0x04)]
     GetInfo,
+}
+
+impl<'b, C> minicbor::Decode<'b, C> for Command {
+    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+        match d.u8()? {
+            0x01 => Ok(Command::MakeCredential(d.decode()?)),
+            0x04 => Ok(Command::GetInfo),
+            type_ => Err(minicbor::decode::Error::message(format!(
+                "Unrecognized command type {}",
+                type_,
+            ))
+            .at(d.position())),
+        }
+    }
 }
 
 impl Command {
@@ -90,7 +77,8 @@ impl Command {
 }
 
 // TODO dedupe with MakeCredential command type
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, PartialEq)]
+#[cbor(map)]
 pub struct MakeCredentialCommand {
     #[n(0x01)]
     pub client_data_hash: Sha256,
@@ -99,9 +87,9 @@ pub struct MakeCredentialCommand {
     #[n(0x03)]
     pub user: PublicKeyCredentialUserEntity,
     #[n(0x04)]
-    pub pub_key_cred_params: Array<PublicKeyCredentialParameters>,
+    pub pub_key_cred_params: Vec<PublicKeyCredentialParameters>,
     #[n(0x05)]
-    pub exclude_list: Option<Array<PublicKeyCredentialDescriptor>>,
+    pub exclude_list: Option<Vec<PublicKeyCredentialDescriptor>>,
     #[n(0x06)]
     pub extensions: Option<Extensions>,
     #[n(0x07)]
@@ -113,6 +101,37 @@ pub struct MakeCredentialCommand {
     #[n(0x0a)]
     pub enterprise_attestation: Option<u8>,
 }
+
+// impl<'b, C> minicbor::Decode<'b, C> for MakeCredentialCommand {
+//     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+//         let _len = d.map()?.unwrap();
+
+//         assert_eq!(d.u8()?, 0x01);
+//         let client_data_hash = d.decode()?;
+
+//         assert_eq!(d.u8()?, 0x02);
+//         let rp = d.decode()?;
+
+//         assert_eq!(d.u8()?, 0x03);
+//         let user = d.decode()?;
+
+//         assert_eq!(d.u8()?, 0x04);
+//         let pub_key_cred_params = d.decode()?;
+
+//         Ok(MakeCredentialCommand {
+//             client_data_hash,
+//             rp,
+//             user,
+//             pub_key_cred_params,
+//             exclude_list: None,
+//             extensions: None,
+//             options: None,
+//             pin_uv_auth_param: None,
+//             pin_uv_auth_protocol: None,
+//             enterprise_attestation: None,
+//         })
+//     }
+// }
 
 #[derive(Debug, Encode, Decode, PartialEq)]
 pub struct Extensions;
@@ -129,7 +148,7 @@ pub struct PinUvAuthProtocol;
 /// Messages from authenticator to the host, called a "response" in the CTAP2 protocol
 #[derive(Debug, PartialEq)]
 pub enum Response {
-    // MakeCredential(MakeCredentialResponse),
+    MakeCredential(MakeCredentialResponse),
     // GetAssertion {
     //     credential: PublicKeyCredentialDescriptor,
     //     auth_data: Vec<u8>,
@@ -145,7 +164,14 @@ impl<C> minicbor::Encode<C> for Response {
         _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         match self {
-            Response::GetInfo(info) => e.encode(info)?,
+            Response::MakeCredential(response) => {
+                e.u8(0)?; // status, TODO encode this in a better place
+                e.encode(response)?
+            }
+            Response::GetInfo(info) => {
+                e.u8(0)?; // status, TODO encode this in a better place
+                e.encode(info)?
+            }
         };
         Ok(())
     }
@@ -159,7 +185,7 @@ impl Response {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct MakeCredentialResponse {
     // #[n(0x01)]
     pub fmt: String,
@@ -167,6 +193,27 @@ pub struct MakeCredentialResponse {
     pub auth_data: Vec<u8>,
     // #[n(0x03)]
     pub att_stmt: AttestationStatement,
+}
+
+impl<C> minicbor::Encode<C> for MakeCredentialResponse {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.map(3)?;
+
+        e.u8(0x01)?;
+        e.encode(&self.fmt)?;
+
+        e.u8(0x02)?;
+        e.encode(&self.auth_data)?;
+
+        e.u8(0x03)?;
+        e.encode(&self.att_stmt)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -243,13 +290,81 @@ impl<C> minicbor::Encode<C> for GetInfoResponse {
     }
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, PartialEq)]
 pub struct AttestationStatement {}
 
 #[cfg(test)]
 mod tests {
+    use crate::{COSEAlgorithmIdentifier, PublicKeyCredentialType, UserHandle};
+
     use super::*;
     use uuid::uuid;
+
+    #[test]
+    fn decode_make_credential_command() {
+        // 1
+        // {
+        //    1: h'0F0476E70816EBD0405FCB705C1D06D29EBC1324BC8F21F34D627FB143F63081',
+        //    2: {"id": "example.com", "name": "Example RP"},
+        //    3: {"id": h'757365725F6964', "name": "A. User"},
+        //    4: [{"alg": -7, "type": "public-key"}, {"alg": -8, "type": "public-key"}, {"alg": -37, "type": "public-key"}, {"alg": -257, "type": "public-key"}]
+        // }
+        assert_eq!(
+            Command::decode_cbor(&[
+                1, 164, 1, 88, 32, 15, 4, 118, 231, 8, 22, 235, 208, 64, 95, 203, 112, 92, 29, 6,
+                210, 158, 188, 19, 36, 188, 143, 33, 243, 77, 98, 127, 177, 67, 246, 48, 129, 2,
+                162, 98, 105, 100, 107, 101, 120, 97, 109, 112, 108, 101, 46, 99, 111, 109, 100,
+                110, 97, 109, 101, 106, 69, 120, 97, 109, 112, 108, 101, 32, 82, 80, 3, 162, 98,
+                105, 100, 71, 117, 115, 101, 114, 95, 105, 100, 100, 110, 97, 109, 101, 103, 65,
+                46, 32, 85, 115, 101, 114, 4, 132, 162, 99, 97, 108, 103, 38, 100, 116, 121, 112,
+                101, 106, 112, 117, 98, 108, 105, 99, 45, 107, 101, 121, 162, 99, 97, 108, 103, 39,
+                100, 116, 121, 112, 101, 106, 112, 117, 98, 108, 105, 99, 45, 107, 101, 121, 162,
+                99, 97, 108, 103, 56, 36, 100, 116, 121, 112, 101, 106, 112, 117, 98, 108, 105, 99,
+                45, 107, 101, 121, 162, 99, 97, 108, 103, 57, 1, 0, 100, 116, 121, 112, 101, 106,
+                112, 117, 98, 108, 105, 99, 45, 107, 101, 121
+            ])
+            .unwrap(),
+            Command::MakeCredential(MakeCredentialCommand {
+                client_data_hash: Sha256([
+                    15, 4, 118, 231, 8, 22, 235, 208, 64, 95, 203, 112, 92, 29, 6, 210, 158, 188,
+                    19, 36, 188, 143, 33, 243, 77, 98, 127, 177, 67, 246, 48, 129,
+                ]),
+                rp: PublicKeyCredentialRpEntity {
+                    id: String::from("example.com"),
+                    name: String::from("Example RP")
+                },
+                user: PublicKeyCredentialUserEntity {
+                    id: UserHandle::new(vec![0x75, 0x73, 0x65, 0x72, 0x5F, 0x69, 0x64]),
+                    display_name: String::from(""),
+                    name: String::from("A. User")
+                },
+                pub_key_cred_params: vec![
+                    PublicKeyCredentialParameters {
+                        alg: COSEAlgorithmIdentifier::ES256,
+                        type_: PublicKeyCredentialType::PublicKey,
+                    },
+                    PublicKeyCredentialParameters {
+                        alg: COSEAlgorithmIdentifier::EdDSA,
+                        type_: PublicKeyCredentialType::PublicKey,
+                    },
+                    PublicKeyCredentialParameters {
+                        alg: COSEAlgorithmIdentifier::PS256,
+                        type_: PublicKeyCredentialType::PublicKey,
+                    },
+                    PublicKeyCredentialParameters {
+                        alg: COSEAlgorithmIdentifier::RS256,
+                        type_: PublicKeyCredentialType::PublicKey,
+                    }
+                ],
+                exclude_list: None,
+                extensions: None,
+                options: None,
+                pin_uv_auth_param: None,
+                pin_uv_auth_protocol: None,
+                enterprise_attestation: None
+            })
+        );
+    }
 
     #[test]
     fn decode_getinfo_command() {
@@ -284,8 +399,8 @@ mod tests {
             })
             .to_cbor(),
             vec![
-                162, 1, 128, 3, 80, 103, 229, 80, 68, 16, 177, 66, 111, 146, 71, 187, 104, 14, 95,
-                224, 200
+                0, 162, 1, 128, 3, 80, 103, 229, 80, 68, 16, 177, 66, 111, 146, 71, 187, 104, 14,
+                95, 224, 200
             ]
         );
     }

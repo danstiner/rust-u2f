@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fido2_authenticator_api::{AuthenticatorAPI, Command, Response};
+use fido2_authenticator_api::{
+    AttestationStatement, AuthenticatorAPI, Command, MakeCredentialResponse, Response,
+};
 use tracing::trace;
 
 use crate::{u2f, CapabilityFlags};
@@ -113,6 +115,14 @@ where
         let command = Command::decode_cbor(&cbor).unwrap();
         trace!("command: {:?}", command);
         let response = match command {
+            Command::MakeCredential(command) => {
+                let response = MakeCredentialResponse {
+                    fmt: String::from(""),
+                    auth_data: Vec::new(),
+                    att_stmt: AttestationStatement {},
+                };
+                Response::MakeCredential(response)
+            }
             Command::GetInfo => {
                 let info = self.0.get_info()?;
                 Response::GetInfo(info)

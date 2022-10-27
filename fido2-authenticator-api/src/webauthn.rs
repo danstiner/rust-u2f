@@ -4,9 +4,11 @@ use minicbor::{Decode, Encode};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum COSEAlgorithmIdentifier {
     ES256 = -7,
+    EdDSA = -8,
     ES384 = -35,
     ES512 = -36,
-    EdDSA = -8,
+    PS256 = -37,
+    RS256 = -257,
 }
 
 impl<C> Encode<C> for COSEAlgorithmIdentifier {
@@ -15,7 +17,7 @@ impl<C> Encode<C> for COSEAlgorithmIdentifier {
         e: &mut minicbor::Encoder<W>,
         _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.i8(*self as i8)?.ok()
+        e.i16(*self as i16)?.ok()
     }
 }
 impl<'b, C> Decode<'b, C> for COSEAlgorithmIdentifier {
@@ -23,8 +25,23 @@ impl<'b, C> Decode<'b, C> for COSEAlgorithmIdentifier {
         d: &mut minicbor::Decoder<'b>,
         _ctx: &mut C,
     ) -> Result<Self, minicbor::decode::Error> {
-        match d.i8()? {
-            -7 => Ok(COSEAlgorithmIdentifier::ES256),
+        let type_ = d.i16()?;
+        match type_ {
+            _ if type_ == COSEAlgorithmIdentifier::ES256 as i16 => {
+                Ok(COSEAlgorithmIdentifier::ES256)
+            }
+            _ if type_ == COSEAlgorithmIdentifier::EdDSA as i16 => {
+                Ok(COSEAlgorithmIdentifier::EdDSA)
+            }
+            _ if type_ == COSEAlgorithmIdentifier::ES512 as i16 => {
+                Ok(COSEAlgorithmIdentifier::ES512)
+            }
+            _ if type_ == COSEAlgorithmIdentifier::PS256 as i16 => {
+                Ok(COSEAlgorithmIdentifier::PS256)
+            }
+            _ if type_ == COSEAlgorithmIdentifier::RS256 as i16 => {
+                Ok(COSEAlgorithmIdentifier::RS256)
+            }
             _ => Err(minicbor::decode::Error::message(
                 "Unrecognized algorithm identifier",
             )),
@@ -32,7 +49,7 @@ impl<'b, C> Decode<'b, C> for COSEAlgorithmIdentifier {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PublicKeyCredentialDescriptor {
     type_: String,
     id: CredentialId,
@@ -162,6 +179,7 @@ impl<C> Encode<C> for PublicKeyCredentialType {
         Ok(())
     }
 }
+
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         match d.str()? {
@@ -172,7 +190,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
 }
 
 /// Relying Party attribute map, used when creating a new credential
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PublicKeyCredentialRpEntity {
     // A unique identifier for the Relying Party entity, used as the RP ID
     pub id: String,
@@ -197,23 +215,34 @@ impl<C> Encode<C> for PublicKeyCredentialRpEntity {
 }
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialRpEntity {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        let map_len = d
-            .map()?
-            .ok_or(minicbor::decode::Error::message("Expected sized map"))?;
+        let map_len = d.map()?.ok_or(
+            minicbor::decode::Error::message("Expected sized map for PublicKeyCredentialRpEntity")
+                .at(d.position()),
+        )?;
         if map_len != 2 {
             return Err(minicbor::decode::Error::message(
-                "Expected map of exactly size 2",
-            ));
+                "Expected map of exactly size 2 for PublicKeyCredentialRpEntity",
+            )
+            .at(d.position()));
         }
-        if d.str()? != "id" {
-            return Err(minicbor::decode::Error::message("Expected map key \"id\""));
+
+        let key = d.str()?;
+        if key != "id" {
+            return Err(minicbor::decode::Error::message(format!(
+                "Expected map key \"id\" for PublicKeyCredentialRpEntity, got \"{}\"",
+                key
+            ))
+            .at(d.position()));
         }
         let id = d.str()?;
 
-        if d.str()? != "name" {
-            return Err(minicbor::decode::Error::message(
-                "Expected map key \"name\"",
-            ));
+        let key = d.str()?;
+        if key != "name" {
+            return Err(minicbor::decode::Error::message(format!(
+                "Expected map key \"name\" for PublicKeyCredentialRpEntity, got \"{}\"",
+                key
+            ))
+            .at(d.position()));
         }
         let name: &'b str = Decode::decode(d, ctx)?;
 
@@ -225,7 +254,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialRpEntity {
 }
 
 // Additional user account attribute map used when creating a new credential
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PublicKeyCredentialUserEntity {
     /// The user handle of the user account. Authentication and authorization
     /// decisions MUST be made on the basis of this member, not displayName or name
@@ -257,41 +286,54 @@ impl<C> Encode<C> for PublicKeyCredentialUserEntity {
 }
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialUserEntity {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        let map_len = d
-            .map()?
-            .ok_or(minicbor::decode::Error::message("Expected sized map"))?;
-        if map_len != 3 {
+        let map_len = d.map()?.ok_or(
+            minicbor::decode::Error::message(
+                "Expected sized map for PublicKeyCredentialUserEntity",
+            )
+            .at(d.position()),
+        )?;
+        if map_len > 3 {
             return Err(minicbor::decode::Error::message(
-                "Expected map of exactly size 3",
-            ));
+                "Expected map of size 3 or less for PublicKeyCredentialUserEntity",
+            )
+            .at(d.position()));
         }
 
-        let id_key: &'b str = Decode::decode(d, ctx)?;
-        if id_key != "id" {
-            return Err(minicbor::decode::Error::message("Expected map key \"id\""));
-        }
-        let id: UserHandle = Decode::decode(d, ctx)?;
+        let mut id = None;
+        let mut display_name = None;
+        let mut name = None;
 
-        let name_key: &'b str = Decode::decode(d, ctx)?;
-        if name_key != "name" {
-            return Err(minicbor::decode::Error::message(
-                "Expected map key \"name\"",
-            ));
+        for _ in 0..map_len {
+            let key = d.str()?;
+            match key {
+                "id" => {
+                    id = Some(Decode::decode(d, ctx)?);
+                }
+                "displayName" => {
+                    display_name = Some(Decode::decode(d, ctx)?);
+                }
+                "name" => {
+                    name = Some(Decode::decode(d, ctx)?);
+                }
+                _ => {
+                    return Err(minicbor::decode::Error::message(format!(
+                        "Unexpected map key '{}' when decoding PublicKeyCredentialUserEntity",
+                        key
+                    ))
+                    .at(d.position()))
+                }
+            }
         }
-        let name: &'b str = Decode::decode(d, ctx)?;
-
-        let display_name_key: &'b str = Decode::decode(d, ctx)?;
-        if display_name_key != "displayName" {
-            return Err(minicbor::decode::Error::message(
-                "Expected map key \"displayName\"",
-            ));
-        }
-        let display_name: &'b str = Decode::decode(d, ctx)?;
 
         Ok(PublicKeyCredentialUserEntity {
-            id: id,
-            name: name.to_string(),
-            display_name: display_name.to_string(),
+            id: id.ok_or_else(|| {
+                minicbor::decode::Error::message(
+                    "Required key id not present decoding PublicKeyCredentialUserEntity",
+                )
+                .at(d.position())
+            })?,
+            name: name.unwrap_or_default(),
+            display_name: display_name.unwrap_or_default(),
         })
     }
 }
@@ -299,7 +341,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialUserEntity {
 /// Opaque byte sequence with a maximum size of 64 bytes. Not meant for display
 /// to the user. MUST NOT contain personally identifying information and
 /// MUST NOT be empty.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct UserHandle(Vec<u8>);
 
 impl UserHandle {
@@ -325,7 +367,7 @@ impl<'b, C> Decode<'b, C> for UserHandle {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CredentialId(Vec<u8>);
 
 impl<C> Encode<C> for CredentialId {
