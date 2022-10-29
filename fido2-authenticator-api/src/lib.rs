@@ -21,7 +21,7 @@ pub trait AuthenticatorAPI {
 
     fn version(&self) -> VersionInfo;
 
-    fn make_credential(
+    async fn make_credential(
         &self,
         cmd: MakeCredentialCommand,
     ) -> Result<MakeCredentialResponse, Self::Error>;

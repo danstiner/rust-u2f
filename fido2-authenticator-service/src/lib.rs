@@ -16,6 +16,7 @@ extern crate tower;
 #[cfg(test)]
 extern crate assert_matches;
 
+mod crypto;
 mod serde_base64;
 mod service;
 
@@ -28,7 +29,7 @@ pub use tower::Service;
 use tracing::error;
 use u2f_core::{AttestationCertificate, KeyHandle};
 
-pub use crate::service::Authenticator;
+pub use crate::service::{Authenticator, SecretStore, UserPresence};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -40,6 +41,9 @@ pub enum Error {
 
     #[error("Invalid Parameter")]
     InvalidParameter,
+
+    #[error("TODO")]
+    Unspecified,
 }
 
 impl Into<StatusCode> for Error {
@@ -47,7 +51,8 @@ impl Into<StatusCode> for Error {
         match self {
             Error::Io(_) => StatusCode::Other,
             Error::UnsupportedAlgorithm => StatusCode::UnsupportedAlgorithm,
-            Error::InvalidParameter => StatusCode::InvalidParameter,
+            Error::InvalidParameter => StatusCode::InvalidCommandParameter,
+            Error::Unspecified => StatusCode::Other,
         }
     }
 }

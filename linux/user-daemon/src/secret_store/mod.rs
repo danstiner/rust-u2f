@@ -1,8 +1,9 @@
 use std::io;
 
+use fido2_authenticator_service::SecretStore;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
-use u2f_core::{ApplicationKey, Counter, SecretStore};
+use u2f_core::{ApplicationKey, Counter};
 
 use crate::config::Config;
 use file_store::FileStore;
@@ -39,7 +40,7 @@ pub trait MutableSecretStore: SecretStore {
     fn add_secret(&self, secret: Secret) -> io::Result<()>;
 }
 
-pub fn build(config: &Config) -> io::Result<Box<dyn SecretStore>> {
+pub fn build(config: &Config) -> io::Result<Box<dyn SecretStore<Error = io::Error>>> {
     match config.secret_store_type() {
         SecretStoreType::SecretService => {
             info!("Storing secrets in your keychain using the D-Bus Secret Service API");

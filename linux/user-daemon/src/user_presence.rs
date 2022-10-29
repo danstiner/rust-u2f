@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::io;
 
 use async_trait::async_trait;
+use fido2_authenticator_service::UserPresence;
 use lazy_static::lazy_static;
 use notify_rust::Timeout;
 use notify_rust::{self, Hint, Notification, Urgency};
 use tracing::debug;
-use u2f_core::{try_reverse_app_id, AppId, UserPresence};
 
 const APPNAME: &str = "SoftU2F";
 const HINT_CATEGORY: &str = "device";
@@ -88,23 +88,17 @@ impl NotificationUserPresence {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl UserPresence for NotificationUserPresence {
-    async fn approve_registration(&self, application: &AppId) -> Result<bool, io::Error> {
-        let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
-        let message = format!("Register with {}", site_name);
-        self.test_user_presence(message).await
+    type Error = io::Error;
+
+    async fn approve_make_credential(&self, name: &str) -> Result<bool, Self::Error> {
+        todo!()
     }
 
-    async fn approve_authentication(&self, application: &AppId) -> Result<bool, io::Error> {
-        let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
-        let message = format!("Authenticate {}", site_name);
-        self.test_user_presence(message).await
-    }
-
-    async fn wink(&self) -> Result<(), io::Error> {
+    async fn wink(&self) -> Result<(), Self::Error> {
         let message = String::from("Ready to authenticate");
-        Notification::new()
+        let notification = Notification::new()
             .appname(APPNAME)
             .summary(SUMMARY)
             .body(&message)
@@ -113,7 +107,44 @@ impl UserPresence for NotificationUserPresence {
             .hint(Hint::Transient(true))
             .hint(Hint::Urgency(URGENCY))
             .urgency(URGENCY)
-            .timeout(*TIMEOUT);
+            .timeout(*TIMEOUT)
+            .show()
+            .unwrap();
         Ok(())
     }
 }
+
+// #[async_trait]
+// impl UserPresence for NotificationUserPresence {
+//     async fn approve_make_credential(&self, name: &str) -> Result<bool, io::Error> {
+//         let message = format!("Register with {}", name);
+//         self.test_user_presence(message).await
+//     }
+
+//     async fn approve_registration(&self, application: &AppId) -> Result<bool, io::Error> {
+//         let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
+//         let message = format!("Register with {}", site_name);
+//         self.test_user_presence(message).await
+//     }
+
+//     async fn approve_authentication(&self, application: &AppId) -> Result<bool, io::Error> {
+//         let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
+//         let message = format!("Authenticate {}", site_name);
+//         self.test_user_presence(message).await
+//     }
+
+//     async fn wink(&self) -> Result<(), io::Error> {
+//         let message = String::from("Ready to authenticate");
+//         Notification::new()
+//             .appname(APPNAME)
+//             .summary(SUMMARY)
+//             .body(&message)
+//             .icon(ICON)
+//             .hint(Hint::Category(String::from(HINT_CATEGORY)))
+//             .hint(Hint::Transient(true))
+//             .hint(Hint::Urgency(URGENCY))
+//             .urgency(URGENCY)
+//             .timeout(*TIMEOUT);
+//         Ok(())
+//     }
+// }

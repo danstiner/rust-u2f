@@ -2,9 +2,11 @@ use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use async_trait::async_trait;
+use fido2_authenticator_service::SecretStore;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle, SecretStore};
+use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle};
 
 use crate::atomic_file;
 use crate::secret_store::{MutableSecretStore, Secret};
@@ -71,41 +73,52 @@ impl MutableSecretStore for FileStoreV2 {
     }
 }
 
+#[async_trait(?Send)]
 impl SecretStore for FileStoreV2 {
-    fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
-        let mut data = self.read()?;
-        data.push(Secret {
-            application_key: key.clone(),
-            counter: 0,
-        });
-        self.write(&data)
-    }
+    type Error = io::Error;
 
-    fn get_and_increment_counter(
+    async fn make_credential(
         &self,
-        application: &AppId,
-        handle: &KeyHandle,
-    ) -> io::Result<Counter> {
-        let mut data = self.read()?;
-        let secret = data
-            .find_secret_mut(application, handle)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "No such secret"))?;
-        let new_counter = secret.counter + 1;
-        secret.counter = new_counter;
-        self.write(&data)?;
-        Ok(new_counter)
+        pub_key_cred_params: &fido2_authenticator_api::PublicKeyCredentialParameters,
+        rp_id: &fido2_authenticator_api::RelyingPartyIdentifier,
+        user_id: &fido2_authenticator_api::UserHandle,
+    ) -> Result<(), Self::Error> {
+        todo!()
     }
+    // fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
+    //     let mut data = self.read()?;
+    //     data.push(Secret {
+    //         application_key: key.clone(),
+    //         counter: 0,
+    //     });
+    //     self.write(&data)
+    // }
 
-    fn retrieve_application_key(
-        &self,
-        application: &AppId,
-        handle: &KeyHandle,
-    ) -> io::Result<Option<ApplicationKey>> {
-        Ok(self
-            .read()?
-            .find_secret(application, handle)
-            .map(|secret| secret.application_key.clone()))
-    }
+    // fn get_and_increment_counter(
+    //     &self,
+    //     application: &AppId,
+    //     handle: &KeyHandle,
+    // ) -> io::Result<Counter> {
+    //     let mut data = self.read()?;
+    //     let secret = data
+    //         .find_secret_mut(application, handle)
+    //         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "No such secret"))?;
+    //     let new_counter = secret.counter + 1;
+    //     secret.counter = new_counter;
+    //     self.write(&data)?;
+    //     Ok(new_counter)
+    // }
+
+    // fn retrieve_application_key(
+    //     &self,
+    //     application: &AppId,
+    //     handle: &KeyHandle,
+    // ) -> io::Result<Option<ApplicationKey>> {
+    //     Ok(self
+    //         .read()?
+    //         .find_secret(application, handle)
+    //         .map(|secret| secret.application_key.clone()))
+    // }
 }
 
 #[cfg(test)]
@@ -136,58 +149,58 @@ i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
         KeyHandle::from(&Vec::new())
     }
 
-    #[test]
-    fn get_and_increment_counter() {
-        let dir = TempDir::new("file_store_tests").unwrap();
-        let path = dir.path().join("store");
-        let store = FileStoreV2 { path };
-        let app_id = fake_app_id();
-        let handle = fake_key_handle();
-        let key = fake_key();
-        let app_key = ApplicationKey::new(app_id, handle, key);
-        store.add_application_key(&app_key).unwrap();
+    // #[test]
+    // fn get_and_increment_counter() {
+    //     let dir = TempDir::new("file_store_tests").unwrap();
+    //     let path = dir.path().join("store");
+    //     let store = FileStoreV2 { path };
+    //     let app_id = fake_app_id();
+    //     let handle = fake_key_handle();
+    //     let key = fake_key();
+    //     let app_key = ApplicationKey::new(app_id, handle, key);
+    //     store.add_application_key(&app_key).unwrap();
 
-        let counter0 = store
-            .get_and_increment_counter(&app_id, &app_key.handle)
-            .unwrap();
-        let counter1 = store
-            .get_and_increment_counter(&app_id, &app_key.handle)
-            .unwrap();
+    //     let counter0 = store
+    //         .get_and_increment_counter(&app_id, &app_key.handle)
+    //         .unwrap();
+    //     let counter1 = store
+    //         .get_and_increment_counter(&app_id, &app_key.handle)
+    //         .unwrap();
 
-        assert_eq!(counter0 + 1, counter1);
-    }
+    //     assert_eq!(counter0 + 1, counter1);
+    // }
 
-    #[test]
-    fn retrieve_application_key() {
-        let dir = TempDir::new("file_store_tests").unwrap();
-        let path = dir.path().join("store");
-        let store = FileStoreV2 { path };
-        let app_id = fake_app_id();
-        let handle = fake_key_handle();
-        let key = fake_key();
-        let app_key = ApplicationKey::new(app_id, handle, key);
-        store.add_application_key(&app_key).unwrap();
+    // #[test]
+    // fn retrieve_application_key() {
+    //     let dir = TempDir::new("file_store_tests").unwrap();
+    //     let path = dir.path().join("store");
+    //     let store = FileStoreV2 { path };
+    //     let app_id = fake_app_id();
+    //     let handle = fake_key_handle();
+    //     let key = fake_key();
+    //     let app_key = ApplicationKey::new(app_id, handle, key);
+    //     store.add_application_key(&app_key).unwrap();
 
-        let retrieved_app_key = store
-            .retrieve_application_key(&app_key.application, &app_key.handle)
-            .unwrap()
-            .unwrap();
+    //     let retrieved_app_key = store
+    //         .retrieve_application_key(&app_key.application, &app_key.handle)
+    //         .unwrap()
+    //         .unwrap();
 
-        assert_eq!(retrieved_app_key.application, app_key.application);
-        assert_eq!(retrieved_app_key.handle, app_key.handle);
-        // Skip key field, it is not easily comparable
-    }
+    //     assert_eq!(retrieved_app_key.application, app_key.application);
+    //     assert_eq!(retrieved_app_key.handle, app_key.handle);
+    //     // Skip key field, it is not easily comparable
+    // }
 
-    #[test]
-    fn retrieve_nonexistent_key_is_none() {
-        let dir = TempDir::new("file_store_tests").unwrap();
-        let path = dir.path().join("store");
-        let store = FileStoreV2 { path };
+    // #[test]
+    // fn retrieve_nonexistent_key_is_none() {
+    //     let dir = TempDir::new("file_store_tests").unwrap();
+    //     let path = dir.path().join("store");
+    //     let store = FileStoreV2 { path };
 
-        let key = store
-            .retrieve_application_key(&fake_app_id(), &fake_key_handle())
-            .unwrap();
+    //     let key = store
+    //         .retrieve_application_key(&fake_app_id(), &fake_key_handle())
+    //         .unwrap();
 
-        assert!(key.is_none());
-    }
+    //     assert!(key.is_none());
+    // }
 }

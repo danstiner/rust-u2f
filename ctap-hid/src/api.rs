@@ -116,12 +116,7 @@ where
         trace!("command: {:?}", command);
         let response = match command {
             Command::MakeCredential(command) => {
-                let response = MakeCredentialResponse {
-                    fmt: String::from(""),
-                    auth_data: Vec::new(),
-                    att_stmt: AttestationStatement {},
-                };
-                Response::MakeCredential(response)
+                Response::MakeCredential(self.0.make_credential(command).await?)
             }
             Command::GetInfo => {
                 let info = self.0.get_info()?;

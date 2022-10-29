@@ -12,45 +12,80 @@ use fido2_authenticator_api::GetInfoResponse;
 use fido2_authenticator_api::MakeCredentialCommand;
 use fido2_authenticator_api::MakeCredentialResponse;
 use fido2_authenticator_api::PublicKeyCredentialParameters;
+use fido2_authenticator_api::RelyingPartyIdentifier;
 use fido2_authenticator_api::Response;
+use fido2_authenticator_api::UserHandle;
 use futures::Future;
 use tower::Service;
 use tracing::warn;
 use tracing::{debug, trace};
-use u2f_core::CryptoOperations;
-use u2f_core::SecretStore;
-use u2f_core::UserPresence;
 
+use crate::crypto::PrivateKeyCredentialSource;
+use crate::crypto::PrivateKeyDocument;
+use crate::crypto::PublicKeyCredentialSource;
 use crate::Error;
 
-// Unique identifier of the "make and model" of this virtual authenticator
-// TODO move to user-daemon
-const AAGUID: Aaguid = Aaguid(uuid::uuid!("5fd220bb-7791-4be4-99c3-1f8d26189e92"));
-
-/// Service capable of handling the requests defined in the FIDO2 specification.
-/// TODO
-/// See https://fidoalliance.org/specs/fido-u2f-v1.2-ps-20170411/fido-u2f-overview-v1.2-ps-20170411.html
-/// See https://fidoalliance.org/specs/fido-u2f-v1.2-ps-20170411/fido-u2f-raw-message-formats-v1.2-ps-20170411.html
-///
-/// Key storage, cryptographic operations, and user presence checking are
-/// separated to pluggable dependencies for flexibility and ease of testing.
-pub struct Authenticator<Secrets, Crypto, Presence> {
-    pub(crate) secrets: Secrets,
-    pub(crate) crypto: Crypto,
-    pub(crate) presence: Presence,
+#[async_trait(?Send)]
+pub trait UserPresence {
+    type Error;
+    async fn approve_make_credential(&self, name: &str) -> Result<bool, Self::Error>;
+    async fn wink(&self) -> Result<(), Self::Error>;
 }
 
-impl<Secrets, Crypto, Presence> Authenticator<Secrets, Crypto, Presence>
+#[async_trait(?Send)]
+pub trait SecretStore {
+    type Error;
+
+    async fn make_credential(
+        &self,
+        pub_key_cred_params: &PublicKeyCredentialParameters,
+        rp_id: &RelyingPartyIdentifier,
+        user_handle: &UserHandle,
+    ) -> Result<(), Self::Error>;
+}
+
+#[async_trait(?Send)]
+impl<W: SecretStore + ?Sized> SecretStore for Box<W> {
+    type Error = W::Error;
+
+    async fn make_credential(
+        &self,
+        pub_key_cred_params: &PublicKeyCredentialParameters,
+        rp_id: &RelyingPartyIdentifier,
+        user_handle: &UserHandle,
+    ) -> Result<(), Self::Error> {
+        (**self)
+            .make_credential(pub_key_cred_params, rp_id, user_handle)
+            .await
+    }
+}
+
+/// Service implementing the FIDO authenticator API.
+///
+/// Methods are defined by the FIDO specification and implemented in terms of pluggable dependencies
+/// that perform the actual cryptographic operations, secret storage, and user interaction.
+///
+/// See https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
+pub struct Authenticator<Secrets, Presence>
 where
     Secrets: SecretStore,
-    Crypto: CryptoOperations,
     Presence: UserPresence,
 {
-    pub fn new(secrets: Secrets, crypto: Crypto, presence: Presence) -> Self {
+    pub(crate) secrets: Secrets,
+    pub(crate) presence: Presence,
+    pub(crate) aaguid: Aaguid,
+}
+
+impl<Secrets, Presence> Authenticator<Secrets, Presence>
+where
+    Secrets: SecretStore,
+    Presence: UserPresence,
+{
+    pub fn new(secrets: Secrets, presence: Presence, aaguid: Aaguid) -> Self {
         Self {
             secrets,
-            crypto,
             presence,
+            aaguid,
         }
     }
 
@@ -58,7 +93,7 @@ where
         GetInfoResponse {
             versions: vec![String::from("FIDO_2_1"), String::from("U2F_V2")],
             extensions: None,
-            aaguid: AAGUID,
+            aaguid: self.aaguid,
             options: None,
             max_msg_size: None,
             pin_uv_auth_protocols: None,
@@ -82,11 +117,12 @@ where
 }
 
 #[async_trait(?Send)]
-impl<Secrets, Crypto, Presence> AuthenticatorAPI for Authenticator<Secrets, Crypto, Presence>
+impl<Secrets, Presence> AuthenticatorAPI for Authenticator<Secrets, Presence>
 where
     Secrets: SecretStore + 'static,
-    Crypto: CryptoOperations + 'static,
     Presence: UserPresence + 'static,
+    super::Error: From<Secrets::Error>,
+    super::Error: From<Presence::Error>,
 {
     type Error = super::Error;
 
@@ -99,7 +135,10 @@ where
         }
     }
 
-    fn make_credential(&self, cmd: MakeCredentialCommand) -> Result<MakeCredentialResponse, Error> {
+    async fn make_credential(
+        &self,
+        cmd: MakeCredentialCommand,
+    ) -> Result<MakeCredentialResponse, Error> {
         let MakeCredentialCommand {
             client_data_hash,
             rp,
@@ -114,36 +153,31 @@ where
         } = cmd;
         debug!(rp = ?rp, user = ?user, "make_credential");
 
-        // See https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-makeCred-platf-actions
+        // Number steps follow the authenticatorMakeCredential algorithm from the fido specification:
+        // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-makeCred-authnr-alg
 
-        // TODO If authenticator supports either pinUvAuthToken or clientPin features and the platform sends a zero length pinUvAuthParam:
+        // 1. This authenticator does not support pinUvAuthToken or clientPin features
+        // 2. This authenticator does not support pinUvAuthParam or pinUvAuthProtocol features
+        if pin_uv_auth_param.is_some() {
+            return Err(Error::InvalidParameter);
+        }
 
-        // TODO If the pinUvAuthParam parameter is present:
-
-        // Validate pubKeyCredParams with the following steps:
-
-        // TODO Push this down into CBOR/Command validation level
-        // If the element is missing required members, including members that are mandatory only for the specific type, then return an error, for example CTAP2_ERR_INVALID_CBOR.
-        // If the values of any known members have the wrong type then return an error, for example CTAP2_ERR_CBOR_UNEXPECTED_TYPE.
-        // Note: This means always iterating over every element of pubKeyCredParams to validate them.
-
-        // For each element of pubKeyCredParams:
-        // If the element specifies an algorithm that is supported by the authenticator, and no algorithm has yet been chosen by this loop, then let the algorithm specified by the current element be the chosen algorithm.
-        // If the loop completes and no algorithm was chosen then return CTAP2_ERR_UNSUPPORTED_ALGORITHM.
-        let algorithm = pub_key_cred_params
+        // 3. Select the first supported algorithm in pubKeyCredParams
+        let pk_parameters = pub_key_cred_params
             .iter()
             .filter(|param| param.alg == COSEAlgorithmIdentifier::ES256) // TODO filter other algorithm types
             .next()
             .ok_or(Error::UnsupportedAlgorithm)?;
 
-        // Create a new authenticatorMakeCredential response structure and initialize both its "uv" bit and "up" bit as false.
+        // 4. Initialize both "uv" and "up" as false.
         let mut uv = false;
         let mut up = false;
 
-        // If the options parameter is present, process all option keys and values present in the parameter.
-        // Treat any option keys that are not understood as absent.
-        // Note: As the specification defines normative behaviours for the "rk", "up", and "uv" option keys, they MUST be understood by all authenticators.
-        // TODO
+        // 5. Process options parameter if present, treat any option keys that are not understood as absent.
+        if let Some(options) = options {
+            // Note: As the specification defines normative behaviours for the "rk", "up", and "uv" option keys, they MUST be understood by all authenticators.
+            // TODO
+        }
 
         // 9. If the enterpriseAttestation parameter is present:
         if enterprise_attestation.is_some() {
@@ -163,7 +197,7 @@ where
         // TODO
 
         // 11. If the authenticator is protected by some form of user verification, then:
-        //   If pinUvAuthParam parameter is present (implying the "uv" option is false (see Step 5)):
+        // 11.1. If pinUvAuthParam parameter is present (implying the "uv" option is false (see Step 5)):
         if pin_uv_auth_param.is_some() {
             assert_eq!(uv, false);
             // If the authenticator is not protected by pinUvAuthToken,
@@ -173,19 +207,21 @@ where
         }
 
         // 12. If the excludeList parameter is present and contains a credential ID created by this authenticator, that is bound to the specified rp.id:
-        // TODO
+
+        if exclude_list.is_some() {
+            // TODO not supported
+            return Err(Error::InvalidParameter);
+        }
 
         // 13. If evidence of user interaction was provided as part of Step 11 (i.e., by invoking performBuiltInUv()):
         // TODO evidence of user interaction
         // Set the "up" bit to true in the response.
+        let present = self.presence.approve_make_credential(&rp.name).await?;
         up = true;
         // Go to Step 15
         // TODO
 
         // 14. If the "up" option is set to true:
-        if up {
-            todo!();
-        }
 
         // 15. If the extensions parameter is present:
         // TODO
@@ -199,6 +235,11 @@ where
         // 18. Otherwise, if the "rk" option is false: the authenticator MUST create a non-discoverable credential.
         // TODO
 
+        let public_key = self
+            .secrets
+            .make_credential(pk_parameters, &rp.id, &user.id)
+            .await;
+
         // 19. Generate an attestation statement for the newly-created credential using clientDataHash, taking into account the value of the enterpriseAttestation parameter, if present, as described above in Step 9.
 
         // On success, the authenticator returns the following authenticatorMakeCredential response structure which contains an attestation object plus additional information.
@@ -207,6 +248,8 @@ where
             auth_data: todo!(),
             att_stmt: todo!(),
         })
+
+        // For reference
 
         // let user_present = self
         //     .presence
@@ -250,8 +293,7 @@ where
     }
 
     async fn wink(&self) -> Result<(), Self::Error> {
-        // TODO show actual user notification
-        warn!("Wink!");
+        self.presence.wink().await?;
         Ok(())
     }
 }
@@ -264,16 +306,17 @@ mod tests {
 
     use async_trait::async_trait;
     use fido2_authenticator_api::{
-        PublicKeyCredentialRpEntity, PublicKeyCredentialType, PublicKeyCredentialUserEntity,
-        Sha256, UserHandle,
+        AttestationStatement, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
+        PublicKeyCredentialUserEntity, RelyingPartyIdentifier, Sha256, UserHandle,
     };
     use openssl::hash::MessageDigest;
     use openssl::pkey::{HasPublic, PKeyRef};
     use openssl::sign::Verifier;
     use u2f_core::{
         AppId, ApplicationKey, Attestation, AttestationCertificate, Challenge, Counter, KeyHandle,
-        OpenSSLCryptoOperations, PrivateKey,
+        PrivateKey,
     };
+    use uuid::Uuid;
 
     use super::*;
     use crate::Signature;
@@ -296,32 +339,73 @@ mod tests {
 
         let info = authenticator.get_info().unwrap();
 
-        assert_eq!(info.aaguid, AAGUID);
+        assert_eq!(info.aaguid, Aaguid(Uuid::default()));
+    }
+
+    #[tokio::test]
+    async fn make_credential_success() {
+        let authenticator = fake_authenticator();
+
+        let result = authenticator
+            .make_credential(MakeCredentialCommand {
+                client_data_hash: Sha256::digest(b"client data"),
+                rp: PublicKeyCredentialRpEntity {
+                    id: RelyingPartyIdentifier::new("example.com".into()),
+                    name: "Example RP".into(),
+                },
+                user: PublicKeyCredentialUserEntity {
+                    id: UserHandle::new(vec![0x01]),
+                    name: "user@example.com".into(),
+                    display_name: "Test User".into(),
+                },
+                pub_key_cred_params: vec![PublicKeyCredentialParameters {
+                    alg: COSEAlgorithmIdentifier::ES256,
+                    type_: PublicKeyCredentialType::PublicKey,
+                }],
+                exclude_list: None,
+                extensions: None,
+                options: None,
+                pin_uv_auth_param: None,
+                pin_uv_auth_protocol: None,
+                enterprise_attestation: None,
+            })
+            .await;
+
+        assert_eq!(
+            result.unwrap(),
+            MakeCredentialResponse {
+                fmt: String::from(""),
+                auth_data: Vec::new(),
+                att_stmt: AttestationStatement {}
+            }
+        );
     }
 
     #[tokio::test]
     async fn make_credential_fails_no_algorithm() {
         let authenticator = fake_authenticator();
 
-        let result = authenticator.make_credential(MakeCredentialCommand {
-            client_data_hash: Sha256::digest(b"client data"),
-            rp: PublicKeyCredentialRpEntity {
-                id: "example.com".into(),
-                name: "Example RP".into(),
-            },
-            user: PublicKeyCredentialUserEntity {
-                id: UserHandle::new(vec![0x01]),
-                name: "user@example.com".into(),
-                display_name: "Test User".into(),
-            },
-            pub_key_cred_params: vec![],
-            exclude_list: None,
-            extensions: None,
-            options: None,
-            pin_uv_auth_param: None,
-            pin_uv_auth_protocol: None,
-            enterprise_attestation: None,
-        });
+        let result = authenticator
+            .make_credential(MakeCredentialCommand {
+                client_data_hash: Sha256::digest(b"client data"),
+                rp: PublicKeyCredentialRpEntity {
+                    id: RelyingPartyIdentifier::new("example.com".into()),
+                    name: "Example RP".into(),
+                },
+                user: PublicKeyCredentialUserEntity {
+                    id: UserHandle::new(vec![0x01]),
+                    name: "user@example.com".into(),
+                    display_name: "Test User".into(),
+                },
+                pub_key_cred_params: vec![],
+                exclude_list: None,
+                extensions: None,
+                options: None,
+                pin_uv_auth_param: None,
+                pin_uv_auth_protocol: None,
+                enterprise_attestation: None,
+            })
+            .await;
 
         match result {
             Err(Error::UnsupportedAlgorithm) => {}
@@ -333,28 +417,30 @@ mod tests {
     async fn make_credential_denies_enterprise_attestation() {
         let authenticator = fake_authenticator();
 
-        let result = authenticator.make_credential(MakeCredentialCommand {
-            client_data_hash: Sha256::digest(b"client data"),
-            rp: PublicKeyCredentialRpEntity {
-                id: "example.com".into(),
-                name: "Example RP".into(),
-            },
-            user: PublicKeyCredentialUserEntity {
-                id: UserHandle::new(vec![0x01]),
-                name: "user@example.com".into(),
-                display_name: "Test User".into(),
-            },
-            pub_key_cred_params: vec![PublicKeyCredentialParameters {
-                alg: COSEAlgorithmIdentifier::ES256,
-                type_: PublicKeyCredentialType::PublicKey,
-            }],
-            exclude_list: None,
-            extensions: None,
-            options: None,
-            pin_uv_auth_param: None,
-            pin_uv_auth_protocol: None,
-            enterprise_attestation: Some(1),
-        });
+        let result = authenticator
+            .make_credential(MakeCredentialCommand {
+                client_data_hash: Sha256::digest(b"client data"),
+                rp: PublicKeyCredentialRpEntity {
+                    id: RelyingPartyIdentifier::new("example.com".into()),
+                    name: "Example RP".into(),
+                },
+                user: PublicKeyCredentialUserEntity {
+                    id: UserHandle::new(vec![0x01]),
+                    name: "user@example.com".into(),
+                    display_name: "Test User".into(),
+                },
+                pub_key_cred_params: vec![PublicKeyCredentialParameters {
+                    alg: COSEAlgorithmIdentifier::ES256,
+                    type_: PublicKeyCredentialType::PublicKey,
+                }],
+                exclude_list: None,
+                extensions: None,
+                options: None,
+                pin_uv_auth_param: None,
+                pin_uv_auth_protocol: None,
+                enterprise_attestation: Some(1),
+            })
+            .await;
 
         match result {
             Err(Error::InvalidParameter) => {}
@@ -362,12 +448,11 @@ mod tests {
         }
     }
 
-    fn fake_authenticator(
-    ) -> Authenticator<InMemorySecretStore, OpenSSLCryptoOperations, FakeUserPresence> {
+    fn fake_authenticator() -> Authenticator<InMemorySecretStore, FakeUserPresence> {
         Authenticator::new(
             InMemorySecretStore::new(),
-            OpenSSLCryptoOperations::new(fake_attestation()),
             FakeUserPresence::always_approve(),
+            Aaguid(Uuid::default()),
         )
     }
 
@@ -397,15 +482,14 @@ mod tests {
         }
     }
 
-    #[async_trait]
+    #[async_trait(?Send)]
     impl UserPresence for FakeUserPresence {
-        async fn approve_registration(&self, _: &AppId) -> Result<bool, io::Error> {
+        type Error = io::Error;
+
+        async fn approve_make_credential(&self, _: &str) -> Result<bool, Self::Error> {
             Ok(self.should_approve_registration)
         }
-        async fn approve_authentication(&self, _: &AppId) -> Result<bool, io::Error> {
-            Ok(self.should_approve_authentication)
-        }
-        async fn wink(&self) -> Result<(), io::Error> {
+        async fn wink(&self) -> Result<(), Self::Error> {
             Ok(())
         }
     }
@@ -415,6 +499,7 @@ mod tests {
     struct InMemorySecretStoreInner {
         application_keys: HashMap<AppId, ApplicationKey>,
         counters: HashMap<AppId, Counter>,
+        rng: ring::rand::SystemRandom,
     }
 
     impl InMemorySecretStore {
@@ -422,50 +507,79 @@ mod tests {
             InMemorySecretStore(Mutex::new(InMemorySecretStoreInner {
                 application_keys: HashMap::new(),
                 counters: HashMap::new(),
+                rng: ring::rand::SystemRandom::new(),
             }))
         }
     }
 
-    #[async_trait]
+    #[async_trait(?Send)]
     impl SecretStore for InMemorySecretStore {
-        fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
-            self.0
-                .lock()
-                .unwrap()
-                .application_keys
-                .insert(key.application, key.clone());
+        type Error = io::Error;
+
+        async fn make_credential(
+            &self,
+            pub_key_cred_params: &PublicKeyCredentialParameters,
+            rp_id: &RelyingPartyIdentifier,
+            user_handle: &UserHandle,
+        ) -> Result<(), Self::Error> {
+            let lock = self.0.lock().unwrap();
+            let private_key_document = match pub_key_cred_params.alg {
+                COSEAlgorithmIdentifier::ES256 => {
+                    let key = PrivateKeyDocument::generate_es256(&lock.rng);
+                    key.map_err(|_| Error::Unspecified)
+                }
+                _ => Err(Error::UnsupportedAlgorithm),
+            }
+            .unwrap();
+            let private_key = PrivateKeyCredentialSource::generate(
+                &pub_key_cred_params.type_,
+                rp_id,
+                user_handle,
+                private_key_document,
+                &lock.rng,
+            )
+            .unwrap();
             Ok(())
         }
 
-        fn get_and_increment_counter(
-            &self,
-            application: &AppId,
-            handle: &KeyHandle,
-        ) -> Result<Counter, io::Error> {
-            let mut borrow = self.0.lock().unwrap();
-            if let Some(counter) = borrow.counters.get_mut(application) {
-                let counter_value = *counter;
-                *counter += 1;
-                return Ok(counter_value);
-            }
+        // fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
+        //     self.0
+        //         .lock()
+        //         .unwrap()
+        //         .application_keys
+        //         .insert(key.application, key.clone());
+        //     Ok(())
+        // }
 
-            let initial_counter = 0;
-            borrow.counters.insert(*application, initial_counter);
-            Ok(initial_counter)
-        }
+        // fn get_and_increment_counter(
+        //     &self,
+        //     application: &AppId,
+        //     handle: &KeyHandle,
+        // ) -> Result<Counter, io::Error> {
+        //     let mut borrow = self.0.lock().unwrap();
+        //     if let Some(counter) = borrow.counters.get_mut(application) {
+        //         let counter_value = *counter;
+        //         *counter += 1;
+        //         return Ok(counter_value);
+        //     }
 
-        fn retrieve_application_key(
-            &self,
-            application: &AppId,
-            handle: &KeyHandle,
-        ) -> Result<Option<ApplicationKey>, io::Error> {
-            let borrow = self.0.lock().unwrap();
-            let key = borrow.application_keys.get(application);
-            match key {
-                Some(key) if key.handle.eq_consttime(handle) => Ok(Some(key.clone())),
-                _ => Ok(None),
-            }
-        }
+        //     let initial_counter = 0;
+        //     borrow.counters.insert(*application, initial_counter);
+        //     Ok(initial_counter)
+        // }
+
+        // fn retrieve_application_key(
+        //     &self,
+        //     application: &AppId,
+        //     handle: &KeyHandle,
+        // ) -> Result<Option<ApplicationKey>, io::Error> {
+        //     let borrow = self.0.lock().unwrap();
+        //     let key = borrow.application_keys.get(application);
+        //     match key {
+        //         Some(key) if key.handle.eq_consttime(handle) => Ok(Some(key.clone())),
+        //         _ => Ok(None),
+        //     }
+        // }
     }
 
     fn fake_attestation() -> Attestation {

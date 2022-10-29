@@ -2155,6 +2155,7 @@ dependencies = [
  "tracing-journald",
  "tracing-subscriber",
  "u2f-core",
+ "uuid 1.0.0",
 ]
 
 [[package]]

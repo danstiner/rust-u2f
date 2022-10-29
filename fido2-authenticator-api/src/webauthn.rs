@@ -1,9 +1,13 @@
 use minicbor::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 
+use crate::Sha256;
+
+/// See https://www.w3.org/TR/2019/PR-webauthn-20190117/#typedefdef-cosealgorithmidentifier
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum COSEAlgorithmIdentifier {
-    ES256 = -7,
+    ES256 = -7, // ECDSA w/ SHA-256, first default option
     EdDSA = -8,
     ES384 = -35,
     ES512 = -36,
@@ -132,6 +136,10 @@ impl<C> Encode<C> for PublicKeyCredentialParameters {
     }
 }
 
+// TODO update this validation
+// If the element is missing required members, including members that are mandatory only for the specific type, then return an error, for example CTAP2_ERR_INVALID_CBOR.
+// If the values of any known members have the wrong type then return an error, for example CTAP2_ERR_CBOR_UNEXPECTED_TYPE.
+// Note: This means always iterating over every element of pubKeyCredParams to validate them.
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialParameters {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         let map_len = d
@@ -160,7 +168,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialParameters {
 }
 
 /// https://www.w3.org/TR/webauthn-2/#enumdef-publickeycredentialtype
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum PublicKeyCredentialType {
     PublicKey,
     Unknown(String),
@@ -193,7 +201,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
 #[derive(Debug, PartialEq)]
 pub struct PublicKeyCredentialRpEntity {
     // A unique identifier for the Relying Party entity, used as the RP ID
-    pub id: String,
+    pub id: RelyingPartyIdentifier,
 
     // A human-palatable name for the Relying Party, intended only for display
     pub name: String,
@@ -207,7 +215,7 @@ impl<C> Encode<C> for PublicKeyCredentialRpEntity {
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.map(2)?
             .str("id")?
-            .str(&self.id)?
+            .str(&self.id.0)?
             .str("name")?
             .str(&self.name)?
             .ok()
@@ -247,7 +255,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialRpEntity {
         let name: &'b str = Decode::decode(d, ctx)?;
 
         Ok(PublicKeyCredentialRpEntity {
-            id: id.to_string(),
+            id: RelyingPartyIdentifier(id.to_string()),
             name: name.to_string(),
         })
     }
@@ -341,7 +349,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialUserEntity {
 /// Opaque byte sequence with a maximum size of 64 bytes. Not meant for display
 /// to the user. MUST NOT contain personally identifying information and
 /// MUST NOT be empty.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct UserHandle(Vec<u8>);
 
 impl UserHandle {
@@ -393,20 +401,31 @@ impl<'b, C> Decode<'b, C> for CredentialId {
 ///
 /// For WebAuthn it will be the origin's effective domain or a suffix thereof.
 /// https://www.w3.org/TR/webauthn-2/#relying-party-identifier
-#[derive(Debug)]
-pub struct RelyingPartyIdentifier(String);
+#[derive(
+    Debug,
+    Serialize,
+    Deserialize,
+    minicbor_derive::Encode,
+    minicbor_derive::Decode,
+    PartialEq,
+    Clone,
+)]
+#[cbor(transparent)]
+pub struct RelyingPartyIdentifier(#[n(0)] String);
 
-impl<C> Encode<C> for RelyingPartyIdentifier {
-    fn encode<W: minicbor::encode::Write>(
-        &self,
-        e: &mut minicbor::Encoder<W>,
-        _ctx: &mut C,
-    ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.str(&self.0)?.ok()
+impl RelyingPartyIdentifier {
+    pub fn new(id: String) -> Self {
+        Self(id)
     }
 }
-impl<'b, C> Decode<'b, C> for RelyingPartyIdentifier {
-    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        Ok(Self(d.str()?.to_string()))
-    }
+
+/// https://www.w3.org/TR/webauthn-2/#authenticator-data
+struct AuthenticatorData {
+    /// SHA-256 hash of the RP ID the credential is scoped to.
+    rp_id_hash: Sha256,
+
+    // flags
+
+    // Signature counter, 32-bit unsigned big-endian integer.
+    sign_count: u32,
 }

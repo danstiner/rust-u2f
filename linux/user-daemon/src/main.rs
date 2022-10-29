@@ -28,6 +28,7 @@ use std::{
 };
 
 use clap::{Arg, Command};
+use fido2_authenticator_api::Aaguid;
 use fido2_authenticator_service::Authenticator;
 use futures::{ready, Sink, SinkExt, Stream, StreamExt};
 use pin_project::pin_project;
@@ -37,12 +38,12 @@ use tokio_serde::formats::Bincode;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::prelude::*;
+use uuid::uuid;
 
 use ctap_hid::{Packet, Server, SimpleAdapter, REPORT_TYPE_INPUT};
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
-use u2f_core::OpenSSLCryptoOperations;
 use user_presence::NotificationUserPresence;
 
 mod atomic_file;
@@ -54,6 +55,9 @@ const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const SOCKET_PATH_ARG: &str = "socket_path";
+
+/// Random unique identifier of the "make and model" of this virtual authenticator
+const AAGUID: Aaguid = Aaguid(uuid!("5fd220bb-7791-4be4-99c3-1f8d26189e92"));
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -119,11 +123,9 @@ async fn main() {
 async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let config = config::Config::load()?;
     let user_presence = NotificationUserPresence::new();
-    let attestation = u2f_core::self_signed_attestation();
-    let crypto = OpenSSLCryptoOperations::new(attestation);
     let secrets = secret_store::build(&config)?;
 
-    let authenticator = SimpleAdapter::new(Authenticator::new(secrets, crypto, user_presence));
+    let authenticator = SimpleAdapter::new(Authenticator::new(secrets, user_presence, AAGUID));
 
     let stream = UnixStream::connect(system_daemon_socket)
         .await

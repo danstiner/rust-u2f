@@ -330,7 +330,7 @@ mod tests {
                     19, 36, 188, 143, 33, 243, 77, 98, 127, 177, 67, 246, 48, 129,
                 ]),
                 rp: PublicKeyCredentialRpEntity {
-                    id: String::from("example.com"),
+                    id: RelyingPartyIdentifier::new(String::from("example.com")),
                     name: String::from("Example RP")
                 },
                 user: PublicKeyCredentialUserEntity {
