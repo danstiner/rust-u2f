@@ -14,13 +14,14 @@ pub use status_code::StatusCode;
 pub use tower::Service;
 pub use webauthn::*;
 
-// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
+/// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
 #[async_trait(?Send)]
 pub trait AuthenticatorAPI {
     type Error;
 
     fn version(&self) -> VersionInfo;
 
+    /// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorMakeCredential
     async fn make_credential(
         &self,
         cmd: MakeCredentialCommand,
@@ -35,7 +36,7 @@ pub trait AuthenticatorAPI {
 
     fn get_info(&self) -> Result<GetInfoResponse, Self::Error>;
 
-    // // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorClientPIN
+    // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorClientPIN
     // fn client_pin(
     //     &self,
     //     pin_auth_protocol: u32,
