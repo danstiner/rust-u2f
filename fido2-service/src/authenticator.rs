@@ -31,6 +31,19 @@ pub trait UserPresence {
 }
 
 #[async_trait(?Send)]
+impl<U: UserPresence + ?Sized> UserPresence for Box<U> {
+    type Error = U::Error;
+
+    async fn approve_make_credential(&self, name: &str) -> Result<bool, Self::Error> {
+        (**self).approve_make_credential(name).await
+    }
+
+    async fn wink(&self) -> Result<(), Self::Error> {
+        (**self).wink().await
+    }
+}
+
+#[async_trait(?Send)]
 pub trait SecretStore {
     type Error;
 
