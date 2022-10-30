@@ -16,8 +16,8 @@ extern crate tower;
 #[cfg(test)]
 extern crate assert_matches;
 
+mod authenticator;
 mod crypto;
-mod service;
 
 use std::fmt::Debug;
 use std::io;
@@ -27,7 +27,7 @@ use thiserror::Error;
 pub use tower::Service;
 use tracing::error;
 
-pub use crate::service::{Authenticator, SecretStore, UserPresence};
+pub use crate::authenticator::{Authenticator, SecretStore, UserPresence};
 
 #[derive(Debug, Error)]
 pub enum Error {
