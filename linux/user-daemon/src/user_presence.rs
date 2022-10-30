@@ -97,7 +97,7 @@ impl UserPresence for NotificationUserPresence {
     }
 
     async fn wink(&self) -> Result<(), Self::Error> {
-        let message = String::from("Ready to authenticate");
+        let message = String::from("Ready to authenticate ;)");
         let notification = Notification::new()
             .appname(APPNAME)
             .summary(SUMMARY)
