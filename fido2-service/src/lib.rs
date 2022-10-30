@@ -17,7 +17,6 @@ extern crate tower;
 extern crate assert_matches;
 
 mod crypto;
-mod serde_base64;
 mod service;
 
 use std::fmt::Debug;
