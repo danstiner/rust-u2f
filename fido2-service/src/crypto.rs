@@ -1,6 +1,6 @@
 use fido2_api::{
-    AuthenticatorData, COSEAlgorithmIdentifier, CredentialId, PublicKeyCredentialType,
-    RelyingPartyIdentifier, Sha256, Signature, UserHandle,
+    AuthenticatorData, COSEAlgorithmIdentifier, CredentialId, CredentialPublicKey, EllipticCurve,
+    KeyType, PublicKeyCredentialType, RelyingPartyIdentifier, Sha256, Signature, UserHandle,
 };
 use ring::{
     error, rand,
@@ -72,6 +72,10 @@ impl PublicKeyCredentialSource {
     pub(crate) fn alg(&self) -> COSEAlgorithmIdentifier {
         self.private_key.alg()
     }
+
+    pub(crate) fn credential_public_key(&self) -> CredentialPublicKey {
+        self.private_key.credential_public_key()
+    }
 }
 
 impl TryFrom<PrivateKeyCredentialSource> for PublicKeyCredentialSource {
@@ -119,6 +123,27 @@ impl PrivateKey {
             PrivateKey::ES256(_) => COSEAlgorithmIdentifier::ES256,
         }
     }
+
+    fn credential_public_key(&self) -> CredentialPublicKey {
+        match self {
+            PrivateKey::ES256(key_pair) => {
+                let mut public_key = CredentialPublicKey {
+                    kty: KeyType::EC2,
+                    alg: self.alg(),
+                    crv: EllipticCurve::P256,
+                    x: [0u8; 32],
+                    y: [0u8; 32],
+                };
+                public_key
+                    .x
+                    .copy_from_slice(&key_pair.public_key().as_ref()[1..33]);
+                public_key
+                    .y
+                    .copy_from_slice(&key_pair.public_key().as_ref()[33..65]);
+                public_key
+            }
+        }
+    }
 }
 
 impl TryFrom<PrivateKeyDocument> for PrivateKey {
@@ -148,8 +173,8 @@ impl AsRef<[u8]> for PublicKeyDocument {
 pub(crate) struct PrivateKeyCredentialSource {
     pub type_: PublicKeyCredentialType,
     pub id: CredentialId,
-    rp_id: RelyingPartyIdentifier,
-    user_handle: UserHandle,
+    pub rp_id: RelyingPartyIdentifier,
+    pub user_handle: UserHandle,
     private_key_document: PrivateKeyDocument,
 }
 

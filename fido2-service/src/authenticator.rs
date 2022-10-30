@@ -58,9 +58,10 @@ pub trait SecretStore {
         &self,
         rp_id: &RelyingPartyIdentifier,
         credential: &PublicKeyCredentialDescriptor,
-        auth_data: &AuthenticatorData,
         client_data_hash: &Sha256,
-    ) -> Result<AttestationStatement, Self::Error>;
+        user_present: bool,
+        user_verified: bool,
+    ) -> Result<(AuthenticatorData, AttestationStatement), Self::Error>;
 }
 
 #[async_trait(?Send)]
@@ -82,11 +83,18 @@ impl<W: SecretStore + ?Sized> SecretStore for Box<W> {
         &self,
         rp_id: &RelyingPartyIdentifier,
         credential_descriptor: &PublicKeyCredentialDescriptor,
-        auth_data: &AuthenticatorData,
         client_data_hash: &Sha256,
-    ) -> Result<AttestationStatement, Self::Error> {
+        user_present: bool,
+        user_verified: bool,
+    ) -> Result<(AuthenticatorData, AttestationStatement), Self::Error> {
         (**self)
-            .attest(rp_id, credential_descriptor, auth_data, client_data_hash)
+            .attest(
+                rp_id,
+                credential_descriptor,
+                client_data_hash,
+                user_present,
+                user_verified,
+            )
             .await
     }
 }
@@ -272,15 +280,9 @@ where
             .await?;
 
         // 19. Generate an attestation statement for the newly-created credential using clientDataHash, taking into account the value of the enterpriseAttestation parameter, if present, as described above in Step 9.
-        let auth_data = AuthenticatorData {
-            rp_id_hash: Sha256::digest(rp.id.as_bytes()),
-            user_present: up,
-            user_verified: uv,
-            sign_count: 1,
-        };
-        let att_stmt = self
+        let (auth_data, att_stmt) = self
             .secrets
-            .attest(&rp.id, &credential, &auth_data, &client_data_hash)
+            .attest(&rp.id, &credential, &client_data_hash, up, uv)
             .await?;
 
         // On success, the authenticator returns the following authenticatorMakeCredential response structure which contains an attestation object plus additional information.
@@ -300,10 +302,9 @@ where
         } = cmd;
 
         let credential: PublicKeyCredentialDescriptor = todo!();
-        let auth_data: AuthenticatorData = todo!();
-        let attestation_statement = self
+        let (auth_data, attestation_statement) = self
             .secrets
-            .attest(&rp_id, &credential, &auth_data, &client_data_hash)
+            .attest(&rp_id, &credential, &client_data_hash, false, false)
             .await?;
 
         Ok(GetAssertionResponse {
@@ -327,17 +328,19 @@ where
 mod tests {
     use async_trait::async_trait;
     use fido2_api::{
-        AttestationStatement, AuthenticatorData, CredentialId, PublicKeyCredentialRpEntity,
-        PublicKeyCredentialType, PublicKeyCredentialUserEntity, RelyingPartyIdentifier, Sha256,
-        UserHandle,
+        AttestationStatement, AttestedCredentialData, AuthenticatorData, CredentialId,
+        PublicKeyCredentialRpEntity, PublicKeyCredentialType, PublicKeyCredentialUserEntity,
+        RelyingPartyIdentifier, Sha256, UserHandle,
     };
     use std::collections::HashMap;
     use std::io;
-    use std::sync::Mutex;
-    use uuid::Uuid;
+    use uuid::uuid;
 
     use super::*;
-    use crate::crypto::{PrivateKeyCredentialSource, PublicKeyCredentialSource};
+    use crate::{
+        crypto::PrivateKeyCredentialSource,
+        secrets::{SecretStoreActual, SimpleSecrets},
+    };
 
     #[test]
     fn version() {
@@ -357,7 +360,7 @@ mod tests {
 
         let info = authenticator.get_info().unwrap();
 
-        assert_eq!(info.aaguid, Aaguid(Uuid::default()));
+        assert_eq!(info.aaguid, FAKE_AAGUID);
     }
 
     #[tokio::test]
@@ -392,27 +395,30 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            result.auth_data,
-            AuthenticatorData {
-                rp_id_hash: Sha256::digest("example.com".as_bytes()),
-                user_present: true,
-                user_verified: false,
-                sign_count: 1,
-            }
+            result.auth_data.rp_id_hash,
+            Sha256::digest("example.com".as_bytes())
         );
+        assert_eq!(result.auth_data.user_present, true);
+        assert_eq!(result.auth_data.user_verified, false);
+        assert_eq!(result.auth_data.sign_count, 1);
 
+        let data = result.auth_data.attested_credential_data.clone();
+        let attested_credential: AttestedCredentialData = data.unwrap().first().unwrap().clone();
+        let mut message = result.auth_data.to_bytes();
+        message.extend_from_slice(client_data_hash.as_ref());
         match result.att_stmt {
             AttestationStatement::Packed(statement) => {
                 assert_eq!(statement.alg, COSEAlgorithmIdentifier::ES256);
 
                 // Verify signature
-                let attestation_certificate = statement.x5c.unwrap();
+                let mut public_key_bytes = Vec::new();
+                public_key_bytes.push(4u8);
+                public_key_bytes.extend_from_slice(&attested_credential.credential_public_key.x);
+                public_key_bytes.extend_from_slice(&attested_credential.credential_public_key.y);
                 let peer_public_key = ring::signature::UnparsedPublicKey::new(
                     &ring::signature::ECDSA_P256_SHA256_FIXED,
-                    &attestation_certificate.attestnCert,
+                    &public_key_bytes,
                 );
-                let mut message = result.auth_data.to_bytes();
-                message.extend_from_slice(client_data_hash.as_ref());
                 peer_public_key
                     .verify(&message, statement.sig.as_ref())
                     .unwrap();
@@ -487,11 +493,13 @@ mod tests {
         }
     }
 
-    fn fake_authenticator() -> Authenticator<InMemorySecretStore, FakeUserPresence> {
+    const FAKE_AAGUID: Aaguid = Aaguid(uuid!("00000000-0000-0000-0000-000000000000"));
+
+    fn fake_authenticator() -> Authenticator<SimpleSecrets<InMemorySecretStore>, FakeUserPresence> {
         Authenticator::new(
             InMemorySecretStore::new(),
             FakeUserPresence::always_approve(),
-            Aaguid(Uuid::default()),
+            FAKE_AAGUID,
         )
     }
 
@@ -520,118 +528,45 @@ mod tests {
         }
     }
 
-    struct InMemorySecretStore(Mutex<InMemorySecretStoreInner>);
-
-    struct InMemorySecretStoreInner {
-        rng: ring::rand::SystemRandom,
+    struct InMemorySecretStore {
         id_lookup: HashMap<RelyingPartyIdentifier, HashMap<UserHandle, CredentialId>>,
         keys: HashMap<CredentialId, PrivateKeyCredentialSource>,
     }
 
     impl InMemorySecretStore {
-        fn new() -> InMemorySecretStore {
-            InMemorySecretStore(Mutex::new(InMemorySecretStoreInner {
-                rng: ring::rand::SystemRandom::new(),
-                id_lookup: HashMap::new(),
-                keys: HashMap::new(),
-            }))
+        fn new() -> SimpleSecrets<InMemorySecretStore> {
+            SimpleSecrets::new(
+                InMemorySecretStore {
+                    id_lookup: HashMap::new(),
+                    keys: HashMap::new(),
+                },
+                FAKE_AAGUID,
+            )
         }
     }
 
-    #[async_trait(?Send)]
-    impl SecretStore for InMemorySecretStore {
+    impl SecretStoreActual for InMemorySecretStore {
         type Error = io::Error;
 
-        async fn make_credential(
-            &self,
-            pub_key_cred_params: &PublicKeyCredentialParameters,
-            rp_id: &RelyingPartyIdentifier,
-            user_handle: &UserHandle,
-        ) -> Result<PublicKeyCredentialDescriptor, Self::Error> {
-            let mut lock = self.0.lock().unwrap();
-            let key = PrivateKeyCredentialSource::generate(
-                &pub_key_cred_params.alg,
-                &pub_key_cred_params.type_,
-                rp_id,
-                user_handle,
-                &lock.rng,
-            )
-            .unwrap();
-            let descriptor = PublicKeyCredentialDescriptor {
-                type_: key.type_.clone(),
-                id: key.id.clone(),
-            };
-            lock.keys.insert(key.id.clone(), key);
-            lock.id_lookup
-                .entry(rp_id.clone())
+        fn put(&mut self, credential: PrivateKeyCredentialSource) -> Result<(), Self::Error> {
+            self.id_lookup
+                .entry(credential.rp_id.clone())
                 .or_default()
-                .insert(user_handle.clone(), descriptor.id.clone());
-            Ok(descriptor)
+                .insert(credential.user_handle.clone(), credential.id.clone());
+            self.keys.insert(credential.id.clone(), credential);
+            Ok(())
         }
 
-        async fn attest(
+        fn get(
             &self,
-            _rp_id: &RelyingPartyIdentifier,
-            credential_descriptor: &PublicKeyCredentialDescriptor,
-            auth_data: &AuthenticatorData,
-            client_data_hash: &Sha256,
-        ) -> Result<AttestationStatement, Self::Error> {
-            let lock = self.0.lock().unwrap();
-            if let Some(key) = lock.keys.get(&credential_descriptor.id) {
-                let key: PublicKeyCredentialSource = key.clone().try_into().unwrap();
-                // TODO increment use counter
-                let signature = key.sign(auth_data, client_data_hash, &lock.rng).unwrap();
-                Ok(AttestationStatement::Packed(PackedAttestationStatement {
-                    alg: key.alg(),
-                    sig: signature,
-                    x5c: Some(AttestationCertificate {
-                        attestnCert: key.public_key_document().as_ref().to_vec(),
-                        caCerts: vec![],
-                    }),
-                }))
+            credential_id: &CredentialId,
+        ) -> Result<Option<PrivateKeyCredentialSource>, Self::Error> {
+            if let Some(credential) = self.keys.get(credential_id) {
+                Ok(Some(credential.clone()))
             } else {
-                todo!("error")
+                Ok(None)
             }
         }
-
-        // fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
-        //     self.0
-        //         .lock()
-        //         .unwrap()
-        //         .application_keys
-        //         .insert(key.application, key.clone());
-        //     Ok(())
-        // }
-
-        // fn get_and_increment_counter(
-        //     &self,
-        //     application: &AppId,
-        //     handle: &KeyHandle,
-        // ) -> Result<Counter, io::Error> {
-        //     let mut borrow = self.0.lock().unwrap();
-        //     if let Some(counter) = borrow.counters.get_mut(application) {
-        //         let counter_value = *counter;
-        //         *counter += 1;
-        //         return Ok(counter_value);
-        //     }
-
-        //     let initial_counter = 0;
-        //     borrow.counters.insert(*application, initial_counter);
-        //     Ok(initial_counter)
-        // }
-
-        // fn retrieve_application_key(
-        //     &self,
-        //     application: &AppId,
-        //     handle: &KeyHandle,
-        // ) -> Result<Option<ApplicationKey>, io::Error> {
-        //     let borrow = self.0.lock().unwrap();
-        //     let key = borrow.application_keys.get(application);
-        //     match key {
-        //         Some(key) if key.handle.eq_consttime(handle) => Ok(Some(key.clone())),
-        //         _ => Ok(None),
-        //     }
-        // }
     }
 
     //     fn fake_attestation() -> Attestation {
@@ -658,13 +593,4 @@ mod tests {
     //             ),
     //         }
     //     }
-
-    // fn verify_signature<T>(signature: &dyn Signature, data: &[u8], public_key: &PKeyRef<T>)
-    // where
-    //     T: HasPublic,
-    // {
-    //     let mut verifier = Verifier::new(MessageDigest::sha256(), public_key).unwrap();
-    //     verifier.update(data).unwrap();
-    //     assert!(verifier.verify(signature.as_ref()).unwrap());
-    // }
 }

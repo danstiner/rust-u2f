@@ -18,6 +18,7 @@ extern crate assert_matches;
 
 mod authenticator;
 mod crypto;
+mod secrets;
 
 use std::fmt::Debug;
 use std::io;

@@ -75,9 +75,16 @@ impl<'a> SecretStore for SecretServiceStore<'a> {
         &self,
         _rp_id: &fido2_api::RelyingPartyIdentifier,
         _credential_descriptor: &fido2_api::PublicKeyCredentialDescriptor,
-        _auth_data: &fido2_api::AuthenticatorData,
         _client_data_hash: &fido2_api::Sha256,
-    ) -> Result<fido2_api::AttestationStatement, Self::Error> {
+        _user_present: bool,
+        _user_verified: bool,
+    ) -> Result<
+        (
+            fido2_api::AuthenticatorData,
+            fido2_api::AttestationStatement,
+        ),
+        Self::Error,
+    > {
         todo!()
     }
 
