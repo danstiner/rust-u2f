@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fido2_authenticator_api::{AuthenticatorAPI, Command, Response};
+use fido2_api::{AuthenticatorAPI, Command, Response};
 use tracing::trace;
 
 use crate::{u2f, CapabilityFlags};

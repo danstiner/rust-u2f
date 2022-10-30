@@ -33,11 +33,11 @@ uuid = "^1.0"
 [dependencies.ctap-hid]
 path = "../../ctap-hid"
 
-[dependencies.fido2-authenticator-api]
-path = "../../fido2-authenticator-api"
+[dependencies.fido2-api]
+path = "../../fido2-api"
 
-[dependencies.fido2-authenticator-service]
-path = "../../fido2-authenticator-service"
+[dependencies.fido2-service]
+path = "../../fido2-service"
 
 [dependencies.softu2f-system-daemon]
 path = "../system-daemon"

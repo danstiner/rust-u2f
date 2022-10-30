@@ -28,8 +28,8 @@ use std::{
 };
 
 use clap::{Arg, Command};
-use fido2_authenticator_api::Aaguid;
-use fido2_authenticator_service::Authenticator;
+use fido2_api::Aaguid;
+use fido2_service::Authenticator;
 use futures::{ready, Sink, SinkExt, Stream, StreamExt};
 use pin_project::pin_project;
 use thiserror::Error;
@@ -80,7 +80,7 @@ pub enum Error {
     CreateDeviceError(#[from] CreateDeviceError),
 
     #[error("{0}")]
-    AuthenticatorError(#[from] fido2_authenticator_service::Error),
+    AuthenticatorError(#[from] fido2_service::Error),
 
     #[error("Home directory path could not be retrieved from the operating system")]
     HomeDirectoryNotFound,

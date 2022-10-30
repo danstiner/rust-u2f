@@ -1,6 +1,6 @@
 [package]
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
-name = "fido2-authenticator-service"
+name = "fido2-service"
 version = "0.4.2"
 edition = "2021"
 
@@ -24,8 +24,8 @@ tower = "^0.4.10"
 tracing = "^0.1"
 uuid = "^1.0"
 
-[dependencies.fido2-authenticator-api]
-path = "../fido2-authenticator-api"
+[dependencies.fido2-api]
+path = "../fido2-api"
 
 [dependencies.u2f-core]
 path = "../u2f-core"

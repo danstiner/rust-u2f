@@ -504,7 +504,7 @@ dependencies = [
  "base64",
  "bitflags",
  "byteorder",
- "fido2-authenticator-api",
+ "fido2-api",
  "futures 0.3.21",
  "itertools",
  "lazy_static",
@@ -732,7 +732,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fido2-authenticator-api"
+name = "fido2-api"
 version = "0.4.2"
 dependencies = [
  "assert_matches",
@@ -758,14 +758,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "fido2-authenticator-service"
+name = "fido2-service"
 version = "0.4.2"
 dependencies = [
  "assert_matches",
  "async-trait",
  "base64",
  "byteorder",
- "fido2-authenticator-api",
+ "fido2-api",
  "futures 0.3.21",
  "hex",
  "lazy_static",
@@ -2133,8 +2133,8 @@ dependencies = [
  "ctap-hid",
  "directories",
  "dirs",
- "fido2-authenticator-api",
- "fido2-authenticator-service",
+ "fido2-api",
+ "fido2-service",
  "futures 0.3.21",
  "futures-cpupool",
  "lazy_static",

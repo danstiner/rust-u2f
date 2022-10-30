@@ -1,4 +1,4 @@
-use fido2_authenticator_api::{
+use fido2_api::{
     AuthenticatorData, COSEAlgorithmIdentifier, CredentialId, PublicKeyCredentialType,
     RelyingPartyIdentifier, Sha256, Signature, UserHandle,
 };

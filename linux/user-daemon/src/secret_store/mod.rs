@@ -1,6 +1,6 @@
 use std::io;
 
-use fido2_authenticator_service::SecretStore;
+use fido2_service::SecretStore;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 use u2f_core::{ApplicationKey, Counter};

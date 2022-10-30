@@ -23,8 +23,8 @@ tracing = "^0.1"
 openssl = "^0.10.24"
 rand = "^0.8.4"
 
-[dependencies.fido2-authenticator-api]
-path = "../fido2-authenticator-api"
+[dependencies.fido2-api]
+path = "../fido2-api"
 
 [dev-dependencies]
 tokio = "1.13.0"

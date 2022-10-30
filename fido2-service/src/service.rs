@@ -1,24 +1,24 @@
 use std::result::Result;
 
 use async_trait::async_trait;
-use fido2_authenticator_api::Aaguid;
-use fido2_authenticator_api::AttestationCertificate;
-use fido2_authenticator_api::AttestationStatement;
-use fido2_authenticator_api::AuthenticatorAPI;
-use fido2_authenticator_api::AuthenticatorData;
-use fido2_authenticator_api::COSEAlgorithmIdentifier;
-use fido2_authenticator_api::GetAssertionCommand;
-use fido2_authenticator_api::GetAssertionResponse;
-use fido2_authenticator_api::GetInfoResponse;
-use fido2_authenticator_api::MakeCredentialCommand;
-use fido2_authenticator_api::MakeCredentialResponse;
-use fido2_authenticator_api::PackedAttestationStatement;
-use fido2_authenticator_api::PublicKeyCredentialDescriptor;
-use fido2_authenticator_api::PublicKeyCredentialParameters;
-use fido2_authenticator_api::RelyingPartyIdentifier;
-use fido2_authenticator_api::Sha256;
-use fido2_authenticator_api::Signature;
-use fido2_authenticator_api::UserHandle;
+use fido2_api::Aaguid;
+use fido2_api::AttestationCertificate;
+use fido2_api::AttestationStatement;
+use fido2_api::AuthenticatorAPI;
+use fido2_api::AuthenticatorData;
+use fido2_api::COSEAlgorithmIdentifier;
+use fido2_api::GetAssertionCommand;
+use fido2_api::GetAssertionResponse;
+use fido2_api::GetInfoResponse;
+use fido2_api::MakeCredentialCommand;
+use fido2_api::MakeCredentialResponse;
+use fido2_api::PackedAttestationStatement;
+use fido2_api::PublicKeyCredentialDescriptor;
+use fido2_api::PublicKeyCredentialParameters;
+use fido2_api::RelyingPartyIdentifier;
+use fido2_api::Sha256;
+use fido2_api::Signature;
+use fido2_api::UserHandle;
 use tracing::debug;
 
 use crate::Error;
@@ -144,8 +144,8 @@ where
 {
     type Error = super::Error;
 
-    fn version(&self) -> fido2_authenticator_api::VersionInfo {
-        fido2_authenticator_api::VersionInfo {
+    fn version(&self) -> fido2_api::VersionInfo {
+        fido2_api::VersionInfo {
             version_major: pkg_version::pkg_version_major!(),
             version_minor: pkg_version::pkg_version_minor!(),
             version_build: pkg_version::pkg_version_patch!(),
@@ -313,7 +313,7 @@ where
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use fido2_authenticator_api::{
+    use fido2_api::{
         AttestationStatement, AuthenticatorData, CredentialId, PublicKeyCredentialRpEntity,
         PublicKeyCredentialType, PublicKeyCredentialUserEntity, RelyingPartyIdentifier, Sha256,
         UserHandle,

@@ -23,7 +23,7 @@ mod service;
 use std::fmt::Debug;
 use std::io;
 
-use fido2_authenticator_api::StatusCode;
+use fido2_api::StatusCode;
 use thiserror::Error;
 pub use tower::Service;
 use tracing::error;

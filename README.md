@@ -93,8 +93,8 @@ This program runs in the user's session. It connects to the system-daemon's sock
 It is broken down into the following crates:
 - [user-daemon](linux/user-daemon) is the binary itself
 - [ctap-hid](ctap-hid) implements the client to authenticator protocol as defined by the FIDO2 specification. As USB authenticators can only receive data as fixed-size HID reports, this protocol lets clients send large messages by packetizing them into a series of HID reports. It also handles potentially concurrent access from multiple clients. So to emulate a USB/HID authenticator, this crate handles decoding the reports back to larger messages, which are themselves encoded authentication requests/responses using either CBOR or a legacy U2F encoding
-- [fido2-authenticator-api](fido2-authenticator-api) defines the API for authentication requests and responses, following the FIDO2 specification. *ctap-hid* depends on this API and *fido2-authenticator-service* implements this API. It also handles serialization of CBOR messages and the legacy U2F message encoding
-- [fido2-authenticator-service](fido2-authenticator-service) implements the actual authentication operations. It does not directly implement secret storage or user presence verification, specific implementations of these are injected as dependencies when the `user-daemon` intializes an authenticator instance
+- [fido2-api](fido2-api) defines the API for authentication requests and responses, following the FIDO2 specification. *ctap-hid* depends on this API and *fido2-service* implements this API. It also handles serialization of CBOR messages and the legacy U2F message encoding
+- [fido2-service](fido2-service) implements the actual authentication operations. It does not directly implement secret storage or user presence verification, specific implementations of these are injected as dependencies when the `user-daemon` intializes an authenticator instance
 
 ### Diagram
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io;
 
 use async_trait::async_trait;
-use fido2_authenticator_service::UserPresence;
+use fido2_service::UserPresence;
 use lazy_static::lazy_static;
 use notify_rust::Timeout;
 use notify_rust::{self, Hint, Notification, Urgency};

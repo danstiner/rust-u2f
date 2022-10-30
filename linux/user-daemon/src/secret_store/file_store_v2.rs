@@ -3,8 +3,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use fido2_authenticator_api::PublicKeyCredentialDescriptor;
-use fido2_authenticator_service::SecretStore;
+use fido2_api::PublicKeyCredentialDescriptor;
+use fido2_service::SecretStore;
 use serde::{Deserialize, Serialize};
 use serde_json;
 
@@ -79,20 +79,20 @@ impl SecretStore for FileStoreV2 {
 
     async fn make_credential(
         &self,
-        _pub_key_cred_params: &fido2_authenticator_api::PublicKeyCredentialParameters,
-        _rp_id: &fido2_authenticator_api::RelyingPartyIdentifier,
-        _user_id: &fido2_authenticator_api::UserHandle,
+        _pub_key_cred_params: &fido2_api::PublicKeyCredentialParameters,
+        _rp_id: &fido2_api::RelyingPartyIdentifier,
+        _user_id: &fido2_api::UserHandle,
     ) -> Result<PublicKeyCredentialDescriptor, Self::Error> {
         todo!()
     }
 
     async fn attest(
         &self,
-        _rp_id: &fido2_authenticator_api::RelyingPartyIdentifier,
-        _credential_descriptor: &fido2_authenticator_api::PublicKeyCredentialDescriptor,
-        _auth_data: &fido2_authenticator_api::AuthenticatorData,
-        _client_data_hash: &fido2_authenticator_api::Sha256,
-    ) -> Result<fido2_authenticator_api::AttestationStatement, Self::Error> {
+        _rp_id: &fido2_api::RelyingPartyIdentifier,
+        _credential_descriptor: &fido2_api::PublicKeyCredentialDescriptor,
+        _auth_data: &fido2_api::AuthenticatorData,
+        _client_data_hash: &fido2_api::Sha256,
+    ) -> Result<fido2_api::AttestationStatement, Self::Error> {
         todo!()
     }
     // fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
