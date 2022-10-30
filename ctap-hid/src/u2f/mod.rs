@@ -23,14 +23,9 @@ use application_key::ApplicationKey;
 use attestation::AttestationCertificate;
 use constants::*;
 use key_handle::KeyHandle;
-use known_app_ids::try_reverse_app_id;
-use known_app_ids::{BOGUS_APP_ID_HASH_CHROME, BOGUS_APP_ID_HASH_FIREFOX};
 use private_key::PrivateKey;
-use public_key::PublicKey;
-use request::AuthenticateControlCode;
 pub use request::Request;
 pub use response::Response;
-use self_signed_attestation::self_signed_attestation;
 
 #[derive(Debug)]
 pub enum StatusCode {
@@ -176,53 +171,4 @@ fn user_presence_byte(user_present: bool) -> u8 {
         byte |= 0b0000_0001;
     }
     byte
-}
-
-fn message_to_sign_for_authenticate(
-    application: &AppId,
-    challenge: &Challenge,
-    user_presence: u8,
-    counter: Counter,
-) -> Vec<u8> {
-    let mut message: Vec<u8> = Vec::new();
-
-    // The application parameter [32 bytes] from the authentication request message.
-    message.extend_from_slice(application.as_ref());
-
-    // The user presence byte [1 byte].
-    message.push(user_presence);
-
-    // The counter [4 bytes].
-    message.write_u32::<BigEndian>(counter).unwrap();
-
-    // The challenge parameter [32 bytes] from the authentication request message.
-    message.extend_from_slice(challenge.as_ref());
-
-    message
-}
-
-fn message_to_sign_for_register(
-    application: &AppId,
-    challenge: &Challenge,
-    key_bytes: &[u8],
-    key_handle: &KeyHandle,
-) -> Vec<u8> {
-    let mut message: Vec<u8> = Vec::new();
-
-    // A byte reserved for future use [1 byte] with the value 0x00.
-    message.push(0u8);
-
-    // The application parameter [32 bytes] from the registration request message.
-    message.extend_from_slice(application.as_ref());
-
-    // The challenge parameter [32 bytes] from the registration request message.
-    message.extend_from_slice(challenge.as_ref());
-
-    // The key handle [variable length].
-    message.extend_from_slice(key_handle.as_ref());
-
-    // The user public key [65 bytes].
-    message.extend_from_slice(key_bytes);
-
-    message
 }

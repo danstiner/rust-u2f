@@ -26,16 +26,10 @@ pub trait AuthenticatorAPI {
         cmd: MakeCredentialCommand,
     ) -> Result<MakeCredentialResponse, Self::Error>;
 
-    // fn get_assertion(
-    //     &self,
-    //     rp_id: RpId,
-    //     client_data_hash: Hash,
-    //     allow_list: [PublicKeyCredentialDescriptor],
-    //     extensions: ExtensionMap,
-    //     options: GetAssertionOptions,
-    //     pin_uv_auth_param: ByteString,
-    //     pin_uv_auth_protocol: u32,
-    // ) -> Result<GetAssertionResponse, Error>;
+    async fn get_assertion(
+        &self,
+        cmd: GetAssertionCommand,
+    ) -> Result<GetAssertionResponse, Self::Error>;
 
     // fn get_next_assertion(&self) -> Result<GetNextAssertionResponse, Error>;
 
@@ -84,7 +78,7 @@ impl<C> Encode<C> for Aaguid {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Sha256([u8; 32]);
 
 impl Sha256 {
@@ -111,5 +105,11 @@ impl<'b, C> Decode<'b, C> for Sha256 {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         let bytes: minicbor::bytes::ByteArray<32> = Decode::decode(d, ctx)?;
         Ok(Sha256(bytes.into()))
+    }
+}
+
+impl AsRef<[u8]> for Sha256 {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }

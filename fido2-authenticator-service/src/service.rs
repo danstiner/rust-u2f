@@ -1,28 +1,26 @@
-use std::pin::Pin;
 use std::result::Result;
-use std::task::Context;
-use std::task::Poll;
 
 use async_trait::async_trait;
 use fido2_authenticator_api::Aaguid;
+use fido2_authenticator_api::AttestationCertificate;
+use fido2_authenticator_api::AttestationStatement;
 use fido2_authenticator_api::AuthenticatorAPI;
+use fido2_authenticator_api::AuthenticatorData;
 use fido2_authenticator_api::COSEAlgorithmIdentifier;
-use fido2_authenticator_api::Command;
+use fido2_authenticator_api::GetAssertionCommand;
+use fido2_authenticator_api::GetAssertionResponse;
 use fido2_authenticator_api::GetInfoResponse;
 use fido2_authenticator_api::MakeCredentialCommand;
 use fido2_authenticator_api::MakeCredentialResponse;
+use fido2_authenticator_api::PackedAttestationStatement;
+use fido2_authenticator_api::PublicKeyCredentialDescriptor;
 use fido2_authenticator_api::PublicKeyCredentialParameters;
 use fido2_authenticator_api::RelyingPartyIdentifier;
-use fido2_authenticator_api::Response;
+use fido2_authenticator_api::Sha256;
+use fido2_authenticator_api::Signature;
 use fido2_authenticator_api::UserHandle;
-use futures::Future;
-use tower::Service;
-use tracing::warn;
-use tracing::{debug, trace};
+use tracing::debug;
 
-use crate::crypto::PrivateKeyCredentialSource;
-use crate::crypto::PrivateKeyDocument;
-use crate::crypto::PublicKeyCredentialSource;
 use crate::Error;
 
 #[async_trait(?Send)]
@@ -41,7 +39,15 @@ pub trait SecretStore {
         pub_key_cred_params: &PublicKeyCredentialParameters,
         rp_id: &RelyingPartyIdentifier,
         user_handle: &UserHandle,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<PublicKeyCredentialDescriptor, Self::Error>;
+
+    async fn attest(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+        credential: &PublicKeyCredentialDescriptor,
+        auth_data: &AuthenticatorData,
+        client_data_hash: &Sha256,
+    ) -> Result<AttestationStatement, Self::Error>;
 }
 
 #[async_trait(?Send)]
@@ -53,9 +59,21 @@ impl<W: SecretStore + ?Sized> SecretStore for Box<W> {
         pub_key_cred_params: &PublicKeyCredentialParameters,
         rp_id: &RelyingPartyIdentifier,
         user_handle: &UserHandle,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<PublicKeyCredentialDescriptor, Self::Error> {
         (**self)
             .make_credential(pub_key_cred_params, rp_id, user_handle)
+            .await
+    }
+
+    async fn attest(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+        credential_descriptor: &PublicKeyCredentialDescriptor,
+        auth_data: &AuthenticatorData,
+        client_data_hash: &Sha256,
+    ) -> Result<AttestationStatement, Self::Error> {
+        (**self)
+            .attest(rp_id, credential_descriptor, auth_data, client_data_hash)
             .await
     }
 }
@@ -145,10 +163,10 @@ where
             user,
             pub_key_cred_params,
             exclude_list,
-            extensions,
+            extensions: _,
             options,
             pin_uv_auth_param,
-            pin_uv_auth_protocol,
+            pin_uv_auth_protocol: _,
             enterprise_attestation,
         } = cmd;
         debug!(rp = ?rp, user = ?user, "make_credential");
@@ -235,57 +253,51 @@ where
         // 18. Otherwise, if the "rk" option is false: the authenticator MUST create a non-discoverable credential.
         // TODO
 
-        let public_key = self
+        let credential = self
             .secrets
             .make_credential(pk_parameters, &rp.id, &user.id)
-            .await;
+            .await?;
 
         // 19. Generate an attestation statement for the newly-created credential using clientDataHash, taking into account the value of the enterpriseAttestation parameter, if present, as described above in Step 9.
+        let auth_data = AuthenticatorData {
+            rp_id_hash: Sha256::digest(rp.id.as_bytes()),
+            user_present: up,
+            user_verified: uv,
+            sign_count: 1,
+        };
+        let att_stmt = self
+            .secrets
+            .attest(&rp.id, &credential, &auth_data, &client_data_hash)
+            .await?;
 
         // On success, the authenticator returns the following authenticatorMakeCredential response structure which contains an attestation object plus additional information.
         Ok(MakeCredentialResponse {
-            fmt: todo!(),
-            auth_data: todo!(),
-            att_stmt: todo!(),
+            auth_data,
+            att_stmt,
         })
+    }
 
-        // For reference
+    async fn get_assertion(
+        &self,
+        cmd: GetAssertionCommand,
+    ) -> Result<GetAssertionResponse, Self::Error> {
+        let GetAssertionCommand {
+            rp_id,
+            client_data_hash,
+        } = cmd;
 
-        // let user_present = self
-        //     .presence
-        //     .approve_authentication(&application_key.application)
-        //     .await?;
+        let credential: PublicKeyCredentialDescriptor = todo!();
+        let auth_data: AuthenticatorData = todo!();
+        let attestation_statement = self
+            .secrets
+            .attest(&rp_id, &credential, &auth_data, &client_data_hash)
+            .await?;
 
-        // let application_key = self
-        //     .secrets
-        //     .retrieve_application_key(&application, &key_handle)?
-        //     .ok_or(AuthenticateError::InvalidKeyHandle)?;
-
-        // if !user_present {
-        //     return Err(AuthenticateError::ApprovalRequired);
-        // }
-
-        // let counter = self
-        //     .secrets
-        //     .get_and_increment_counter(&application_key.application, &application_key.handle)?;
-
-        // let user_presence_byte = user_presence_byte(user_present);
-
-        // let signature = self.crypto.sign(
-        //     application_key.key(),
-        //     &message_to_sign_for_authenticate(
-        //         &application_key.application,
-        //         &challenge,
-        //         user_presence_byte,
-        //         counter,
-        //     ),
-        // )?;
-
-        // Ok(Authentication {
-        //     counter,
-        //     signature,
-        //     user_present,
-        // })
+        Ok(GetAssertionResponse {
+            credential,
+            auth_data,
+            signature: todo!(),
+        })
     }
 
     fn get_info(&self) -> Result<GetInfoResponse, Error> {
@@ -300,26 +312,19 @@ where
 
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
+    use fido2_authenticator_api::{
+        AttestationStatement, AuthenticatorData, CredentialId, PublicKeyCredentialRpEntity,
+        PublicKeyCredentialType, PublicKeyCredentialUserEntity, RelyingPartyIdentifier, Sha256,
+        UserHandle,
+    };
     use std::collections::HashMap;
     use std::io;
     use std::sync::Mutex;
-
-    use async_trait::async_trait;
-    use fido2_authenticator_api::{
-        AttestationStatement, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
-        PublicKeyCredentialUserEntity, RelyingPartyIdentifier, Sha256, UserHandle,
-    };
-    use openssl::hash::MessageDigest;
-    use openssl::pkey::{HasPublic, PKeyRef};
-    use openssl::sign::Verifier;
-    use u2f_core::{
-        AppId, ApplicationKey, Attestation, AttestationCertificate, Challenge, Counter, KeyHandle,
-        PrivateKey,
-    };
     use uuid::Uuid;
 
     use super::*;
-    use crate::Signature;
+    use crate::crypto::{PrivateKeyCredentialSource, PublicKeyCredentialSource};
 
     #[test]
     fn version() {
@@ -345,10 +350,11 @@ mod tests {
     #[tokio::test]
     async fn make_credential_success() {
         let authenticator = fake_authenticator();
+        let client_data_hash = Sha256::digest(b"client data");
 
         let result = authenticator
             .make_credential(MakeCredentialCommand {
-                client_data_hash: Sha256::digest(b"client data"),
+                client_data_hash: client_data_hash.clone(),
                 rp: PublicKeyCredentialRpEntity {
                     id: RelyingPartyIdentifier::new("example.com".into()),
                     name: "Example RP".into(),
@@ -369,16 +375,36 @@ mod tests {
                 pin_uv_auth_protocol: None,
                 enterprise_attestation: None,
             })
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(
-            result.unwrap(),
-            MakeCredentialResponse {
-                fmt: String::from(""),
-                auth_data: Vec::new(),
-                att_stmt: AttestationStatement {}
+            result.auth_data,
+            AuthenticatorData {
+                rp_id_hash: Sha256::digest("example.com".as_bytes()),
+                user_present: true,
+                user_verified: false,
+                sign_count: 1,
             }
         );
+
+        match result.att_stmt {
+            AttestationStatement::Packed(statement) => {
+                assert_eq!(statement.alg, COSEAlgorithmIdentifier::ES256);
+
+                // Verify signature
+                let attestation_certificate = statement.x5c.unwrap();
+                let peer_public_key = ring::signature::UnparsedPublicKey::new(
+                    &ring::signature::ECDSA_P256_SHA256_FIXED,
+                    &attestation_certificate.attestnCert,
+                );
+                let mut message = result.auth_data.to_bytes();
+                message.extend_from_slice(client_data_hash.as_ref());
+                peer_public_key
+                    .verify(&message, statement.sig.as_ref())
+                    .unwrap();
+            }
+        };
     }
 
     #[tokio::test]
@@ -456,28 +482,14 @@ mod tests {
         )
     }
 
-    fn fake_app_id() -> AppId {
-        AppId::from_bytes(&[0u8; 32])
-    }
-
-    fn fake_challenge() -> Challenge {
-        Challenge::from([0u8; 32])
-    }
-
-    fn fake_key_handle() -> KeyHandle {
-        KeyHandle::from(&vec![0u8; 128])
-    }
-
     struct FakeUserPresence {
-        pub should_approve_authentication: bool,
-        pub should_approve_registration: bool,
+        pub should_make_credential: bool,
     }
 
     impl FakeUserPresence {
         fn always_approve() -> FakeUserPresence {
             FakeUserPresence {
-                should_approve_authentication: true,
-                should_approve_registration: true,
+                should_make_credential: true,
             }
         }
     }
@@ -487,8 +499,9 @@ mod tests {
         type Error = io::Error;
 
         async fn approve_make_credential(&self, _: &str) -> Result<bool, Self::Error> {
-            Ok(self.should_approve_registration)
+            Ok(self.should_make_credential)
         }
+
         async fn wink(&self) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -497,17 +510,17 @@ mod tests {
     struct InMemorySecretStore(Mutex<InMemorySecretStoreInner>);
 
     struct InMemorySecretStoreInner {
-        application_keys: HashMap<AppId, ApplicationKey>,
-        counters: HashMap<AppId, Counter>,
         rng: ring::rand::SystemRandom,
+        id_lookup: HashMap<RelyingPartyIdentifier, HashMap<UserHandle, CredentialId>>,
+        keys: HashMap<CredentialId, PrivateKeyCredentialSource>,
     }
 
     impl InMemorySecretStore {
         fn new() -> InMemorySecretStore {
             InMemorySecretStore(Mutex::new(InMemorySecretStoreInner {
-                application_keys: HashMap::new(),
-                counters: HashMap::new(),
                 rng: ring::rand::SystemRandom::new(),
+                id_lookup: HashMap::new(),
+                keys: HashMap::new(),
             }))
         }
     }
@@ -521,25 +534,51 @@ mod tests {
             pub_key_cred_params: &PublicKeyCredentialParameters,
             rp_id: &RelyingPartyIdentifier,
             user_handle: &UserHandle,
-        ) -> Result<(), Self::Error> {
-            let lock = self.0.lock().unwrap();
-            let private_key_document = match pub_key_cred_params.alg {
-                COSEAlgorithmIdentifier::ES256 => {
-                    let key = PrivateKeyDocument::generate_es256(&lock.rng);
-                    key.map_err(|_| Error::Unspecified)
-                }
-                _ => Err(Error::UnsupportedAlgorithm),
-            }
-            .unwrap();
-            let private_key = PrivateKeyCredentialSource::generate(
+        ) -> Result<PublicKeyCredentialDescriptor, Self::Error> {
+            let mut lock = self.0.lock().unwrap();
+            let key = PrivateKeyCredentialSource::generate(
+                &pub_key_cred_params.alg,
                 &pub_key_cred_params.type_,
                 rp_id,
                 user_handle,
-                private_key_document,
                 &lock.rng,
             )
             .unwrap();
-            Ok(())
+            let descriptor = PublicKeyCredentialDescriptor {
+                type_: key.type_.clone(),
+                id: key.id.clone(),
+            };
+            lock.keys.insert(key.id.clone(), key);
+            lock.id_lookup
+                .entry(rp_id.clone())
+                .or_default()
+                .insert(user_handle.clone(), descriptor.id.clone());
+            Ok(descriptor)
+        }
+
+        async fn attest(
+            &self,
+            _rp_id: &RelyingPartyIdentifier,
+            credential_descriptor: &PublicKeyCredentialDescriptor,
+            auth_data: &AuthenticatorData,
+            client_data_hash: &Sha256,
+        ) -> Result<AttestationStatement, Self::Error> {
+            let lock = self.0.lock().unwrap();
+            if let Some(key) = lock.keys.get(&credential_descriptor.id) {
+                let key: PublicKeyCredentialSource = key.clone().try_into().unwrap();
+                // TODO increment use counter
+                let signature = key.sign(auth_data, client_data_hash, &lock.rng).unwrap();
+                Ok(AttestationStatement::Packed(PackedAttestationStatement {
+                    alg: key.alg(),
+                    sig: signature,
+                    x5c: Some(AttestationCertificate {
+                        attestnCert: key.public_key_document().as_ref().to_vec(),
+                        caCerts: vec![],
+                    }),
+                }))
+            } else {
+                todo!("error")
+            }
         }
 
         // fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
@@ -582,37 +621,37 @@ mod tests {
         // }
     }
 
-    fn fake_attestation() -> Attestation {
-        Attestation {
-            certificate: AttestationCertificate::from_pem(
-                "-----BEGIN CERTIFICATE-----
-MIIBfzCCASagAwIBAgIJAJaMtBXq9XVHMAoGCCqGSM49BAMCMBsxGTAXBgNVBAMM
-EFNvZnQgVTJGIFRlc3RpbmcwHhcNMTcxMDIwMjE1NzAzWhcNMjcxMDIwMjE1NzAz
-WjAbMRkwFwYDVQQDDBBTb2Z0IFUyRiBUZXN0aW5nMFkwEwYHKoZIzj0CAQYIKoZI
-zj0DAQcDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
-30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSqNTMFEwHQYDVR0OBBYEFHjWu2kQGzvn
-KfCIKULVtb4WZnAEMB8GA1UdIwQYMBaAFHjWu2kQGzvnKfCIKULVtb4WZnAEMA8G
-A1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDRwAwRAIgaiIS0Rb+Hw8WSO9fcsln
-ERLGHDWaV+MS0kr5HgmvAjQCIEU0qjr86VDcpLvuGnTkt2djzapR9iO9PPZ5aErv
-3GCT
------END CERTIFICATE-----",
-            ),
-            key: PrivateKey::from_pem(
-                "-----BEGIN EC PRIVATE KEY-----
-MHcCAQEEIEijhKU+RGVbusHs9jNSUs9ZycXRSvtz0wrBJKozKuh1oAoGCCqGSM49
-AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
-30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSg==
------END EC PRIVATE KEY-----",
-            ),
-        }
-    }
+    //     fn fake_attestation() -> Attestation {
+    //         Attestation {
+    //             certificate: AttestationCertificate::from_pem(
+    //                 "-----BEGIN CERTIFICATE-----
+    // MIIBfzCCASagAwIBAgIJAJaMtBXq9XVHMAoGCCqGSM49BAMCMBsxGTAXBgNVBAMM
+    // EFNvZnQgVTJGIFRlc3RpbmcwHhcNMTcxMDIwMjE1NzAzWhcNMjcxMDIwMjE1NzAz
+    // WjAbMRkwFwYDVQQDDBBTb2Z0IFUyRiBUZXN0aW5nMFkwEwYHKoZIzj0CAQYIKoZI
+    // zj0DAQcDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
+    // 30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSqNTMFEwHQYDVR0OBBYEFHjWu2kQGzvn
+    // KfCIKULVtb4WZnAEMB8GA1UdIwQYMBaAFHjWu2kQGzvnKfCIKULVtb4WZnAEMA8G
+    // A1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDRwAwRAIgaiIS0Rb+Hw8WSO9fcsln
+    // ERLGHDWaV+MS0kr5HgmvAjQCIEU0qjr86VDcpLvuGnTkt2djzapR9iO9PPZ5aErv
+    // 3GCT
+    // -----END CERTIFICATE-----",
+    //             ),
+    //             key: PrivateKey::from_pem(
+    //                 "-----BEGIN EC PRIVATE KEY-----
+    // MHcCAQEEIEijhKU+RGVbusHs9jNSUs9ZycXRSvtz0wrBJKozKuh1oAoGCCqGSM49
+    // AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
+    // 30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSg==
+    // -----END EC PRIVATE KEY-----",
+    //             ),
+    //         }
+    //     }
 
-    fn verify_signature<T>(signature: &dyn Signature, data: &[u8], public_key: &PKeyRef<T>)
-    where
-        T: HasPublic,
-    {
-        let mut verifier = Verifier::new(MessageDigest::sha256(), public_key).unwrap();
-        verifier.update(data).unwrap();
-        assert!(verifier.verify(signature.as_ref()).unwrap());
-    }
+    // fn verify_signature<T>(signature: &dyn Signature, data: &[u8], public_key: &PKeyRef<T>)
+    // where
+    //     T: HasPublic,
+    // {
+    //     let mut verifier = Verifier::new(MessageDigest::sha256(), public_key).unwrap();
+    //     verifier.update(data).unwrap();
+    //     assert!(verifier.verify(signature.as_ref()).unwrap());
+    // }
 }

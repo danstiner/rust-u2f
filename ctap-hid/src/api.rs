@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fido2_authenticator_api::{
-    AttestationStatement, AuthenticatorAPI, Command, MakeCredentialResponse, Response,
-};
+use fido2_authenticator_api::{AuthenticatorAPI, Command, Response};
 use tracing::trace;
 
 use crate::{u2f, CapabilityFlags};
@@ -87,14 +85,14 @@ where
 
         match request {
             u2f::Request::Register {
-                application,
-                challenge,
+                application: _,
+                challenge: _,
             } => todo!("map to make_credential"),
             u2f::Request::Authenticate {
-                application,
-                challenge,
-                control_code,
-                key_handle,
+                application: _,
+                challenge: _,
+                control_code: _,
+                key_handle: _,
             } => todo!("map to get_assertion"),
             u2f::Request::GetVersion => {
                 let version = self.0.version();
@@ -117,6 +115,9 @@ where
         let response = match command {
             Command::MakeCredential(command) => {
                 Response::MakeCredential(self.0.make_credential(command).await?)
+            }
+            Command::GetAssertion(command) => {
+                Response::GetAssertion(self.0.get_assertion(command).await?)
             }
             Command::GetInfo => {
                 let info = self.0.get_info()?;

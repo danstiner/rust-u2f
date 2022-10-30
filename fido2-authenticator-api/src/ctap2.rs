@@ -1,14 +1,16 @@
+use crate::webauthn::AuthenticatorData;
 use crate::webauthn::PublicKeyCredentialDescriptor;
 use crate::webauthn::PublicKeyCredentialParameters;
 use crate::webauthn::PublicKeyCredentialRpEntity;
 use crate::webauthn::PublicKeyCredentialUserEntity;
-use crate::webauthn::RelyingPartyIdentifier;
 use crate::Aaguid;
+use crate::AttestationStatement;
+use crate::RelyingPartyIdentifier;
 use crate::Sha256;
+use crate::Signature;
 
 use minicbor_derive::{Decode, Encode};
 use std::collections::HashMap;
-use std::fmt::format;
 use std::fmt::Debug;
 
 ///! CTAP2 protocol
@@ -19,40 +21,8 @@ use std::fmt::Debug;
 #[derive(Debug, PartialEq)]
 // #[cbor(index_only)]
 pub enum Command {
-    // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorMakeCredential
-    // #[n(0x01)]
     MakeCredential(MakeCredentialCommand),
-    //  {
-    //     #[n(0x01)]
-    //     client_data_hash: Sha256,
-    //     #[n(0x02)]
-    //     rp: PublicKeyCredentialRpEntity,
-    //     #[n(0x03)]
-    //     user: PublicKeyCredentialUserEntity,
-    //     #[n(0x04)]
-    //     pub_key_cred_params: Array<PublicKeyCredentialParameters>,
-    //     #[n(0x05)]
-    //     exclude_list: Option<Array<PublicKeyCredentialDescriptor>>,
-    //     #[n(0x06)]
-    //     extensions: Option<Extensions>,
-    //     #[n(0x07)]
-    //     options: Option<Options>,
-    //     #[n(0x08)]
-    //     pin_uv_auth_param: Option<PinUvAuthParam>,
-    //     #[n(0x09)]
-    //     pin_uv_auth_protocol: Option<PinUvAuthProtocol>,
-    //     #[n(0x0a)]
-    //     enterprise_attestation: Option<u8>,
-    // },
-    // #[n(0x02)]
-    // GetAssertion(GetAssertionCommand)
-    //  {
-    //     #[n(0x01)]
-    //     rp_id: RelyingPartyIdentifier,
-    //     #[n(0x02)]
-    //     client_data_hash: Sha256,
-    // },
-    // #[n(0x04)]
+    GetAssertion(GetAssertionCommand),
     GetInfo,
 }
 
@@ -76,7 +46,7 @@ impl Command {
     }
 }
 
-// TODO dedupe with MakeCredential command type
+/// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorMakeCredential
 #[derive(Debug, Encode, Decode, PartialEq)]
 #[cbor(map)]
 pub struct MakeCredentialCommand {
@@ -145,15 +115,26 @@ pub struct PinUvAuthParam;
 #[derive(Debug, Encode, Decode, PartialEq)]
 pub struct PinUvAuthProtocol;
 
+/// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorGetAssertion
+#[derive(Debug, Encode, Decode, PartialEq)]
+#[cbor(map)]
+pub struct GetAssertionCommand {
+    #[n(0x01)]
+    pub rp_id: RelyingPartyIdentifier,
+    #[n(0x02)]
+    pub client_data_hash: Sha256,
+    //     allow_list: [PublicKeyCredentialDescriptor],
+    //     extensions: ExtensionMap,
+    //     options: GetAssertionOptions,
+    //     pin_uv_auth_param: ByteString,
+    //     pin_uv_auth_protocol: u32,
+}
+
 /// Messages from authenticator to the host, called a "response" in the CTAP2 protocol
 #[derive(Debug, PartialEq)]
 pub enum Response {
     MakeCredential(MakeCredentialResponse),
-    // GetAssertion {
-    //     credential: PublicKeyCredentialDescriptor,
-    //     auth_data: Vec<u8>,
-    //     signature: Vec<u8>,
-    // },
+    GetAssertion(GetAssertionResponse),
     GetInfo(GetInfoResponse),
 }
 
@@ -165,6 +146,10 @@ impl<C> minicbor::Encode<C> for Response {
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         match self {
             Response::MakeCredential(response) => {
+                e.u8(0)?; // status, TODO encode this in a better place
+                e.encode(response)?
+            }
+            Response::GetAssertion(response) => {
                 e.u8(0)?; // status, TODO encode this in a better place
                 e.encode(response)?
             }
@@ -187,11 +172,7 @@ impl Response {
 
 #[derive(Debug, PartialEq)]
 pub struct MakeCredentialResponse {
-    // #[n(0x01)]
-    pub fmt: String,
-    // #[n(0x02)]
-    pub auth_data: Vec<u8>,
-    // #[n(0x03)]
+    pub auth_data: AuthenticatorData,
     pub att_stmt: AttestationStatement,
 }
 
@@ -204,16 +185,32 @@ impl<C> minicbor::Encode<C> for MakeCredentialResponse {
         e.map(3)?;
 
         e.u8(0x01)?;
-        e.encode(&self.fmt)?;
+        e.encode(self.att_stmt.format())?;
 
         e.u8(0x02)?;
         e.encode(&self.auth_data)?;
 
         e.u8(0x03)?;
-        e.encode(&self.att_stmt)?;
+        match &self.att_stmt {
+            AttestationStatement::Packed(statement) => {
+                e.encode(statement)?;
+            }
+        }
 
         Ok(())
     }
+}
+
+#[derive(Debug, minicbor_derive::Encode, PartialEq)]
+#[cbor(map)]
+pub struct GetAssertionResponse {
+    #[n(0x01)]
+    pub credential: PublicKeyCredentialDescriptor,
+    #[n(0x02)]
+    pub auth_data: AuthenticatorData,
+    #[n(0x03)]
+    pub signature: Signature,
+    // todo optional fields
 }
 
 #[derive(Debug, PartialEq)]
@@ -290,11 +287,9 @@ impl<C> minicbor::Encode<C> for GetInfoResponse {
     }
 }
 
-#[derive(Debug, Encode, Decode, PartialEq)]
-pub struct AttestationStatement {}
-
 #[cfg(test)]
 mod tests {
+    use crate::{Aaguid, RelyingPartyIdentifier};
     use crate::{COSEAlgorithmIdentifier, PublicKeyCredentialType, UserHandle};
 
     use super::*;

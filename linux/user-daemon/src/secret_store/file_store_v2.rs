@@ -3,10 +3,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
+use fido2_authenticator_api::PublicKeyCredentialDescriptor;
 use fido2_authenticator_service::SecretStore;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use u2f_core::{AppId, ApplicationKey, Counter, KeyHandle};
 
 use crate::atomic_file;
 use crate::secret_store::{MutableSecretStore, Secret};
@@ -17,18 +17,18 @@ struct Data {
 }
 
 impl Data {
-    fn find_secret(&self, application: &AppId, handle: &KeyHandle) -> Option<&Secret> {
-        self.secrets.iter().find(|s| {
-            s.application_key.application.eq_consttime(application)
-                && s.application_key.handle.eq_consttime(handle)
-        })
-    }
-    fn find_secret_mut(&mut self, application: &AppId, handle: &KeyHandle) -> Option<&mut Secret> {
-        self.secrets.iter_mut().find(|s| {
-            s.application_key.application.eq_consttime(application)
-                && s.application_key.handle.eq_consttime(handle)
-        })
-    }
+    // fn find_secret(&self, application: &AppId, handle: &KeyHandle) -> Option<&Secret> {
+    //     self.secrets.iter().find(|s| {
+    //         s.application_key.application.eq_consttime(application)
+    //             && s.application_key.handle.eq_consttime(handle)
+    //     })
+    // }
+    // fn find_secret_mut(&mut self, application: &AppId, handle: &KeyHandle) -> Option<&mut Secret> {
+    //     self.secrets.iter_mut().find(|s| {
+    //         s.application_key.application.eq_consttime(application)
+    //             && s.application_key.handle.eq_consttime(handle)
+    //     })
+    // }
     fn push(&mut self, secret: Secret) {
         self.secrets.push(secret)
     }
@@ -79,10 +79,20 @@ impl SecretStore for FileStoreV2 {
 
     async fn make_credential(
         &self,
-        pub_key_cred_params: &fido2_authenticator_api::PublicKeyCredentialParameters,
-        rp_id: &fido2_authenticator_api::RelyingPartyIdentifier,
-        user_id: &fido2_authenticator_api::UserHandle,
-    ) -> Result<(), Self::Error> {
+        _pub_key_cred_params: &fido2_authenticator_api::PublicKeyCredentialParameters,
+        _rp_id: &fido2_authenticator_api::RelyingPartyIdentifier,
+        _user_id: &fido2_authenticator_api::UserHandle,
+    ) -> Result<PublicKeyCredentialDescriptor, Self::Error> {
+        todo!()
+    }
+
+    async fn attest(
+        &self,
+        _rp_id: &fido2_authenticator_api::RelyingPartyIdentifier,
+        _credential_descriptor: &fido2_authenticator_api::PublicKeyCredentialDescriptor,
+        _auth_data: &fido2_authenticator_api::AuthenticatorData,
+        _client_data_hash: &fido2_authenticator_api::Sha256,
+    ) -> Result<fido2_authenticator_api::AttestationStatement, Self::Error> {
         todo!()
     }
     // fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
@@ -125,29 +135,27 @@ impl SecretStore for FileStoreV2 {
 mod tests {
     extern crate tempdir;
 
-    use u2f_core::PrivateKey;
+    // use super::*;
 
-    use super::*;
+    //     use self::tempdir::TempDir;
 
-    use self::tempdir::TempDir;
+    //     fn fake_app_id() -> AppId {
+    //         AppId::from_bytes(&vec![0u8; 32])
+    //     }
 
-    fn fake_app_id() -> AppId {
-        AppId::from_bytes(&vec![0u8; 32])
-    }
+    //     fn fake_key() -> PrivateKey {
+    //         PrivateKey::from_pem(
+    //             "-----BEGIN EC PRIVATE KEY-----
+    // MHcCAQEEICm1nBaPoI3Q3+RJ143W8eCBAdkxrq5YUoNQ9joO0CdroAoGCCqGSM49
+    // AwEHoUQDQgAE4CiwgIh5tZgW85DKWRajIeTv7Z11C0nmida+m53yVySriU2YK/8O
+    // i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
+    // -----END EC PRIVATE KEY-----",
+    //         )
+    //     }
 
-    fn fake_key() -> PrivateKey {
-        PrivateKey::from_pem(
-            "-----BEGIN EC PRIVATE KEY-----
-MHcCAQEEICm1nBaPoI3Q3+RJ143W8eCBAdkxrq5YUoNQ9joO0CdroAoGCCqGSM49
-AwEHoUQDQgAE4CiwgIh5tZgW85DKWRajIeTv7Z11C0nmida+m53yVySriU2YK/8O
-i2L2wGDHkWWIJJSthmgwkZovXHyMXMpDhw==
------END EC PRIVATE KEY-----",
-        )
-    }
-
-    fn fake_key_handle() -> KeyHandle {
-        KeyHandle::from(&Vec::new())
-    }
+    // fn fake_key_handle() -> KeyHandle {
+    //     KeyHandle::from(&Vec::new())
+    // }
 
     // #[test]
     // fn get_and_increment_counter() {

@@ -1,3 +1,4 @@
+use byteorder::{BigEndian, WriteBytesExt};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
@@ -55,8 +56,8 @@ impl<'b, C> Decode<'b, C> for COSEAlgorithmIdentifier {
 
 #[derive(Debug, PartialEq)]
 pub struct PublicKeyCredentialDescriptor {
-    type_: String,
-    id: CredentialId,
+    pub type_: PublicKeyCredentialType,
+    pub id: CredentialId,
     //TODO optional transports: Vec<String>,
 }
 
@@ -70,7 +71,7 @@ impl<C> Encode<C> for PublicKeyCredentialDescriptor {
             .str("id")?
             .encode(&self.id)?
             .str("type")?
-            .str(&self.type_)?
+            .encode(&self.type_)?
             .ok()
     }
 }
@@ -88,19 +89,16 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialDescriptor {
         if d.str()? != "id" {
             return Err(minicbor::decode::Error::message("Expected map key \"id\""));
         }
-        let id = Decode::decode(d, ctx)?;
+        let id = d.decode()?;
 
         if d.str()? != "type" {
             return Err(minicbor::decode::Error::message(
                 "Expected map key \"type\"",
             ));
         }
-        let type_: &'b str = d.str()?;
+        let type_ = d.decode()?;
 
-        Ok(PublicKeyCredentialDescriptor {
-            id: id,
-            type_: type_.to_string(),
-        })
+        Ok(PublicKeyCredentialDescriptor { id, type_ })
     }
 }
 
@@ -189,7 +187,10 @@ impl<C> Encode<C> for PublicKeyCredentialType {
 }
 
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
-    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
         match d.str()? {
             "public-key" => Ok(PublicKeyCredentialType::PublicKey),
             type_ => Ok(PublicKeyCredentialType::Unknown(type_.to_owned())),
@@ -292,6 +293,7 @@ impl<C> Encode<C> for PublicKeyCredentialUserEntity {
             .ok()
     }
 }
+
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialUserEntity {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         let map_len = d.map()?.ok_or(
@@ -349,7 +351,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialUserEntity {
 /// Opaque byte sequence with a maximum size of 64 bytes. Not meant for display
 /// to the user. MUST NOT contain personally identifying information and
 /// MUST NOT be empty.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
 pub struct UserHandle(Vec<u8>);
 
 impl UserHandle {
@@ -375,8 +377,16 @@ impl<'b, C> Decode<'b, C> for UserHandle {
     }
 }
 
-#[derive(Debug, PartialEq)]
+/// A probabilistically-unique byte sequence identifying a public key credential source and its authentication assertions.
+/// Must be at least 16 bytes and include at least 100 bits of entropy.
+#[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
 pub struct CredentialId(Vec<u8>);
+
+impl CredentialId {
+    pub fn new(value: &[u8]) -> Self {
+        CredentialId(value.to_vec())
+    }
+}
 
 impl<C> Encode<C> for CredentialId {
     fn encode<W: minicbor::encode::Write>(
@@ -387,8 +397,12 @@ impl<C> Encode<C> for CredentialId {
         e.bytes(&self.0)?.ok()
     }
 }
+
 impl<'b, C> Decode<'b, C> for CredentialId {
-    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
         Ok(Self(d.bytes()?.to_vec()))
     }
 }
@@ -407,7 +421,9 @@ impl<'b, C> Decode<'b, C> for CredentialId {
     Deserialize,
     minicbor_derive::Encode,
     minicbor_derive::Decode,
+    Hash,
     PartialEq,
+    Eq,
     Clone,
 )]
 #[cbor(transparent)]
@@ -417,15 +433,116 @@ impl RelyingPartyIdentifier {
     pub fn new(id: String) -> Self {
         Self(id)
     }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
 }
 
+/// The authenticator data structure is a byte array of 37 bytes or more that
+/// encodes contextual bindings made by the authenticator.
 /// https://www.w3.org/TR/webauthn-2/#authenticator-data
-struct AuthenticatorData {
+#[derive(Debug, PartialEq)]
+pub struct AuthenticatorData {
     /// SHA-256 hash of the RP ID the credential is scoped to.
-    rp_id_hash: Sha256,
+    pub rp_id_hash: Sha256,
 
     // flags
+    pub user_present: bool,
+    pub user_verified: bool,
 
-    // Signature counter, 32-bit unsigned big-endian integer.
-    sign_count: u32,
+    /// Signature counter, 32-bit unsigned big-endian integer.
+    pub sign_count: u32,
+}
+
+impl AuthenticatorData {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(37);
+        buf.extend_from_slice(&self.rp_id_hash.0);
+        buf.push(0u8);
+        buf.write_u32::<BigEndian>(self.sign_count).unwrap();
+        buf
+    }
+}
+
+impl<C> minicbor::Encode<C> for AuthenticatorData {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.bytes(&self.to_bytes())?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AttestationStatement {
+    Packed(PackedAttestationStatement),
+}
+
+impl AttestationStatement {
+    pub fn format(&self) -> &str {
+        match self {
+            AttestationStatement::Packed(_) => "packed",
+        }
+    }
+}
+
+/// https://www.w3.org/TR/webauthn-2/#sctn-packed-attestation
+#[derive(Debug, PartialEq)]
+pub struct PackedAttestationStatement {
+    pub alg: COSEAlgorithmIdentifier,
+    pub sig: Signature,
+    pub x5c: Option<AttestationCertificate>,
+}
+
+impl<C> Encode<C> for PackedAttestationStatement {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.map(2)?
+            .str("alg")?
+            .encode(&self.alg)?
+            .str("sig")?
+            .bytes(self.sig.as_ref())?
+            .ok()
+    }
+}
+
+/// An attestation certificate and its certificate chain (if any), each encoded in X.509 format
+#[derive(Debug, PartialEq)]
+pub struct AttestationCertificate {
+    pub attestnCert: Vec<u8>,
+    pub caCerts: Vec<Vec<u8>>,
+}
+
+/// A WebAuthn signature is the result of signing authenticator data and the client data hash.
+/// It can be an attestation signature or assertion signature.
+/// https://www.w3.org/TR/webauthn-2/#webauthn-signature
+#[derive(Debug, PartialEq)]
+pub struct Signature(Vec<u8>);
+
+impl Signature {
+    pub fn new(value: &[u8]) -> Signature {
+        Signature(value.to_vec())
+    }
+}
+
+impl<C> Encode<C> for Signature {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.bytes(&self.0)?.ok()
+    }
+}
+
+impl AsRef<[u8]> for Signature {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
 }

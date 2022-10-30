@@ -1,13 +1,12 @@
-use std::collections::HashMap;
 use std::io;
 use std::io::ErrorKind;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use fido2_authenticator_service::SecretStore;
-use secret_service::{Collection, EncryptionType, Error, Item, SecretService};
+use secret_service::{Collection, EncryptionType, Error, SecretService};
 use serde_json;
-use u2f_core::{try_reverse_app_id, AppId, ApplicationKey, Counter, KeyHandle};
+use u2f_core::{try_reverse_app_id, AppId, KeyHandle};
 
 use crate::secret_store::{MutableSecretStore, Secret};
 
@@ -65,10 +64,20 @@ impl<'a> SecretStore for SecretServiceStore<'a> {
 
     async fn make_credential(
         &self,
-        pub_key_cred_params: &fido2_authenticator_api::PublicKeyCredentialParameters,
-        rp_id: &fido2_authenticator_api::RelyingPartyIdentifier,
-        user_id: &fido2_authenticator_api::UserHandle,
-    ) -> Result<(), Self::Error> {
+        _pub_key_cred_params: &fido2_authenticator_api::PublicKeyCredentialParameters,
+        _rp_id: &fido2_authenticator_api::RelyingPartyIdentifier,
+        _user_id: &fido2_authenticator_api::UserHandle,
+    ) -> Result<fido2_authenticator_api::PublicKeyCredentialDescriptor, Self::Error> {
+        todo!()
+    }
+
+    async fn attest(
+        &self,
+        _rp_id: &fido2_authenticator_api::RelyingPartyIdentifier,
+        _credential_descriptor: &fido2_authenticator_api::PublicKeyCredentialDescriptor,
+        _auth_data: &fido2_authenticator_api::AuthenticatorData,
+        _client_data_hash: &fido2_authenticator_api::Sha256,
+    ) -> Result<fido2_authenticator_api::AttestationStatement, Self::Error> {
         todo!()
     }
 
@@ -186,19 +195,19 @@ fn registration_attributes(app_id: &AppId, handle: &KeyHandle) -> Vec<(&'static 
     attributes
 }
 
-fn find_item<'a>(
-    collection: &'a Collection<'a>,
-    app_id: &AppId,
-    handle: &KeyHandle,
-) -> io::Result<Option<Item<'a>>> {
-    unlock_if_locked(collection)?;
-    let attributes = search_attributes(app_id, handle);
-    let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let mut result = collection
-        .search_items(attributes)
-        .map_err(|_error| io::Error::new(ErrorKind::Other, "search_items"))?;
-    Ok(result.pop())
-}
+// fn find_item<'a>(
+//     collection: &'a Collection<'a>,
+//     app_id: &AppId,
+//     handle: &KeyHandle,
+// ) -> io::Result<Option<Item<'a>>> {
+//     unlock_if_locked(collection)?;
+//     let attributes = search_attributes(app_id, handle);
+//     let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
+//     let mut result = collection
+//         .search_items(attributes)
+//         .map_err(|_error| io::Error::new(ErrorKind::Other, "search_items"))?;
+//     Ok(result.pop())
+// }
 
 fn unlock_if_locked(collection: &Collection) -> io::Result<()> {
     if collection

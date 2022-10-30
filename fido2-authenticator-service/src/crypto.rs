@@ -1,11 +1,14 @@
-use fido2_authenticator_api::{PublicKeyCredentialType, RelyingPartyIdentifier, UserHandle};
+use fido2_authenticator_api::{
+    AuthenticatorData, COSEAlgorithmIdentifier, CredentialId, PublicKeyCredentialType,
+    RelyingPartyIdentifier, Sha256, Signature, UserHandle,
+};
 use ring::{
     error, rand,
     signature::{self, KeyPair},
 };
 use serde::{Deserialize, Serialize};
 
-fn test() -> Result<(), ring::error::Unspecified> {
+fn _test() -> Result<(), ring::error::Unspecified> {
     // Generate a key pair in PKCS#8 (v2) format.
     let rng = rand::SystemRandom::new();
     let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
@@ -32,18 +35,12 @@ fn test() -> Result<(), ring::error::Unspecified> {
     Ok(())
 }
 
-/// A probabilistically-unique byte sequence identifying a public key credential source and its authentication assertions.
-/// Must be at least 16 bytes and include at least 100 bits of entropy
-///
-#[derive(Serialize, Deserialize)]
-struct CredentialId(Vec<u8>);
-
-impl CredentialId {
-    pub fn generate(rng: &dyn rand::SecureRandom) -> Result<Self, error::Unspecified> {
-        let mut buf = [0u8; 16];
-        rng.fill(&mut buf)?;
-        Ok(Self(buf.to_vec()))
-    }
+pub fn generate_credential_id(
+    rng: &dyn rand::SecureRandom,
+) -> Result<CredentialId, error::Unspecified> {
+    let mut buf = [0u8; 16];
+    rng.fill(&mut buf)?;
+    Ok(CredentialId::new(&buf))
 }
 
 /// https://www.w3.org/TR/webauthn-2/#public-key-credential-source
@@ -53,6 +50,28 @@ pub struct PublicKeyCredentialSource {
     rp_id: RelyingPartyIdentifier,
     user_handle: UserHandle,
     private_key: PrivateKey,
+}
+
+impl PublicKeyCredentialSource {
+    /// https://www.w3.org/TR/webauthn-2/#fig-signature
+    pub fn sign(
+        &self,
+        auth_data: &AuthenticatorData,
+        client_data_hash: &Sha256,
+        rng: &dyn rand::SecureRandom,
+    ) -> Result<Signature, error::Unspecified> {
+        let mut message = auth_data.to_bytes();
+        message.extend_from_slice(client_data_hash.as_ref());
+        self.private_key.sign(rng, &message)
+    }
+
+    pub(crate) fn public_key_document(&self) -> PublicKeyDocument {
+        self.private_key.public_key_document()
+    }
+
+    pub(crate) fn alg(&self) -> COSEAlgorithmIdentifier {
+        self.private_key.alg()
+    }
 }
 
 impl TryFrom<PrivateKeyCredentialSource> for PublicKeyCredentialSource {
@@ -73,6 +92,35 @@ enum PrivateKey {
     ES256(signature::EcdsaKeyPair),
 }
 
+impl PrivateKey {
+    fn sign(
+        &self,
+        rng: &dyn rand::SecureRandom,
+        message: &[u8],
+    ) -> Result<Signature, error::Unspecified> {
+        match self {
+            PrivateKey::ES256(key_pair) => match key_pair.sign(rng, message) {
+                Ok(signature) => Ok(Signature::new(signature.as_ref())),
+                Err(err) => Err(err),
+            },
+        }
+    }
+
+    fn public_key_document(&self) -> PublicKeyDocument {
+        match self {
+            PrivateKey::ES256(key_pair) => {
+                PublicKeyDocument(key_pair.public_key().as_ref().to_vec())
+            }
+        }
+    }
+
+    fn alg(&self) -> COSEAlgorithmIdentifier {
+        match self {
+            PrivateKey::ES256(_) => COSEAlgorithmIdentifier::ES256,
+        }
+    }
+}
+
 impl TryFrom<PrivateKeyDocument> for PrivateKey {
     type Error = error::Unspecified;
 
@@ -88,10 +136,18 @@ impl TryFrom<PrivateKeyDocument> for PrivateKey {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct PrivateKeyCredentialSource {
-    type_: PublicKeyCredentialType,
-    id: CredentialId,
+pub(crate) struct PublicKeyDocument(Vec<u8>);
+
+impl AsRef<[u8]> for PublicKeyDocument {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub(crate) struct PrivateKeyCredentialSource {
+    pub type_: PublicKeyCredentialType,
+    pub id: CredentialId,
     rp_id: RelyingPartyIdentifier,
     user_handle: UserHandle,
     private_key_document: PrivateKeyDocument,
@@ -99,15 +155,19 @@ pub struct PrivateKeyCredentialSource {
 
 impl PrivateKeyCredentialSource {
     pub fn generate(
+        alg: &COSEAlgorithmIdentifier,
         type_: &PublicKeyCredentialType,
         rp_id: &RelyingPartyIdentifier,
         user_handle: &UserHandle,
-        private_key_document: PrivateKeyDocument,
         rng: &dyn rand::SecureRandom,
     ) -> Result<Self, error::Unspecified> {
+        let private_key_document = match alg {
+            COSEAlgorithmIdentifier::ES256 => PrivateKeyDocument::generate_es256(rng),
+            _ => todo!("error that indicated unsupported algorithm"),
+        }?;
         Ok(Self {
             type_: type_.clone(),
-            id: CredentialId::generate(rng)?,
+            id: generate_credential_id(rng)?,
             rp_id: rp_id.clone(),
             user_handle: user_handle.clone(),
             private_key_document,
@@ -115,7 +175,7 @@ impl PrivateKeyCredentialSource {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum PrivateKeyDocument {
     ES256 { pkcs8_bytes: Vec<u8> },
 }

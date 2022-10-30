@@ -8,11 +8,7 @@ use super::serde_base64::{from_base64, to_base64};
 
 pub struct PrivateKey(pub(crate) EcKey<Private>);
 
-impl PrivateKey {
-    pub fn from_pem(pem: &str) -> PrivateKey {
-        PrivateKey(EcKey::private_key_from_pem(pem.as_bytes()).unwrap())
-    }
-}
+impl PrivateKey {}
 
 impl Clone for PrivateKey {
     fn clone(&self) -> PrivateKey {

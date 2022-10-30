@@ -2,7 +2,6 @@ use std::result::Result;
 
 use super::serde_base64::{from_base64, to_base64};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use subtle::ConstantTimeEq;
 
 #[derive(Copy, Clone, Eq, Hash, PartialEq)]
 pub struct AppId(pub(crate) [u8; 32]);
@@ -13,14 +12,6 @@ impl AppId {
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(slice);
         AppId(bytes)
-    }
-
-    pub fn eq_consttime(&self, other: &AppId) -> bool {
-        self.0.ct_eq(&other.0).unwrap_u8() == 1
-    }
-
-    pub fn to_base64(&self) -> String {
-        base64::encode(&self.0)
     }
 }
 

@@ -11,22 +11,6 @@ use ring::digest;
 //
 // See https://github.com/google/u2f-ref-code/blob/b11e47c5bca093c93d802286bead3db78a4b0b9f/u2f-chrome-extension/usbsignhandler.js#L118
 
-// Chrome uses app id QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=
-pub const BOGUS_APP_ID_HASH_CHROME: AppId = AppId([
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
-    65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8, 65u8,
-]);
-
-// Firefox uses app id AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-pub const BOGUS_APP_ID_HASH_FIREFOX: AppId = AppId([
-    0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-    0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-]);
-
-pub fn try_reverse_app_id(app_id: &AppId) -> Option<String> {
-    KNOWN_APP_IDS.get(app_id).map(|s| String::from(*s))
-}
-
 lazy_static! {
     static ref KNOWN_APP_IDS: HashMap<AppId, &'static str> = {
         let mut map = HashMap::new();
