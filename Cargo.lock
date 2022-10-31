@@ -498,7 +498,7 @@ dependencies = [
 
 [[package]]
 name = "ctap-hid"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "base64",
@@ -733,7 +733,7 @@ dependencies = [
 
 [[package]]
 name = "fido2-api"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "assert_matches",
  "async-trait",
@@ -759,7 +759,7 @@ dependencies = [
 
 [[package]]
 name = "fido2-service"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "assert_matches",
  "async-trait",
@@ -2094,7 +2094,7 @@ dependencies = [
 
 [[package]]
 name = "softu2f-system-daemon"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "base64",
  "bincode",
@@ -2124,7 +2124,7 @@ dependencies = [
 
 [[package]]
 name = "softu2f-user-daemon"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "base64",
@@ -2323,7 +2323,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-linux-uhid"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "bitflags",
  "bytes",
@@ -2524,7 +2524,7 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 
 [[package]]
 name = "u2f-core"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "assert_matches",
  "async-trait",

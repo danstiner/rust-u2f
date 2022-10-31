@@ -1,10 +1,15 @@
+softu2f (0.5.0) unstable; urgency=medium
+
+  * FIDO2 support
+
+ -- Dan <daniel.stiner@gmail.com>  Mon, 6 Sep 2021 15:32:00 -0800
+
 softu2f (0.4.2) unstable; urgency=medium
 
 * Remove xdg:schema search attribute, some entries from older versions can lack this attribute
 * Better handling of bogus app id's from Firefox and Chrome
 
  -- Dan <daniel.stiner@gmail.com>  Mon, 6 Sep 2021 15:32:00 -0800
-
 
 softu2f (0.4.1) unstable; urgency=medium
 

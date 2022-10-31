@@ -2,7 +2,7 @@
 authors = ["Daniel Stiner <danstiner@gmail.com>"]
 description = "System daemon for emulating U2F devices"
 name = "softu2f-system-daemon"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2021"
 
 [dependencies]
