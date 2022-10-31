@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 use u2f_core::{ApplicationKey, Counter};
 
-use crate::config::Config;
+use crate::{config::Config, AAGUID};
 use file_store::FileStore;
 use file_store_v2::FileStoreV2;
 use secret_service_store::SecretServiceStore;
@@ -36,7 +36,7 @@ impl Default for SecretStoreType {
     }
 }
 
-pub trait MutableSecretStore: SecretStore {
+pub trait MutableSecretStore {
     fn add_secret(&self, secret: Secret) -> io::Result<()>;
 }
 
@@ -47,7 +47,7 @@ pub fn build(config: &Config) -> io::Result<Box<dyn SecretStore<Error = io::Erro
             let store = SecretServiceStore::new()
                 .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
             migrate_legacy_file_store(config, &store)?;
-            Ok(Box::new(store))
+            Ok(Box::new(fido2_service::SimpleSecrets::new(store, AAGUID)))
         }
         SecretStoreType::File => {
             let store = FileStoreV2::new(config.data_local_dir())?;

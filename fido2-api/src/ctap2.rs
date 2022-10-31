@@ -33,6 +33,7 @@ impl<'b, C> minicbor::Decode<'b, C> for Command {
     ) -> Result<Self, minicbor::decode::Error> {
         match d.u8()? {
             0x01 => Ok(Command::MakeCredential(d.decode()?)),
+            0x02 => Ok(Command::GetAssertion(d.decode()?)),
             0x04 => Ok(Command::GetInfo),
             type_ => Err(minicbor::decode::Error::message(format!(
                 "Unrecognized command type {}",

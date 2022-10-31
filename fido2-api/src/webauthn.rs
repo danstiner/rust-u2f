@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use byteorder::{BigEndian, WriteBytesExt};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
@@ -25,6 +26,7 @@ impl<C> Encode<C> for COSEAlgorithmIdentifier {
         e.i16(*self as i16)?.ok()
     }
 }
+
 impl<'b, C> Decode<'b, C> for COSEAlgorithmIdentifier {
     fn decode(
         d: &mut minicbor::Decoder<'b>,
@@ -226,6 +228,7 @@ impl<C> Encode<C> for PublicKeyCredentialRpEntity {
             .ok()
     }
 }
+
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialRpEntity {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         let map_len = d.map()?.ok_or(
@@ -364,6 +367,10 @@ impl UserHandle {
         assert!(id.len() <= 64);
         UserHandle(id)
     }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
+    }
 }
 
 impl<C> Encode<C> for UserHandle {
@@ -392,6 +399,10 @@ pub struct CredentialId(Vec<u8>);
 impl CredentialId {
     pub fn new(value: &[u8]) -> Self {
         CredentialId(value.to_vec())
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }
 
@@ -444,6 +455,14 @@ impl RelyingPartyIdentifier {
     pub fn as_bytes(&self) -> &[u8] {
         self.0.as_bytes()
     }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn to_string(&self) -> String {
+        self.0.clone()
+    }
 }
 
 /// The authenticator data structure is a byte array of 37 bytes or more that
@@ -467,10 +486,32 @@ pub struct AuthenticatorData {
 
 impl AuthenticatorData {
     pub fn to_bytes(&self) -> Vec<u8> {
+        let mut flags = AuthenticatorDataFlags::empty();
+        if self.user_present {
+            flags |= AuthenticatorDataFlags::UP;
+        }
+        if self.user_verified {
+            flags |= AuthenticatorDataFlags::UV;
+        }
+        if self.attested_credential_data.is_some() {
+            flags |= AuthenticatorDataFlags::AT;
+        }
+
         let mut buf = Vec::with_capacity(37);
         buf.extend_from_slice(self.rp_id_hash.as_ref());
-        buf.push(0u8);
+        buf.push(flags.bits);
         buf.write_u32::<BigEndian>(self.sign_count).unwrap();
+        if let Some(ref attested_credential_data) = self.attested_credential_data {
+            for attested in attested_credential_data {
+                buf.extend_from_slice(attested.aaguid.as_bytes());
+                buf.write_u16::<BigEndian>(
+                    attested.credential_id.as_bytes().len().try_into().unwrap(),
+                )
+                .unwrap();
+                buf.extend_from_slice(attested.credential_id.as_bytes());
+                minicbor::encode(&attested.credential_public_key, &mut buf).unwrap();
+            }
+        }
         buf
     }
 }
@@ -483,6 +524,15 @@ impl<C> minicbor::Encode<C> for AuthenticatorData {
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.bytes(&self.to_bytes())?;
         Ok(())
+    }
+}
+
+bitflags! {
+    pub struct AuthenticatorDataFlags: u8 {
+        const UP = 0b0000_0001; // Indicates the user is present
+        const UV = 0b0000_0100; // Indicates the user is verified
+        const AT = 0b0100_0000; // Indicates the authenticator added attested credential data
+        const ED = 0b1000_0000; // Indicates the authenticator data has extensions
     }
 }
 
@@ -510,12 +560,39 @@ pub struct AttestedCredentialData {
 /// Note: The credential public key is referred to as the user public key in FIDO UAF and U2F.
 /// https://www.w3.org/TR/webauthn-2/#credential-public-key
 #[derive(Debug, PartialEq, Clone)]
+// #[cbor(map)]
 pub struct CredentialPublicKey {
+    // #[n(0x01)]
     pub kty: KeyType,
+    // #[n(0x03)]
     pub alg: COSEAlgorithmIdentifier,
+    // #[n(0x20)]
     pub crv: EllipticCurve,
+    // #[n(0x21)]
     pub x: [u8; 32],
+    // #[n(0x22)]
     pub y: [u8; 32],
+}
+
+impl<C> Encode<C> for CredentialPublicKey {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.map(5)?
+            .i8(1)?
+            .encode(self.kty)?
+            .i8(3)?
+            .encode(self.alg)?
+            .i8(-1)?
+            .encode(self.crv)?
+            .i8(-2)?
+            .bytes(&self.x)?
+            .i8(-3)?
+            .bytes(&self.y)?
+            .ok()
+    }
 }
 
 /// Key types define a format for transmitting pblic and private keys.
@@ -532,11 +609,31 @@ pub enum KeyType {
     Symmetric = 4,
 }
 
+impl<C> Encode<C> for KeyType {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.u8(*self as u8)?.ok()
+    }
+}
+
 /// https://www.rfc-editor.org/rfc/rfc8152#section-13.1
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum EllipticCurve {
     /// NIST P-256 also known as secp256r1, uses KeyType::EC2
     P256 = 1,
+}
+
+impl<C> Encode<C> for EllipticCurve {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.u8(*self as u8)?.ok()
+    }
 }
 
 #[derive(Debug, PartialEq)]

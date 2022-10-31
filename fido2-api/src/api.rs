@@ -63,6 +63,12 @@ pub struct VersionInfo {
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Aaguid(pub uuid::Uuid);
 
+impl Aaguid {
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
 impl<C> Encode<C> for Aaguid {
     fn encode<W: minicbor::encode::Write>(
         &self,

@@ -13,7 +13,7 @@ use crate::{
     CredentialProtection, SecretStore,
 };
 
-pub(crate) trait SecretStoreActual {
+pub trait SecretStoreActual {
     type Error;
 
     fn put_discoverable(
@@ -32,7 +32,7 @@ pub(crate) trait SecretStoreActual {
     ) -> Result<Vec<CredentialHandle>, Self::Error>;
 }
 
-pub(crate) struct SimpleSecrets<S>(Mutex<SimpleSecretsData<S>>);
+pub struct SimpleSecrets<S>(Mutex<SimpleSecretsData<S>>);
 
 impl<S> SimpleSecrets<S> {
     pub fn new(store: S, aaguid: Aaguid) -> Self {
@@ -80,6 +80,7 @@ impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
                 is_user_verification_required: false,
                 is_user_verification_optional_with_credential_id_list: false,
             },
+            rp_id: rp_id.clone(),
         })
     }
 

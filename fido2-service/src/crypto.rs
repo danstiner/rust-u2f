@@ -170,7 +170,7 @@ impl AsRef<[u8]> for PublicKeyDocument {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct PrivateKeyCredentialSource {
+pub struct PrivateKeyCredentialSource {
     pub type_: PublicKeyCredentialType,
     pub id: CredentialId,
     pub rp_id: RelyingPartyIdentifier,

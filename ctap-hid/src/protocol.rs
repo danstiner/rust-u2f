@@ -350,10 +350,10 @@ where
                             &(*payload_buffer)[0..(*payload_len).into()],
                             this.output,
                             this.output_waker,
-                        )
-                    } else {
-                        Ok(())
+                        )?;
+                        *state = ChannelState::Ready;
                     }
+                    Ok(())
                 }
                 Packet::Initialization { .. } => todo!("Err: Unexpected Initialization packet"),
             },

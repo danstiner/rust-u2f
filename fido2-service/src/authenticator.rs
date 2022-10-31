@@ -18,6 +18,7 @@ use fido2_api::Sha256;
 use fido2_api::Signature;
 use fido2_api::UserHandle;
 use tracing::debug;
+use tracing::trace;
 use tracing::warn;
 
 use crate::Error;
@@ -52,6 +53,7 @@ pub struct CredentialProtection {
 pub struct CredentialHandle {
     pub descriptor: PublicKeyCredentialDescriptor,
     pub protection: CredentialProtection,
+    pub rp_id: RelyingPartyIdentifier,
 }
 
 #[async_trait(?Send)]
@@ -340,12 +342,14 @@ where
         // 18. Otherwise, if the "rk" option is false: the authenticator MUST create a non-discoverable credential.
         // TODO
 
+        trace!("Make credential");
         let credential = self
             .secrets
             .make_credential(pk_parameters, &rp.id, &user.id)
             .await?;
 
         // 19. Generate an attestation statement for the newly-created credential using clientDataHash, taking into account the value of the enterpriseAttestation parameter, if present, as described above in Step 9.
+        trace!("Generate attestation statement");
         let (auth_data, att_stmt) = self
             .secrets
             .attest(
@@ -818,6 +822,7 @@ mod tests {
                             is_user_verification_required: false,
                             is_user_verification_optional_with_credential_id_list: false,
                         },
+                        rp_id: credential.rp_id.clone(),
                     },
                 );
             self.keys.insert(credential.id.clone(), credential);

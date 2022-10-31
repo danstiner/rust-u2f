@@ -11,7 +11,6 @@ extern crate ring;
 extern crate serde;
 extern crate subtle;
 extern crate tokio;
-extern crate tower;
 
 #[cfg(test)]
 extern crate assert_matches;
@@ -25,8 +24,11 @@ use std::io;
 
 use fido2_api::StatusCode;
 use thiserror::Error;
-pub use tower::Service;
 use tracing::error;
+
+// TODO hack
+pub use crate::crypto::PrivateKeyCredentialSource;
+pub use crate::secrets::{SecretStoreActual, SimpleSecrets};
 
 pub use crate::authenticator::{
     Authenticator, CredentialHandle, CredentialProtection, SecretStore, UserPresence,
