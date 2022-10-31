@@ -1,32 +1,28 @@
-const CTAP1_ERR_INVALID_PARAMETER: u8 = 0x02;
-const CTAP2_ERR_INVALID_CBOR: u8 = 0x12;
-const CTAP2_ERR_MISSING_PARAMETER: u8 = 0x14;
-const CTAP2_ERR_UNSUPPORTED_ALGORITHM: u8 = 0x26;
-const CTAP1_ERR_OTHER: u8 = 0x7f;
-
 /// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#error-responses
 #[derive(Debug)]
 pub enum StatusCode {
+    /// CTAP1_ERR_SUCCESS, CTAP2_OK: Indicates successful response.
+    Ok = 0x00,
+    /// The command is not a valid CTAP command.
+    InvalidCommand = 0x01,
     /// The command included an invalid parameter.
-    InvalidCommandParameter,
+    InvalidParameter = 0x02,
+    /// Invalid message or item length.
+    InvalidLength = 0x03,
     /// Error when parsing CBOR
-    InvalidCbor,
+    InvalidCbor = 0x12,
     /// Missing non-optional parameter
-    MissingParameter,
+    MissingParameter = 0x14,
     /// Authenticator does not support requested algorithm.
-    UnsupportedAlgorithm,
+    UnsupportedAlgorithm = 0x26,
     /// Other unspecified error
-    Other,
+    Other = 0x7f,
+    /// No valid credentials provided.
+    NoCredentials = 0x2e,
 }
 
 impl StatusCode {
     pub fn to_u8(&self) -> u8 {
-        match self {
-            StatusCode::InvalidCommandParameter => CTAP1_ERR_INVALID_PARAMETER,
-            StatusCode::InvalidCbor => CTAP2_ERR_INVALID_CBOR,
-            StatusCode::MissingParameter => CTAP2_ERR_MISSING_PARAMETER,
-            StatusCode::UnsupportedAlgorithm => CTAP2_ERR_UNSUPPORTED_ALGORITHM,
-            StatusCode::Other => CTAP1_ERR_OTHER,
-        }
+        *self as u8
     }
 }

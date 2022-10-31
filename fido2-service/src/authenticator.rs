@@ -2,7 +2,6 @@ use std::result::Result;
 
 use async_trait::async_trait;
 use fido2_api::Aaguid;
-use fido2_api::AttestationCertificate;
 use fido2_api::AttestationStatement;
 use fido2_api::AuthenticatorAPI;
 use fido2_api::AuthenticatorData;
@@ -12,7 +11,6 @@ use fido2_api::GetAssertionResponse;
 use fido2_api::GetInfoResponse;
 use fido2_api::MakeCredentialCommand;
 use fido2_api::MakeCredentialResponse;
-use fido2_api::PackedAttestationStatement;
 use fido2_api::PublicKeyCredentialDescriptor;
 use fido2_api::PublicKeyCredentialParameters;
 use fido2_api::RelyingPartyIdentifier;
@@ -20,6 +18,7 @@ use fido2_api::Sha256;
 use fido2_api::Signature;
 use fido2_api::UserHandle;
 use tracing::debug;
+use tracing::warn;
 
 use crate::Error;
 
@@ -43,6 +42,18 @@ impl<U: UserPresence + ?Sized> UserPresence for Box<U> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CredentialProtection {
+    pub is_user_verification_required: bool,
+    pub is_user_verification_optional_with_credential_id_list: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct CredentialHandle {
+    pub descriptor: PublicKeyCredentialDescriptor,
+    pub protection: CredentialProtection,
+}
+
 #[async_trait(?Send)]
 pub trait SecretStore {
     type Error;
@@ -52,16 +63,36 @@ pub trait SecretStore {
         pub_key_cred_params: &PublicKeyCredentialParameters,
         rp_id: &RelyingPartyIdentifier,
         user_handle: &UserHandle,
-    ) -> Result<PublicKeyCredentialDescriptor, Self::Error>;
+    ) -> Result<CredentialHandle, Self::Error>;
 
     async fn attest(
         &self,
         rp_id: &RelyingPartyIdentifier,
-        credential: &PublicKeyCredentialDescriptor,
+        credential_handle: &CredentialHandle,
         client_data_hash: &Sha256,
         user_present: bool,
         user_verified: bool,
     ) -> Result<(AuthenticatorData, AttestationStatement), Self::Error>;
+
+    async fn assert(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+        credential_handle: &CredentialHandle,
+        client_data_hash: &Sha256,
+        user_present: bool,
+        user_verified: bool,
+    ) -> Result<(AuthenticatorData, Signature), Self::Error>;
+
+    async fn list_discoverable_credentials(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+    ) -> Result<Vec<CredentialHandle>, Self::Error>;
+
+    async fn list_specified_credentials(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+        allow_list: &[PublicKeyCredentialDescriptor],
+    ) -> Result<Vec<CredentialHandle>, Self::Error>;
 }
 
 #[async_trait(?Send)]
@@ -73,7 +104,7 @@ impl<W: SecretStore + ?Sized> SecretStore for Box<W> {
         pub_key_cred_params: &PublicKeyCredentialParameters,
         rp_id: &RelyingPartyIdentifier,
         user_handle: &UserHandle,
-    ) -> Result<PublicKeyCredentialDescriptor, Self::Error> {
+    ) -> Result<CredentialHandle, Self::Error> {
         (**self)
             .make_credential(pub_key_cred_params, rp_id, user_handle)
             .await
@@ -82,7 +113,7 @@ impl<W: SecretStore + ?Sized> SecretStore for Box<W> {
     async fn attest(
         &self,
         rp_id: &RelyingPartyIdentifier,
-        credential_descriptor: &PublicKeyCredentialDescriptor,
+        credential_handle: &CredentialHandle,
         client_data_hash: &Sha256,
         user_present: bool,
         user_verified: bool,
@@ -90,11 +121,47 @@ impl<W: SecretStore + ?Sized> SecretStore for Box<W> {
         (**self)
             .attest(
                 rp_id,
-                credential_descriptor,
+                credential_handle,
                 client_data_hash,
                 user_present,
                 user_verified,
             )
+            .await
+    }
+
+    async fn assert(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+        credential_handle: &CredentialHandle,
+        client_data_hash: &Sha256,
+        user_present: bool,
+        user_verified: bool,
+    ) -> Result<(AuthenticatorData, Signature), Self::Error> {
+        (**self)
+            .assert(
+                rp_id,
+                credential_handle,
+                client_data_hash,
+                user_present,
+                user_verified,
+            )
+            .await
+    }
+
+    async fn list_discoverable_credentials(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+    ) -> Result<Vec<CredentialHandle>, Self::Error> {
+        (**self).list_discoverable_credentials(rp_id).await
+    }
+
+    async fn list_specified_credentials(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+        credential_list: &[PublicKeyCredentialDescriptor],
+    ) -> Result<Vec<CredentialHandle>, Self::Error> {
+        (**self)
+            .list_specified_credentials(rp_id, credential_list)
             .await
     }
 }
@@ -192,7 +259,7 @@ where
         } = cmd;
         debug!(rp = ?rp, user = ?user, "make_credential");
 
-        // Number steps follow the authenticatorMakeCredential algorithm from the fido specification:
+        // Numbered steps follow the authenticatorMakeCredential algorithm from the FIDO specification:
         // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-makeCred-authnr-alg
 
         // 1. This authenticator does not support pinUvAuthToken or clientPin features
@@ -209,7 +276,7 @@ where
             .ok_or(Error::UnsupportedAlgorithm)?;
 
         // 4. Initialize both "uv" and "up" as false.
-        let mut uv = false;
+        let uv = false;
         let mut up = false;
 
         // 5. Process options parameter if present, treat any option keys that are not understood as absent.
@@ -255,8 +322,7 @@ where
         // 13. If evidence of user interaction was provided as part of Step 11 (i.e., by invoking performBuiltInUv()):
         // TODO evidence of user interaction
         // Set the "up" bit to true in the response.
-        let present = self.presence.approve_make_credential(&rp.name).await?;
-        up = true;
+        up = self.presence.approve_make_credential(&rp.name).await?;
         // Go to Step 15
         // TODO
 
@@ -299,18 +365,97 @@ where
         let GetAssertionCommand {
             rp_id,
             client_data_hash,
+            allow_list,
         } = cmd;
 
-        let credential: PublicKeyCredentialDescriptor = todo!();
-        let (auth_data, attestation_statement) = self
+        // Numbered steps follow the authenticatorMakeCredential algorithm from the FIDO specification:
+        // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-getAssert-authnr-alg
+
+        // 3. Create a new authenticatorGetAssertion response structure and initialize both its "uv" bit and "up" bit as false.
+        let user_present = false;
+        let user_verified = false;
+
+        // 7. Locate all credentials that are eligible for retrieval.
+        let located_credentials = if let Some(ref allow_list) = allow_list {
+            // 7.1. If the allowList parameter is present and is non-empty, locate all denoted credentials
+            // created by this authenticator and bound to the specified rpId.
+            if allow_list.is_empty() {
+                warn!("Invalid allow_list, if present the list must not be empty per spec");
+                return Err(Error::InvalidParameter);
+            }
+            self.secrets
+                .list_specified_credentials(&rp_id, allow_list)
+                .await?
+        } else {
+            // 7.2. If an allowList is not present, locate all discoverable credentials that are
+            // created by this authenticator and bound to the specified rpId.
+            self.secrets.list_discoverable_credentials(&rp_id).await?
+        };
+
+        // 7.3. Create an applicable credentials list populated with the located credentials.
+        let applicable_credentials: Vec<CredentialHandle> = located_credentials
+            .into_iter()
+            .filter(|credential| {
+                if credential.protection.is_user_verification_required && user_verified == false {
+                    // 7.4. If credential protection for a credential is marked as userVerificationRequired,
+                    // and the "uv" bit is false in the response, remove that credential from the
+                    // applicable credentials list.
+                    false
+                } else if credential
+                    .protection
+                    .is_user_verification_optional_with_credential_id_list
+                    && allow_list.is_none()
+                    && user_verified == false
+                {
+                    // 7.5: If credential protection for a credential is marked as
+                    // userVerificationOptionalWithCredentialIDList and there is no allowList passed
+                    // by the client and the "uv" bit is false in the response, remove that credential
+                    // from the applicable credentials list.
+                    false
+                } else {
+                    // Otherwise add the located credentials to the applicable credentials list.
+                    true
+                }
+            })
+            .collect();
+
+        if applicable_credentials.is_empty() {
+            return Err(Error::NoCredentials);
+        }
+
+        let credential_handle = if allow_list.is_some() {
+            // 11. If the allowList parameter is present select any credential from the applicable credentials list
+            applicable_credentials.into_iter().nth(0).unwrap()
+        }
+        // 12. If allowList is not present, order the applicable credentials by create time, most recent first
+        else if user_verified == false && user_present == false {
+            // 12.2. If the authenticator does not have a display, or the authenticator does have a display and the "uv" and "up" options are false:
+            // 12.2.1. Remember the authenticatorGetAssertion parameters.
+            // 12.2.2. Create a credential counter (credentialCounter) and set it to 1. This counter signifies the next credential to be returned by the authenticator, assuming zero-based indexing.
+            // 12.2.3. Start a timer. This is used during authenticatorGetNextAssertion command. This step is OPTIONAL if transport is done over NFC.
+            // 12.2.4. Select the first credential.
+            applicable_credentials.into_iter().nth(0).unwrap()
+        } else if user_verified || user_present {
+            todo!()
+        } else {
+            unreachable!()
+        };
+
+        let (auth_data, signature) = self
             .secrets
-            .attest(&rp_id, &credential, &client_data_hash, false, false)
+            .assert(
+                &rp_id,
+                &credential_handle,
+                &client_data_hash,
+                user_present,
+                user_verified,
+            )
             .await?;
 
         Ok(GetAssertionResponse {
-            credential,
+            credential: credential_handle.descriptor,
             auth_data,
-            signature: todo!(),
+            signature,
         })
     }
 
@@ -328,9 +473,9 @@ where
 mod tests {
     use async_trait::async_trait;
     use fido2_api::{
-        AttestationStatement, AttestedCredentialData, AuthenticatorData, CredentialId,
-        PublicKeyCredentialRpEntity, PublicKeyCredentialType, PublicKeyCredentialUserEntity,
-        RelyingPartyIdentifier, Sha256, UserHandle,
+        AttestationStatement, AttestedCredentialData, CredentialId, PublicKeyCredentialRpEntity,
+        PublicKeyCredentialType, PublicKeyCredentialUserEntity, RelyingPartyIdentifier, Sha256,
+        UserHandle,
     };
     use std::collections::HashMap;
     use std::io;
@@ -493,6 +638,107 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn make_discoverable_credential_then_get_assertion_success() {
+        let authenticator = fake_authenticator();
+        let client_data_hash = Sha256::digest(b"client data");
+
+        let mut public_key_bytes;
+
+        // TODO make discoverable credential to discover
+        {
+            let result = authenticator
+                .make_credential(MakeCredentialCommand {
+                    client_data_hash: client_data_hash.clone(),
+                    rp: PublicKeyCredentialRpEntity {
+                        id: RelyingPartyIdentifier::new("example.com".into()),
+                        name: "Example RP".into(),
+                    },
+                    user: PublicKeyCredentialUserEntity {
+                        id: UserHandle::new(vec![0x01]),
+                        name: "user@example.com".into(),
+                        display_name: "Test User".into(),
+                    },
+                    pub_key_cred_params: vec![PublicKeyCredentialParameters {
+                        alg: COSEAlgorithmIdentifier::ES256,
+                        type_: PublicKeyCredentialType::PublicKey,
+                    }],
+                    exclude_list: None,
+                    extensions: None,
+                    options: None,
+                    pin_uv_auth_param: None,
+                    pin_uv_auth_protocol: None,
+                    enterprise_attestation: None,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                result.auth_data.rp_id_hash,
+                Sha256::digest("example.com".as_bytes())
+            );
+            assert_eq!(result.auth_data.user_present, true);
+            assert_eq!(result.auth_data.user_verified, false);
+            assert_eq!(result.auth_data.sign_count, 1);
+
+            let data = result.auth_data.attested_credential_data.clone();
+            let attested_credential: AttestedCredentialData =
+                data.unwrap().first().unwrap().clone();
+            let mut message = result.auth_data.to_bytes();
+            message.extend_from_slice(client_data_hash.as_ref());
+            match result.att_stmt {
+                AttestationStatement::Packed(statement) => {
+                    assert_eq!(statement.alg, COSEAlgorithmIdentifier::ES256);
+
+                    // Verify signature
+                    public_key_bytes = Vec::new();
+                    public_key_bytes.push(4u8);
+                    public_key_bytes
+                        .extend_from_slice(&attested_credential.credential_public_key.x);
+                    public_key_bytes
+                        .extend_from_slice(&attested_credential.credential_public_key.y);
+                    let peer_public_key = ring::signature::UnparsedPublicKey::new(
+                        &ring::signature::ECDSA_P256_SHA256_FIXED,
+                        &public_key_bytes,
+                    );
+                    peer_public_key
+                        .verify(&message, statement.sig.as_ref())
+                        .unwrap();
+                }
+            };
+        }
+
+        {
+            let result = authenticator
+                .get_assertion(GetAssertionCommand {
+                    client_data_hash: client_data_hash.clone(),
+                    rp_id: RelyingPartyIdentifier::new("example.com".into()),
+                    allow_list: None,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                result.auth_data.rp_id_hash,
+                Sha256::digest("example.com".as_bytes())
+            );
+            assert_eq!(result.auth_data.user_present, false);
+            assert_eq!(result.auth_data.user_verified, false);
+            assert_eq!(result.auth_data.sign_count, 2);
+
+            // Verify signature
+            let mut message = result.auth_data.to_bytes();
+            message.extend_from_slice(client_data_hash.as_ref());
+            let peer_public_key = ring::signature::UnparsedPublicKey::new(
+                &ring::signature::ECDSA_P256_SHA256_FIXED,
+                &public_key_bytes,
+            );
+            peer_public_key
+                .verify(&message, result.signature.as_ref())
+                .unwrap();
+        }
+    }
+
     const FAKE_AAGUID: Aaguid = Aaguid(uuid!("00000000-0000-0000-0000-000000000000"));
 
     fn fake_authenticator() -> Authenticator<SimpleSecrets<InMemorySecretStore>, FakeUserPresence> {
@@ -529,7 +775,7 @@ mod tests {
     }
 
     struct InMemorySecretStore {
-        id_lookup: HashMap<RelyingPartyIdentifier, HashMap<UserHandle, CredentialId>>,
+        discoverable: HashMap<RelyingPartyIdentifier, HashMap<UserHandle, CredentialHandle>>,
         keys: HashMap<CredentialId, PrivateKeyCredentialSource>,
     }
 
@@ -537,7 +783,7 @@ mod tests {
         fn new() -> SimpleSecrets<InMemorySecretStore> {
             SimpleSecrets::new(
                 InMemorySecretStore {
-                    id_lookup: HashMap::new(),
+                    discoverable: HashMap::new(),
                     keys: HashMap::new(),
                 },
                 FAKE_AAGUID,
@@ -548,23 +794,49 @@ mod tests {
     impl SecretStoreActual for InMemorySecretStore {
         type Error = io::Error;
 
-        fn put(&mut self, credential: PrivateKeyCredentialSource) -> Result<(), Self::Error> {
-            self.id_lookup
+        fn put_discoverable(
+            &mut self,
+            credential: PrivateKeyCredentialSource,
+        ) -> Result<(), Self::Error> {
+            self.discoverable
                 .entry(credential.rp_id.clone())
                 .or_default()
-                .insert(credential.user_handle.clone(), credential.id.clone());
+                .insert(
+                    credential.user_handle.clone(),
+                    CredentialHandle {
+                        descriptor: PublicKeyCredentialDescriptor {
+                            type_: credential.type_.clone(),
+                            id: credential.id.clone(),
+                        },
+                        protection: CredentialProtection {
+                            is_user_verification_required: false,
+                            is_user_verification_optional_with_credential_id_list: false,
+                        },
+                    },
+                );
             self.keys.insert(credential.id.clone(), credential);
             Ok(())
         }
 
         fn get(
             &self,
-            credential_id: &CredentialId,
+            credential_handle: &CredentialHandle,
         ) -> Result<Option<PrivateKeyCredentialSource>, Self::Error> {
-            if let Some(credential) = self.keys.get(credential_id) {
+            if let Some(credential) = self.keys.get(&credential_handle.descriptor.id) {
                 Ok(Some(credential.clone()))
             } else {
                 Ok(None)
+            }
+        }
+
+        fn list_discoverable(
+            &self,
+            rp_id: &RelyingPartyIdentifier,
+        ) -> Result<Vec<CredentialHandle>, Self::Error> {
+            if let Some(handles) = self.discoverable.get(rp_id) {
+                Ok(handles.values().cloned().collect())
+            } else {
+                Ok(vec![])
             }
         }
     }

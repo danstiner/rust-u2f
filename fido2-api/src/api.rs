@@ -22,12 +22,11 @@ pub trait AuthenticatorAPI {
         cmd: MakeCredentialCommand,
     ) -> Result<MakeCredentialResponse, Self::Error>;
 
+    /// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorGetAssertion
     async fn get_assertion(
         &self,
         cmd: GetAssertionCommand,
     ) -> Result<GetAssertionResponse, Self::Error>;
-
-    // fn get_next_assertion(&self) -> Result<GetNextAssertionResponse, Error>;
 
     fn get_info(&self) -> Result<GetInfoResponse, Self::Error>;
 

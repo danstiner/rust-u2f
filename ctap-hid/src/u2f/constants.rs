@@ -19,6 +19,3 @@ pub(crate) const AUTH_DONT_ENFORCE: u8 = 0x08; // Don't enforce user presence an
 
 pub(crate) const DEFAULT_KEY_HANDLE_LEN: usize = 255;
 pub(crate) const MAX_KEY_HANDLE_LEN: usize = 255;
-
-#[cfg(test)]
-pub(crate) const EC_POINT_FORMAT_UNCOMPRESSED: u8 = 0x04;

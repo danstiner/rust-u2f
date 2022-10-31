@@ -28,7 +28,9 @@ use thiserror::Error;
 pub use tower::Service;
 use tracing::error;
 
-pub use crate::authenticator::{Authenticator, SecretStore, UserPresence};
+pub use crate::authenticator::{
+    Authenticator, CredentialHandle, CredentialProtection, SecretStore, UserPresence,
+};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -43,6 +45,9 @@ pub enum Error {
 
     #[error("TODO")]
     Unspecified,
+
+    #[error("TODO")]
+    NoCredentials,
 }
 
 impl Into<StatusCode> for Error {
@@ -50,8 +55,9 @@ impl Into<StatusCode> for Error {
         match self {
             Error::Io(_) => StatusCode::Other,
             Error::UnsupportedAlgorithm => StatusCode::UnsupportedAlgorithm,
-            Error::InvalidParameter => StatusCode::InvalidCommandParameter,
+            Error::InvalidParameter => StatusCode::InvalidParameter,
             Error::Unspecified => StatusCode::Other,
+            Error::NoCredentials => StatusCode::NoCredentials,
         }
     }
 }

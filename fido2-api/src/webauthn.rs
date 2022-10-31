@@ -54,7 +54,7 @@ impl<'b, C> Decode<'b, C> for COSEAlgorithmIdentifier {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PublicKeyCredentialDescriptor {
     pub type_: PublicKeyCredentialType,
     pub id: CredentialId,
@@ -75,6 +75,7 @@ impl<C> Encode<C> for PublicKeyCredentialDescriptor {
             .ok()
     }
 }
+
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialDescriptor {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         let map_len = d

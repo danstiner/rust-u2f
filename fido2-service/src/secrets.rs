@@ -4,23 +4,32 @@ use async_trait::async_trait;
 use fido2_api::{
     Aaguid, AttestationCertificate, AttestationStatement, AttestedCredentialData,
     AuthenticatorData, CredentialId, PackedAttestationStatement, PublicKeyCredentialDescriptor,
-    Sha256,
+    RelyingPartyIdentifier, Sha256,
 };
 
 use crate::{
+    authenticator::CredentialHandle,
     crypto::{PrivateKeyCredentialSource, PublicKeyCredentialSource},
-    SecretStore,
+    CredentialProtection, SecretStore,
 };
 
 pub(crate) trait SecretStoreActual {
     type Error;
 
-    fn put(&mut self, credential: PrivateKeyCredentialSource) -> Result<(), Self::Error>;
+    fn put_discoverable(
+        &mut self,
+        credential: PrivateKeyCredentialSource,
+    ) -> Result<(), Self::Error>;
 
     fn get(
         &self,
-        credential_id: &CredentialId,
+        credential_handle: &CredentialHandle,
     ) -> Result<Option<PrivateKeyCredentialSource>, Self::Error>;
+
+    fn list_discoverable(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+    ) -> Result<Vec<CredentialHandle>, Self::Error>;
 }
 
 pub(crate) struct SimpleSecrets<S>(Mutex<SimpleSecretsData<S>>);
@@ -50,7 +59,7 @@ impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
         pub_key_cred_params: &fido2_api::PublicKeyCredentialParameters,
         rp_id: &fido2_api::RelyingPartyIdentifier,
         user_handle: &fido2_api::UserHandle,
-    ) -> Result<fido2_api::PublicKeyCredentialDescriptor, Self::Error> {
+    ) -> Result<CredentialHandle, Self::Error> {
         let mut data = self.0.lock().unwrap();
         let key = PrivateKeyCredentialSource::generate(
             &pub_key_cred_params.alg,
@@ -64,20 +73,26 @@ impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
             type_: key.type_.clone(),
             id: key.id.clone(),
         };
-        data.store.put(key)?;
-        Ok(descriptor)
+        data.store.put_discoverable(key)?;
+        Ok(CredentialHandle {
+            descriptor,
+            protection: CredentialProtection {
+                is_user_verification_required: false,
+                is_user_verification_optional_with_credential_id_list: false,
+            },
+        })
     }
 
     async fn attest(
         &self,
         rp_id: &fido2_api::RelyingPartyIdentifier,
-        credential: &fido2_api::PublicKeyCredentialDescriptor,
+        credential_handle: &CredentialHandle,
         client_data_hash: &fido2_api::Sha256,
         user_present: bool,
         user_verified: bool,
     ) -> Result<(AuthenticatorData, AttestationStatement), Self::Error> {
         let data = self.0.lock().unwrap();
-        if let Some(key) = data.store.get(&credential.id)? {
+        if let Some(key) = data.store.get(credential_handle)? {
             let key: PublicKeyCredentialSource = key.clone().try_into().unwrap();
             let auth_data = AuthenticatorData {
                 rp_id_hash: Sha256::digest(rp_id.as_bytes()),
@@ -86,7 +101,7 @@ impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
                 sign_count: 1,
                 attested_credential_data: Some(vec![AttestedCredentialData {
                     aaguid: data.aaguid,
-                    credential_id: credential.id.clone(),
+                    credential_id: credential_handle.descriptor.id.clone(),
                     credential_public_key: key.credential_public_key(),
                 }]),
             };
@@ -106,5 +121,47 @@ impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
         } else {
             todo!("error")
         }
+    }
+
+    async fn assert(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+        credential_handle: &CredentialHandle,
+        client_data_hash: &Sha256,
+        user_present: bool,
+        user_verified: bool,
+    ) -> Result<(AuthenticatorData, fido2_api::Signature), Self::Error> {
+        let data = self.0.lock().unwrap();
+        if let Some(key) = data.store.get(credential_handle)? {
+            let key: PublicKeyCredentialSource = key.clone().try_into().unwrap();
+            let auth_data = AuthenticatorData {
+                rp_id_hash: Sha256::digest(rp_id.as_bytes()),
+                user_present,
+                user_verified,
+                sign_count: 2,
+                attested_credential_data: None,
+            };
+            // TODO increment use counter
+            let signature = key.sign(&auth_data, client_data_hash, &data.rng).unwrap();
+            Ok((auth_data, signature))
+        } else {
+            todo!("error")
+        }
+    }
+
+    async fn list_discoverable_credentials(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+    ) -> Result<Vec<CredentialHandle>, Self::Error> {
+        let data = self.0.lock().unwrap();
+        data.store.list_discoverable(rp_id)
+    }
+
+    async fn list_specified_credentials(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+        credential_list: &[PublicKeyCredentialDescriptor],
+    ) -> Result<Vec<CredentialHandle>, Self::Error> {
+        todo!()
     }
 }

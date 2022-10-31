@@ -123,11 +123,16 @@ pub struct GetAssertionCommand {
     pub rp_id: RelyingPartyIdentifier,
     #[n(0x02)]
     pub client_data_hash: Sha256,
-    //     allow_list: [PublicKeyCredentialDescriptor],
-    //     extensions: ExtensionMap,
-    //     options: GetAssertionOptions,
-    //     pin_uv_auth_param: ByteString,
-    //     pin_uv_auth_protocol: u32,
+
+    /// An array of allowed credentials. The authenticator MUST only generate an assertion for one
+    /// of the listed credentials, if the list is present. The list MUST NOT be empty, if the list
+    /// would be empty the platform MUST omit the field.
+    #[n(0x03)]
+    pub allow_list: Option<Vec<PublicKeyCredentialDescriptor>>,
+    //     extensions: Option<ExtensionMap>,
+    //     options: Option<GetAssertionOptions>,
+    //     pin_uv_auth_param: Option<PinUvAuthParam>,
+    //     pin_uv_auth_protocol: Option<PinUvAuthProtocol>,
 }
 
 /// Messages from authenticator to the host, called a "response" in the CTAP2 protocol

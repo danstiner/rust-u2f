@@ -3,7 +3,7 @@ use std::io::ErrorKind;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use fido2_service::SecretStore;
+use fido2_service::{CredentialHandle, SecretStore};
 use secret_service::{Collection, EncryptionType, Error, SecretService};
 use serde_json;
 use u2f_core::{try_reverse_app_id, AppId, KeyHandle};
@@ -67,14 +67,14 @@ impl<'a> SecretStore for SecretServiceStore<'a> {
         _pub_key_cred_params: &fido2_api::PublicKeyCredentialParameters,
         _rp_id: &fido2_api::RelyingPartyIdentifier,
         _user_id: &fido2_api::UserHandle,
-    ) -> Result<fido2_api::PublicKeyCredentialDescriptor, Self::Error> {
+    ) -> Result<CredentialHandle, Self::Error> {
         todo!()
     }
 
     async fn attest(
         &self,
         _rp_id: &fido2_api::RelyingPartyIdentifier,
-        _credential_descriptor: &fido2_api::PublicKeyCredentialDescriptor,
+        _credential_descriptor: &CredentialHandle,
         _client_data_hash: &fido2_api::Sha256,
         _user_present: bool,
         _user_verified: bool,
@@ -85,6 +85,32 @@ impl<'a> SecretStore for SecretServiceStore<'a> {
         ),
         Self::Error,
     > {
+        todo!()
+    }
+
+    async fn assert(
+        &self,
+        rp_id: &fido2_api::RelyingPartyIdentifier,
+        credential_handle: &CredentialHandle,
+        client_data_hash: &fido2_api::Sha256,
+        user_present: bool,
+        user_verified: bool,
+    ) -> Result<(fido2_api::AuthenticatorData, fido2_api::Signature), Self::Error> {
+        todo!()
+    }
+
+    async fn list_discoverable_credentials(
+        &self,
+        rp_id: &fido2_api::RelyingPartyIdentifier,
+    ) -> Result<Vec<CredentialHandle>, Self::Error> {
+        todo!()
+    }
+
+    async fn list_specified_credentials(
+        &self,
+        rp_id: &fido2_api::RelyingPartyIdentifier,
+        allow_list: &[fido2_api::PublicKeyCredentialDescriptor],
+    ) -> Result<Vec<CredentialHandle>, Self::Error> {
         todo!()
     }
 
