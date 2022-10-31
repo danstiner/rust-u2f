@@ -276,11 +276,11 @@ where
             .ok_or(Error::UnsupportedAlgorithm)?;
 
         // 4. Initialize both "uv" and "up" as false.
-        let uv = false;
-        let mut up = false;
+        let user_verified = false;
+        let user_present;
 
         // 5. Process options parameter if present, treat any option keys that are not understood as absent.
-        if let Some(options) = options {
+        if let Some(_options) = options {
             // Note: As the specification defines normative behaviours for the "rk", "up", and "uv" option keys, they MUST be understood by all authenticators.
             // TODO
         }
@@ -305,7 +305,7 @@ where
         // 11. If the authenticator is protected by some form of user verification, then:
         // 11.1. If pinUvAuthParam parameter is present (implying the "uv" option is false (see Step 5)):
         if pin_uv_auth_param.is_some() {
-            assert_eq!(uv, false);
+            assert_eq!(user_verified, false);
             // If the authenticator is not protected by pinUvAuthToken,
             // or the authenticator is protected by pinUvAuthToken but pinUvAuthToken is disabled,
             // then end the operation by returning CTAP1_ERR_INVALID_PARAMETER.
@@ -322,7 +322,7 @@ where
         // 13. If evidence of user interaction was provided as part of Step 11 (i.e., by invoking performBuiltInUv()):
         // TODO evidence of user interaction
         // Set the "up" bit to true in the response.
-        up = self.presence.approve_make_credential(&rp.name).await?;
+        user_present = self.presence.approve_make_credential(&rp.name).await?;
         // Go to Step 15
         // TODO
 
@@ -348,7 +348,13 @@ where
         // 19. Generate an attestation statement for the newly-created credential using clientDataHash, taking into account the value of the enterpriseAttestation parameter, if present, as described above in Step 9.
         let (auth_data, att_stmt) = self
             .secrets
-            .attest(&rp.id, &credential, &client_data_hash, up, uv)
+            .attest(
+                &rp.id,
+                &credential,
+                &client_data_hash,
+                user_present,
+                user_verified,
+            )
             .await?;
 
         // On success, the authenticator returns the following authenticatorMakeCredential response structure which contains an attestation object plus additional information.

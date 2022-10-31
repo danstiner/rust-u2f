@@ -1,29 +1,16 @@
 mod app_id;
-mod application_key;
 mod attestation;
 mod constants;
 mod key_handle;
-mod known_app_ids;
-mod private_key;
-mod public_key;
 mod request;
 mod response;
-mod self_signed_attestation;
 mod serde_base64;
 
-use async_trait::async_trait;
 use byteorder::{BigEndian, WriteBytesExt};
 use std::fmt::Debug;
-use std::io;
 use thiserror::Error;
-use tracing::error;
 
-use app_id::AppId;
-use application_key::ApplicationKey;
-use attestation::AttestationCertificate;
 use constants::*;
-use key_handle::KeyHandle;
-use private_key::PrivateKey;
 pub use request::Request;
 pub use response::Response;
 
@@ -68,98 +55,6 @@ impl AsRef<[u8]> for Challenge {
 }
 
 pub trait Signature: AsRef<[u8]> + Debug + Send {}
-
-#[async_trait]
-pub trait UserPresence {
-    async fn approve_registration(&self, application: &AppId) -> Result<bool, io::Error>;
-    async fn approve_authentication(&self, application: &AppId) -> Result<bool, io::Error>;
-    async fn wink(&self) -> Result<(), io::Error>;
-}
-
-pub trait CryptoOperations {
-    fn attest(&self, data: &[u8]) -> Result<Box<dyn Signature>, SignError>;
-    fn generate_application_key(&self, application: &AppId) -> io::Result<ApplicationKey>;
-    fn get_attestation_certificate(&self) -> AttestationCertificate;
-    fn sign(&self, key: &PrivateKey, data: &[u8]) -> Result<Box<dyn Signature>, SignError>;
-}
-
-pub trait SecretStore {
-    fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()>;
-    fn get_and_increment_counter(
-        &self,
-        application: &AppId,
-        handle: &KeyHandle,
-    ) -> io::Result<Counter>;
-    fn retrieve_application_key(
-        &self,
-        application: &AppId,
-        handle: &KeyHandle,
-    ) -> io::Result<Option<ApplicationKey>>;
-}
-
-impl SecretStore for Box<dyn SecretStore> {
-    fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
-        Box::as_ref(self).add_application_key(key)
-    }
-
-    fn get_and_increment_counter(
-        &self,
-        application: &AppId,
-        handle: &KeyHandle,
-    ) -> io::Result<Counter> {
-        Box::as_ref(self).get_and_increment_counter(application, handle)
-    }
-
-    fn retrieve_application_key(
-        &self,
-        application: &AppId,
-        handle: &KeyHandle,
-    ) -> io::Result<Option<ApplicationKey>> {
-        Box::as_ref(self).retrieve_application_key(application, handle)
-    }
-}
-
-#[derive(Debug)]
-pub struct Registration {
-    user_public_key: Vec<u8>,
-    key_handle: KeyHandle,
-    attestation_certificate: AttestationCertificate,
-    signature: Box<dyn Signature>,
-}
-
-#[derive(Debug)]
-pub struct Authentication {
-    counter: Counter,
-    signature: Box<dyn Signature>,
-    user_present: bool,
-}
-
-#[derive(Debug, Error)]
-pub enum AuthenticateError {
-    #[error("Approval required")]
-    ApprovalRequired,
-
-    #[error("Invalid key handle")]
-    InvalidKeyHandle,
-
-    #[error("I/O error: {0}")]
-    Io(#[from] io::Error),
-
-    #[error("Signing error: {0}")]
-    Signing(#[from] SignError),
-}
-
-#[derive(Debug, Error)]
-pub enum RegisterError {
-    #[error("Approval required")]
-    ApprovalRequired,
-
-    #[error("I/O error: {0}")]
-    Io(#[from] io::Error),
-
-    #[error("Signing error: {0}")]
-    Signing(#[from] SignError),
-}
 
 /// User presence byte [1 byte]. Bit 0 indicates whether user presence was verified.
 /// If Bit 0 is is to 1, then user presence was verified. If Bit 0 is set to 0,

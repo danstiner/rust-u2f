@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use fido2_api::{
     Aaguid, AttestationCertificate, AttestationStatement, AttestedCredentialData,
-    AuthenticatorData, CredentialId, PackedAttestationStatement, PublicKeyCredentialDescriptor,
+    AuthenticatorData, PackedAttestationStatement, PublicKeyCredentialDescriptor,
     RelyingPartyIdentifier, Sha256,
 };
 

@@ -77,7 +77,10 @@ impl<C> Encode<C> for PublicKeyCredentialDescriptor {
 }
 
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialDescriptor {
-    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
         let map_len = d
             .map()?
             .ok_or(minicbor::decode::Error::message("Expected sized map"))?;
@@ -373,7 +376,10 @@ impl<C> Encode<C> for UserHandle {
     }
 }
 impl<'b, C> Decode<'b, C> for UserHandle {
-    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
         Ok(Self(d.bytes()?.to_vec()))
     }
 }
