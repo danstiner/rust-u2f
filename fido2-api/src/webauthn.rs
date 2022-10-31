@@ -461,7 +461,7 @@ pub struct AuthenticatorData {
 impl AuthenticatorData {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(37);
-        buf.extend_from_slice(&self.rp_id_hash.0);
+        buf.extend_from_slice(self.rp_id_hash.as_ref());
         buf.push(0u8);
         buf.write_u32::<BigEndian>(self.sign_count).unwrap();
         buf

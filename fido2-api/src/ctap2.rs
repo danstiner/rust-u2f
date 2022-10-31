@@ -1,12 +1,12 @@
+use crate::api::Aaguid;
+use crate::api::Sha256;
 use crate::webauthn::AuthenticatorData;
 use crate::webauthn::PublicKeyCredentialDescriptor;
 use crate::webauthn::PublicKeyCredentialParameters;
 use crate::webauthn::PublicKeyCredentialRpEntity;
 use crate::webauthn::PublicKeyCredentialUserEntity;
-use crate::Aaguid;
 use crate::AttestationStatement;
 use crate::RelyingPartyIdentifier;
-use crate::Sha256;
 use crate::Signature;
 
 use minicbor_derive::{Decode, Encode};
@@ -320,7 +320,7 @@ mod tests {
             ])
             .unwrap(),
             Command::MakeCredential(MakeCredentialCommand {
-                client_data_hash: Sha256([
+                client_data_hash: Sha256::new([
                     15, 4, 118, 231, 8, 22, 235, 208, 64, 95, 203, 112, 92, 29, 6, 210, 158, 188,
                     19, 36, 188, 143, 33, 243, 77, 98, 127, 177, 67, 246, 48, 129,
                 ]),

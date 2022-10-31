@@ -3,8 +3,8 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use fido2_api::{
     Aaguid, AttestationCertificate, AttestationStatement, AttestedCredentialData,
-    AuthenticatorData, CredentialId, CredentialPublicKey, PackedAttestationStatement,
-    PublicKeyCredentialDescriptor, Sha256,
+    AuthenticatorData, CredentialId, PackedAttestationStatement, PublicKeyCredentialDescriptor,
+    Sha256,
 };
 
 use crate::{
