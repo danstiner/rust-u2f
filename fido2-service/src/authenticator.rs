@@ -13,6 +13,7 @@ use fido2_api::MakeCredentialCommand;
 use fido2_api::MakeCredentialResponse;
 use fido2_api::PublicKeyCredentialDescriptor;
 use fido2_api::PublicKeyCredentialParameters;
+use fido2_api::PublicKeyCredentialRpEntity;
 use fido2_api::RelyingPartyIdentifier;
 use fido2_api::Sha256;
 use fido2_api::Signature;
@@ -27,7 +28,10 @@ use crate::Error;
 #[async_trait(?Send)]
 pub trait UserPresence {
     type Error;
-    async fn approve_make_credential(&self, name: &str) -> Result<bool, Self::Error>;
+    async fn approve_make_credential(
+        &self,
+        rp: &PublicKeyCredentialRpEntity,
+    ) -> Result<bool, Self::Error>;
     async fn wink(&self) -> Result<(), Self::Error>;
 }
 
@@ -35,8 +39,11 @@ pub trait UserPresence {
 impl<U: UserPresence + ?Sized> UserPresence for Box<U> {
     type Error = U::Error;
 
-    async fn approve_make_credential(&self, name: &str) -> Result<bool, Self::Error> {
-        (**self).approve_make_credential(name).await
+    async fn approve_make_credential(
+        &self,
+        rp: &PublicKeyCredentialRpEntity,
+    ) -> Result<bool, Self::Error> {
+        (**self).approve_make_credential(rp).await
     }
 
     async fn wink(&self) -> Result<(), Self::Error> {
@@ -323,7 +330,7 @@ where
         // 13. If evidence of user interaction was provided as part of Step 11 (i.e., by invoking performBuiltInUv()):
         // TODO evidence of user interaction
         // Set the "up" bit to true in the response.
-        let user_present = self.presence.approve_make_credential(&rp.name).await?;
+        let user_present = self.presence.approve_make_credential(&rp).await?;
         // Go to Step 15
         // TODO
 
@@ -777,7 +784,10 @@ mod tests {
     impl UserPresence for FakeUserPresence {
         type Error = io::Error;
 
-        async fn approve_make_credential(&self, _: &str) -> Result<bool, Self::Error> {
+        async fn approve_make_credential(
+            &self,
+            _: &PublicKeyCredentialRpEntity,
+        ) -> Result<bool, Self::Error> {
             Ok(self.should_make_credential)
         }
 

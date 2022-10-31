@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::io;
 
 use async_trait::async_trait;
+use fido2_api::PublicKeyCredentialRpEntity;
 use fido2_service::UserPresence;
 use lazy_static::lazy_static;
 use notify_rust::Timeout;
@@ -91,8 +92,11 @@ impl NotificationUserPresence {
 impl UserPresence for NotificationUserPresence {
     type Error = io::Error;
 
-    async fn approve_make_credential(&self, name: &str) -> Result<bool, Self::Error> {
-        let message = format!("Register with {}", name);
+    async fn approve_make_credential(
+        &self,
+        rp: &PublicKeyCredentialRpEntity,
+    ) -> Result<bool, Self::Error> {
+        let message = format!("Register with {} ({})", rp.id.as_str(), rp.name);
         self.test_user_presence(message).await
     }
 
