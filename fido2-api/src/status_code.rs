@@ -1,5 +1,5 @@
 /// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#error-responses
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum StatusCode {
     /// CTAP1_ERR_SUCCESS, CTAP2_OK: Indicates successful response.
     Ok = 0x00,
