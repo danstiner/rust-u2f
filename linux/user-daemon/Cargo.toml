@@ -46,7 +46,8 @@ path = "../system-daemon"
 path = "../../u2f-core"
 
 [dev-dependencies]
-tempdir = "0.3.7"
+ring = "0.16"
+tempdir = "0.3"
 
 [package.metadata.deb]
 assets = [

@@ -2141,6 +2141,7 @@ dependencies = [
  "libsystemd",
  "notify-rust",
  "pin-project",
+ "ring",
  "secret-service",
  "serde",
  "serde_derive",

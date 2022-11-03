@@ -1,27 +1,23 @@
 use std::collections::HashMap;
 use std::io;
 use std::io::ErrorKind;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use fido2_api::RelyingPartyIdentifier;
-use fido2_service::{
-    CredentialHandle, CredentialProtection, PrivateKeyCredentialSource, SecretStore,
-};
-use secret_service::{Collection, EncryptionType, Error, Item, SecretService};
+use fido2_service::{CredentialHandle, CredentialProtection, PrivateKeyCredentialSource};
 use serde_json;
-use u2f_core::{try_reverse_app_id, AppId, KeyHandle};
 
 use crate::secret_store::{MutableSecretStore, Secret};
 
-pub struct SecretServiceStore<'a> {
-    service: SecretService<'a>,
+pub struct SecretServiceStore<S> {
+    service: S,
 }
 
-impl SecretServiceStore<'_> {
-    pub fn new() -> Result<Self, Error> {
+impl SecretServiceStore<secret_service::SecretService<'_>> {
+    pub fn new() -> Result<Self, secret_service::Error> {
         Ok(Self {
-            service: SecretService::new(EncryptionType::Dh)?,
+            service: secret_service::SecretService::new(secret_service::EncryptionType::Dh)?,
         })
     }
 
@@ -30,14 +26,14 @@ impl SecretServiceStore<'_> {
     }
 }
 
-impl<'a> MutableSecretStore for SecretServiceStore<'a> {
+impl<S> MutableSecretStore for SecretServiceStore<S> {
     fn add_secret(&self, secret: Secret) -> io::Result<()> {
         todo!()
     }
 }
 
 #[async_trait(?Send)]
-impl<'a> fido2_service::SecretStoreActual for SecretServiceStore<'a> {
+impl<S: SecretService> fido2_service::SecretStoreActual for SecretServiceStore<S> {
     type Error = io::Error;
 
     fn put_discoverable(
@@ -56,7 +52,7 @@ impl<'a> fido2_service::SecretStoreActual for SecretServiceStore<'a> {
             .map_err(|error| io::Error::new(ErrorKind::Other, error))?;
         let content_type = "application/json";
         let _item = collection
-            .create_item(&label, attributes, secret.as_bytes(), false, content_type)
+            .create_item(&label, attributes, secret.as_bytes(), true, content_type)
             .map_err(|_error| io::Error::new(ErrorKind::Other, "create_item"))?;
         Ok(())
     }
@@ -96,7 +92,7 @@ impl<'a> fido2_service::SecretStoreActual for SecretServiceStore<'a> {
 
         let attributes = discoverable_search_attributes(rp_id);
         let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        collection
+        let handles = collection
             .search_items(attributes)
             .map_err(|_error| io::Error::new(ErrorKind::Other, "search_items"))?
             .into_iter()
@@ -118,126 +114,95 @@ impl<'a> fido2_service::SecretStoreActual for SecretServiceStore<'a> {
                     rp_id: credential.rp_id,
                 })
             })
-            .collect()
+            .collect();
+        handles
     }
 }
 
-// #[async_trait(?Send)]
-// impl<'a> SecretStore for SecretServiceStore<'a> {
-//     type Error = io::Error;
+pub(crate) trait Item {
+    fn get_secret(&self) -> secret_service::Result<Vec<u8>>;
 
-//     // fn add_application_key(&self, key: &ApplicationKey) -> io::Result<()> {
-//     //     self.add_secret(Secret {
-//     //         application_key: key.clone(),
-//     //         counter: 0,
-//     //     })
-//     // }
-
-//     // fn get_and_increment_counter(
-//     //     &self,
-//     //     application: &AppId,
-//     //     handle: &KeyHandle,
-//     // ) -> io::Result<Counter> {
-//     //     let collection = self
-//     //         .service
-//     //         .get_default_collection()
-//     //         .map_err(|_error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
-//     //     let option = find_item(&collection, application, handle)
-//     //         .map_err(|_error| io::Error::new(ErrorKind::Other, "find_item"))?;
-//     //     if option.is_none() {
-//     //         return Err(io::Error::new(ErrorKind::Other, "not found"));
-//     //     }
-//     //     let item = option.unwrap();
-//     //     let secret_bytes = item
-//     //         .get_secret()
-//     //         .map_err(|_error| io::Error::new(ErrorKind::Other, "get_secret"))?;
-//     //     let mut secret: Secret = serde_json::from_slice(&secret_bytes)
-//     //         .map_err(|_error| io::Error::new(ErrorKind::Other, "from_slice"))?;
-
-//     //     secret.counter += 1;
-
-//     //     let secret_string = serde_json::to_string(&secret)
-//     //         .map_err(|error| io::Error::new(ErrorKind::Other, error))?;
-//     //     item.set_secret(secret_string.as_bytes(), "application/json")
-//     //         .map_err(|_error| io::Error::new(ErrorKind::Other, "get_attributes"))?;
-
-//     //     let attributes = item
-//     //         .get_attributes()
-//     //         .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-//     //     let mut attributes: HashMap<_, _> = attributes.into_iter().collect();
-//     //     attributes
-//     //         .entry("times_used".to_string())
-//     //         .and_modify(|value| {
-//     //             let count = value.parse::<u64>().unwrap_or(0);
-//     //             *value = (count + 1).to_string();
-//     //         })
-//     //         .or_insert_with(|| 0.to_string());
-//     //     let attributes = attributes
-//     //         .iter()
-//     //         .map(|(key, value)| (key.as_str(), value.as_str()))
-//     //         .collect();
-//     //     item.set_attributes(attributes)
-//     //         .map_err(|_error| io::Error::new(ErrorKind::Other, "set_attributes"))?;
-
-//     //     let label = match try_reverse_app_id(application) {
-//     //         Some(app_id) => format!("Universal 2nd Factor token for {}", app_id),
-//     //         None => format!("Universal 2nd Factor token for {}", application.to_base64()),
-//     //     };
-//     //     item.set_label(&label)
-//     //         .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-
-//     //     Ok(secret.counter)
-//     // }
-
-//     // fn retrieve_application_key(
-//     //     &self,
-//     //     application: &AppId,
-//     //     handle: &KeyHandle,
-//     // ) -> io::Result<Option<ApplicationKey>> {
-//     //     let collection = self
-//     //         .service
-//     //         .get_default_collection()
-//     //         .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-//     //     let option = find_item(&collection, application, handle)
-//     //         .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-//     //     if option.is_none() {
-//     //         return Ok(None);
-//     //     }
-//     //     let item = option.unwrap();
-//     //     let secret_bytes = item
-//     //         .get_secret()
-//     //         .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-//     //     let secret: Secret = serde_json::from_slice(&secret_bytes)
-//     //         .map_err(|error| io::Error::new(ErrorKind::Other, error))?;
-//     //     Ok(Some(secret.application_key))
-//     // }
-// }
-
-fn u2f_search_attributes(app_id: &AppId, handle: &KeyHandle) -> Vec<(&'static str, String)> {
-    vec![
-        ("application", "com.github.danstiner.rust-u2f".to_string()),
-        ("u2f_app_id_hash", app_id.to_base64()),
-        ("u2f_key_handle", handle.to_base64()),
-    ]
+    fn get_created(&self) -> secret_service::Result<SystemTime>;
 }
 
-fn u2f_registration_attributes(app_id: &AppId, handle: &KeyHandle) -> Vec<(&'static str, String)> {
-    let mut attributes = u2f_search_attributes(app_id, handle);
-    attributes.push(("xdg:schema", "com.github.danstiner.rust-u2f".to_string()));
-    attributes.push(("times_used", 0.to_string()));
+impl Item for secret_service::Item<'_> {
+    fn get_secret(&self) -> secret_service::Result<Vec<u8>> {
+        self.get_secret()
+    }
 
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("time moved backwards");
-    attributes.push(("date_registered", since_the_epoch.as_secs().to_string()));
+    fn get_created(&self) -> secret_service::Result<SystemTime> {
+        Ok(UNIX_EPOCH + Duration::from_secs(self.get_created()?))
+    }
+}
 
-    match try_reverse_app_id(app_id) {
-        Some(id) => attributes.push(("u2f_app_id", id)),
-        None => {}
-    };
+pub(crate) trait Collection {
+    type Item<'a>: Item
+    where
+        Self: 'a;
 
-    attributes
+    fn create_item<'a>(
+        &'a self,
+        label: &str,
+        attributes: HashMap<&str, &str>,
+        secret: &[u8],
+        replace: bool,
+        content_type: &str,
+    ) -> secret_service::Result<Self::Item<'a>>;
+
+    fn search_items<'a>(
+        &'a self,
+        attributes: HashMap<&str, &str>,
+    ) -> secret_service::Result<Vec<Self::Item<'a>>>;
+
+    fn is_locked(&self) -> secret_service::Result<bool>;
+
+    fn unlock(&self) -> secret_service::Result<()>;
+}
+
+impl Collection for secret_service::Collection<'_> {
+    type Item<'a> = secret_service::Item<'a> where Self: 'a;
+
+    fn create_item<'a>(
+        &'a self,
+        label: &str,
+        attributes: HashMap<&str, &str>,
+        secret: &[u8],
+        replace: bool,
+        content_type: &str,
+    ) -> secret_service::Result<Self::Item<'a>> {
+        self.create_item(label, attributes, secret, replace, content_type)
+    }
+
+    fn search_items<'a>(
+        &'a self,
+        attributes: HashMap<&str, &str>,
+    ) -> secret_service::Result<Vec<Self::Item<'a>>> {
+        self.search_items(attributes)
+    }
+
+    fn is_locked(&self) -> secret_service::Result<bool> {
+        self.is_locked()
+    }
+
+    fn unlock(&self) -> secret_service::Result<()> {
+        self.unlock()
+    }
+}
+
+pub(crate) trait SecretService {
+    type Collection<'a>: Collection
+    where
+        Self: 'a;
+
+    fn get_default_collection<'a>(&'a self) -> secret_service::Result<Self::Collection<'a>>;
+}
+
+impl SecretService for secret_service::SecretService<'_> {
+    type Collection<'a> = secret_service::Collection<'a> where Self: 'a;
+
+    fn get_default_collection<'a>(&'a self) -> secret_service::Result<Self::Collection<'a>> {
+        self.get_default_collection()
+    }
 }
 
 fn discoverable_credential_attributes(
@@ -246,23 +211,18 @@ fn discoverable_credential_attributes(
     let since_the_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("time moved backwards");
-    vec![
-        ("application", "com.github.danstiner.rust-fido".to_string()),
-        ("rp_id", credential.rp_id.to_string()),
-        ("credential_id", base64::encode(credential.id.as_bytes())),
-        (
-            "user_handle",
-            base64::encode(credential.user_handle.as_bytes()),
-        ),
-        ("xdg:schema", "com.github.danstiner.rust-fido".to_string()),
-        ("times_used", 1.to_string()),
-        ("created_at", since_the_epoch.as_secs().to_string()),
-    ]
+    let mut attributes = discoverable_search_attributes(&credential.rp_id);
+    attributes.push((
+        "user_handle",
+        base64::encode(credential.user_handle.as_bytes()),
+    ));
+    attributes
 }
 
 fn discoverable_search_attributes(rp_id: &RelyingPartyIdentifier) -> Vec<(&'static str, String)> {
     vec![
         ("application", "com.github.danstiner.rust-fido".to_string()),
+        ("xdg:schema", "com.github.danstiner.rust-fido".to_string()),
         ("rp_id", rp_id.to_string()),
     ]
 }
@@ -270,6 +230,7 @@ fn discoverable_search_attributes(rp_id: &RelyingPartyIdentifier) -> Vec<(&'stat
 fn handle_search_attributes(handle: &CredentialHandle) -> Vec<(&'static str, String)> {
     vec![
         ("application", "com.github.danstiner.rust-fido".to_string()),
+        ("xdg:schema", "com.github.danstiner.rust-fido".to_string()),
         ("rp_id", handle.rp_id.to_string()),
         (
             "credential_id",
@@ -278,39 +239,25 @@ fn handle_search_attributes(handle: &CredentialHandle) -> Vec<(&'static str, Str
     ]
 }
 
-fn find_item<'a>(
-    collection: &'a Collection<'a>,
+fn find_item<'a, C: Collection>(
+    collection: &'a C,
     handle: &CredentialHandle,
-) -> io::Result<Option<Item<'a>>> {
+) -> io::Result<Option<C::Item<'a>>> {
     let attributes = handle_search_attributes(handle);
     let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
     Ok(find_items(collection, attributes)?.into_iter().nth(0))
 }
 
-fn find_items<'a>(
-    collection: &'a Collection<'a>,
+fn find_items<'a, C: Collection>(
+    collection: &'a C,
     attributes: HashMap<&str, &str>,
-) -> io::Result<Vec<Item<'a>>> {
+) -> io::Result<Vec<C::Item<'a>>> {
     collection
         .search_items(attributes)
         .map_err(|_error| io::Error::new(ErrorKind::Other, "search_items"))
 }
 
-// fn u2f_find_item<'a>(
-//     collection: &'a Collection<'a>,
-//     app_id: &AppId,
-//     handle: &KeyHandle,
-// ) -> io::Result<Option<Item<'a>>> {
-//     unlock_if_locked(collection)?;
-//     let attributes = u2f_search_attributes(app_id, handle);
-//     let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
-//     let mut result = collection
-//         .search_items(attributes)
-//         .map_err(|_error| io::Error::new(ErrorKind::Other, "search_items"))?;
-//     Ok(result.pop())
-// }
-
-fn unlock_if_locked(collection: &Collection) -> io::Result<()> {
+fn unlock_if_locked<C: Collection>(collection: &C) -> io::Result<()> {
     if collection
         .is_locked()
         .map_err(|_error| io::Error::new(ErrorKind::Other, "is_locked"))?
@@ -322,8 +269,379 @@ fn unlock_if_locked(collection: &Collection) -> io::Result<()> {
     Ok(())
 }
 
+fn borrow_map<'a>(m: &'a HashMap<String, String>) -> HashMap<&'a str, &'a str> {
+    m.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
+    use fido2_service::SecretStoreActual;
+
+    use super::*;
+
     #[test]
-    fn todo() {}
+    fn get_none() {
+        let store = SecretServiceStore {
+            service: FakeSecretService::new(),
+        };
+        let credential_handle = CredentialHandle {
+            descriptor: fido2_api::PublicKeyCredentialDescriptor {
+                type_: fido2_api::PublicKeyCredentialType::PublicKey,
+                id: fido2_api::CredentialId::new(&[]),
+            },
+            protection: CredentialProtection {
+                is_user_verification_required: false,
+                is_user_verification_optional_with_credential_id_list: false,
+            },
+            rp_id: RelyingPartyIdentifier::new("test".to_string()),
+        };
+
+        assert!(store.get(&credential_handle).unwrap().is_none());
+    }
+
+    #[test]
+    fn list_none() {
+        let store = SecretServiceStore {
+            service: FakeSecretService::new(),
+        };
+        let rp_id = RelyingPartyIdentifier::new("test".to_string());
+
+        assert!(store.list_discoverable(&rp_id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn put_discoverable_then_list() {
+        let mut store = SecretServiceStore {
+            service: FakeSecretService::new(),
+        };
+        let key = fido2_service::PrivateKeyCredentialSource::generate(
+            &fido2_api::COSEAlgorithmIdentifier::ES256,
+            &fido2_api::PublicKeyCredentialType::PublicKey,
+            &fido2_api::RelyingPartyIdentifier::new("test".to_string()),
+            &fido2_api::UserHandle::new(vec![0]),
+            &ring::rand::SystemRandom::new(),
+        )
+        .unwrap();
+
+        {
+            let put = store.put_discoverable(key.clone()).unwrap();
+        }
+
+        {
+            let list = store.list_discoverable(&key.rp_id).unwrap();
+            assert_eq!(list.len(), 1);
+        }
+    }
+
+    #[test]
+    fn put_discoverable_should_replace() {
+        let mut store = SecretServiceStore {
+            service: FakeSecretService::new(),
+        };
+        let key = fido2_service::PrivateKeyCredentialSource::generate(
+            &fido2_api::COSEAlgorithmIdentifier::ES256,
+            &fido2_api::PublicKeyCredentialType::PublicKey,
+            &fido2_api::RelyingPartyIdentifier::new("test".to_string()),
+            &fido2_api::UserHandle::new(vec![0]),
+            &ring::rand::SystemRandom::new(),
+        )
+        .unwrap();
+
+        {
+            let put = store.put_discoverable(key.clone()).unwrap();
+        }
+
+        {
+            let put = store.put_discoverable(key.clone()).unwrap();
+        }
+
+        {
+            let list = store.list_discoverable(&key.rp_id).unwrap();
+            assert_eq!(list.len(), 1);
+        }
+    }
+
+    struct FakeSecretService(RefCell<Vec<Rc<RefCell<ItemData>>>>);
+
+    impl FakeSecretService {
+        fn new() -> Self {
+            Self(RefCell::new(vec![]))
+        }
+    }
+
+    impl SecretService for FakeSecretService {
+        type Collection<'a> = FakeCollection<'a> where Self: 'a;
+
+        fn get_default_collection<'a>(&'a self) -> secret_service::Result<Self::Collection<'a>> {
+            Ok(FakeCollection(&self.0))
+        }
+    }
+
+    struct FakeCollection<'a>(&'a RefCell<Vec<Rc<RefCell<ItemData>>>>);
+
+    impl FakeCollection<'_> {
+        fn remove_item(&self, attributes: &HashMap<&str, &str>) {
+            self.0
+                .borrow_mut()
+                .retain(|i| attributes != &borrow_map(&i.borrow().attributes));
+        }
+    }
+
+    impl Collection for FakeCollection<'_> {
+        type Item<'a> = FakeItem where Self: 'a;
+
+        fn create_item<'a>(
+            &'a self,
+            label: &str,
+            attributes: HashMap<&str, &str>,
+            secret: &[u8],
+            replace: bool,
+            content_type: &str,
+        ) -> secret_service::Result<Self::Item<'a>> {
+            if replace {
+                self.remove_item(&attributes);
+            }
+            self.0.borrow_mut().push(Rc::new(RefCell::new(ItemData {
+                created: NOW,
+                secret: secret.to_owned(),
+                label: label.to_owned(),
+                content_type: content_type.to_owned(),
+                attributes: attributes
+                    .into_iter()
+                    .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                    .collect(),
+            })));
+            Ok(FakeItem(Rc::clone(self.0.borrow().last().unwrap())))
+        }
+
+        fn search_items<'a>(
+            &'a self,
+            attributes: HashMap<&str, &str>,
+        ) -> secret_service::Result<Vec<Self::Item<'a>>> {
+            Ok(self
+                .0
+                .borrow()
+                .iter()
+                .filter(|i| {
+                    attributes.iter().all(|(k, v)| {
+                        i.borrow()
+                            .attributes
+                            .get(*k)
+                            .map(|x| x.as_str() == *v)
+                            .unwrap_or_default()
+                    })
+                })
+                .map(|d| FakeItem(Rc::clone(d)))
+                .collect())
+        }
+
+        fn is_locked(&self) -> secret_service::Result<bool> {
+            Ok(true)
+        }
+
+        fn unlock(&self) -> secret_service::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct FakeItem(Rc<RefCell<ItemData>>);
+
+    impl Item for FakeItem {
+        fn get_secret(&self) -> secret_service::Result<Vec<u8>> {
+            Ok(self.0.as_ref().borrow().secret.clone())
+        }
+
+        fn get_created(&self) -> secret_service::Result<SystemTime> {
+            Ok(self.0.as_ref().borrow().created)
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct ItemData {
+        label: String,
+        secret: Vec<u8>,
+        content_type: String,
+        attributes: HashMap<String, String>,
+        created: SystemTime,
+    }
+
+    const NOW: SystemTime = UNIX_EPOCH;
+
+    #[test]
+    fn fake_service_create_adds_one_item() -> secret_service::Result<()> {
+        let service = FakeSecretService::new();
+        let expected = ItemData {
+            label: "label".to_owned(),
+            secret: "secret".as_bytes().to_owned(),
+            content_type: "content_type".to_owned(),
+            attributes: HashMap::from([]),
+            created: NOW,
+        };
+
+        // Create new item
+        let item = service.get_default_collection()?.create_item(
+            &expected.label,
+            borrow_map(&expected.attributes),
+            &expected.secret,
+            false,
+            &expected.content_type,
+        )?;
+        assert_eq!(item.get_secret()?, expected.secret);
+
+        // Assert one item was created
+        let items = service.0.borrow();
+        assert_eq!(items.len(), 1);
+        let item = items[0].as_ref().borrow();
+        assert_eq!(*item, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn fake_service_create_with_replace_adds_one_item() -> secret_service::Result<()> {
+        let service = FakeSecretService::new();
+        let expected = ItemData {
+            label: "label".to_owned(),
+            secret: "secret".as_bytes().to_owned(),
+            content_type: "content_type".to_owned(),
+            attributes: HashMap::from([]),
+            created: NOW,
+        };
+
+        // First create
+        let item = service.get_default_collection()?.create_item(
+            &expected.label,
+            borrow_map(&expected.attributes),
+            &expected.secret,
+            true,
+            &expected.content_type,
+        )?;
+        assert_eq!(item.get_secret()?, expected.secret);
+
+        // A second create
+        let item = service.get_default_collection()?.create_item(
+            &expected.label,
+            borrow_map(&expected.attributes),
+            &expected.secret,
+            true,
+            &expected.content_type,
+        )?;
+        assert_eq!(item.get_secret()?, expected.secret);
+
+        // Assert one item was created
+        let items = service.0.borrow();
+        assert_eq!(items.len(), 1);
+        let item = items[0].as_ref().borrow();
+        assert_eq!(*item, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn fake_service_create_without_replace_adds_multiple_items() -> secret_service::Result<()> {
+        let service = FakeSecretService::new();
+        let expected = ItemData {
+            label: "label".to_owned(),
+            secret: "secret".as_bytes().to_owned(),
+            content_type: "content_type".to_owned(),
+            attributes: HashMap::from([]),
+            created: NOW,
+        };
+
+        // First create
+        let item = service.get_default_collection()?.create_item(
+            &expected.label,
+            borrow_map(&expected.attributes),
+            &expected.secret,
+            false,
+            &expected.content_type,
+        )?;
+        assert_eq!(item.get_secret()?, expected.secret);
+
+        // A second create
+        let item = service.get_default_collection()?.create_item(
+            &expected.label,
+            borrow_map(&expected.attributes),
+            &expected.secret,
+            false,
+            &expected.content_type,
+        )?;
+        assert_eq!(item.get_secret()?, expected.secret);
+
+        // Assert two items were created
+        let items = service.0.borrow();
+        assert_eq!(items.len(), 2);
+        let item = items[0].as_ref().borrow();
+        assert_eq!(*item, expected);
+        let item = items[1].as_ref().borrow();
+        assert_eq!(*item, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn fake_service_search_with_exact_attributes_finds_item() -> secret_service::Result<()> {
+        let service = FakeSecretService::new();
+        service.0.borrow_mut().push(Rc::new(RefCell::new(ItemData {
+            label: "label".to_owned(),
+            secret: "secret".as_bytes().to_owned(),
+            content_type: "content_type".to_owned(),
+            attributes: HashMap::from([("attribute".to_owned(), "match".to_owned())]),
+            created: NOW,
+        })));
+
+        let results = service
+            .get_default_collection()?
+            .search_items(HashMap::from([("attribute", "match")]))?;
+
+        assert_eq!(results.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn fake_service_search_with_subset_of_attributes_finds_item() -> secret_service::Result<()> {
+        let service = FakeSecretService::new();
+        service.0.borrow_mut().push(Rc::new(RefCell::new(ItemData {
+            label: "label".to_owned(),
+            secret: "secret".as_bytes().to_owned(),
+            content_type: "content_type".to_owned(),
+            attributes: HashMap::from([
+                ("attribute".to_owned(), "match".to_owned()),
+                ("extra_attribute".to_owned(), "no_match".to_owned()),
+            ]),
+            created: NOW,
+        })));
+
+        let results = service
+            .get_default_collection()?
+            .search_items(HashMap::from([("attribute", "match")]))?;
+
+        assert_eq!(results.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn fake_service_search_with_non_matching_attributes_finds_nothing() -> secret_service::Result<()>
+    {
+        let service = FakeSecretService::new();
+        service.0.borrow_mut().push(Rc::new(RefCell::new(ItemData {
+            label: "label".to_owned(),
+            secret: "secret".as_bytes().to_owned(),
+            content_type: "content_type".to_owned(),
+            attributes: HashMap::from([]),
+            created: NOW,
+        })));
+
+        let results = service
+            .get_default_collection()?
+            .search_items(HashMap::from([("no_such_attribute", "wow")]))?;
+
+        assert!(results.is_empty());
+
+        Ok(())
+    }
 }
