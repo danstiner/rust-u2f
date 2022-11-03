@@ -1,3 +1,5 @@
+#![feature(generic_associated_types)]
+
 extern crate alloc;
 extern crate bincode;
 extern crate clap;
