@@ -2,6 +2,7 @@ use bitflags::bitflags;
 use byteorder::{BigEndian, WriteBytesExt};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
+use tracing::Value;
 
 use crate::{Aaguid, Sha256};
 
@@ -85,7 +86,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialDescriptor {
     ) -> Result<Self, minicbor::decode::Error> {
         let map_len = d
             .map()?
-            .ok_or(minicbor::decode::Error::message("Expected sized map"))?;
+            .ok_or_else(|| minicbor::decode::Error::message("Expected sized map"))?;
         if map_len != 2 {
             return Err(minicbor::decode::Error::message(
                 "Expected map of exactly size 2",
@@ -133,7 +134,7 @@ impl<C> Encode<C> for PublicKeyCredentialParameters {
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.map(2)?
             .str("alg")?
-            .encode(&self.alg)?
+            .encode(self.alg)?
             .str("type")?
             .encode(&self.type_)?
             .ok()
@@ -148,7 +149,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialParameters {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
         let map_len = d
             .map()?
-            .ok_or(minicbor::decode::Error::message("Expected sized map"))?;
+            .ok_or_else(|| minicbor::decode::Error::message("Expected sized map"))?;
         if map_len != 2 {
             return Err(minicbor::decode::Error::message(
                 "Expected map of exactly size 2",
@@ -231,10 +232,10 @@ impl<C> Encode<C> for PublicKeyCredentialRpEntity {
 
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialRpEntity {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        let map_len = d.map()?.ok_or(
+        let map_len = d.map()?.ok_or_else(|| {
             minicbor::decode::Error::message("Expected sized map for PublicKeyCredentialRpEntity")
-                .at(d.position()),
-        )?;
+                .at(d.position())
+        })?;
         if map_len != 2 {
             return Err(minicbor::decode::Error::message(
                 "Expected map of exactly size 2 for PublicKeyCredentialRpEntity",
@@ -303,12 +304,10 @@ impl<C> Encode<C> for PublicKeyCredentialUserEntity {
 
 impl<'b, C> Decode<'b, C> for PublicKeyCredentialUserEntity {
     fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        let map_len = d.map()?.ok_or(
-            minicbor::decode::Error::message(
-                "Expected sized map for PublicKeyCredentialUserEntity",
-            )
-            .at(d.position()),
-        )?;
+        let map_len = d.map()?.ok_or_else(|| {
+            minicbor::decode::Error::message("Expected sized map for PublicKeyCredentialUserEntity")
+                .at(d.position())
+        })?;
         if map_len > 3 {
             return Err(minicbor::decode::Error::message(
                 "Expected map of size 3 or less for PublicKeyCredentialUserEntity",
@@ -665,7 +664,7 @@ impl<C> Encode<C> for PackedAttestationStatement {
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.map(2)?
             .str("alg")?
-            .encode(&self.alg)?
+            .encode(self.alg)?
             .str("sig")?
             .bytes(self.sig.as_ref())?
             .ok()
@@ -675,8 +674,8 @@ impl<C> Encode<C> for PackedAttestationStatement {
 /// An attestation certificate and its certificate chain (if any), each encoded in X.509 format
 #[derive(Debug, PartialEq)]
 pub struct AttestationCertificate {
-    pub attestnCert: Vec<u8>,
-    pub caCerts: Vec<Vec<u8>>,
+    pub attestation_certificate: Vec<u8>,
+    pub ca_certificate_chain: Vec<Vec<u8>>,
 }
 
 /// A WebAuthn signature is the result of signing authenticator data and the client data hash.

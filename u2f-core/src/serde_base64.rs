@@ -1,4 +1,3 @@
-use base64;
 use serde::{Deserialize, Deserializer, Serializer};
 
 pub(crate) fn to_base64<T, S>(buffer: &T, serializer: S) -> Result<S::Ok, S::Error>
@@ -15,5 +14,5 @@ where
 {
     use serde::de::Error;
     String::deserialize(deserializer)
-        .and_then(|string| base64::decode(&string).map_err(|err| Error::custom(err.to_string())))
+        .and_then(|string| base64::decode(string).map_err(|err| Error::custom(err.to_string())))
 }

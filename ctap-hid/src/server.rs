@@ -134,7 +134,7 @@ where
                         }
                     };
                 }
-                Err(err) => return Poll::Ready(Err(err.into())),
+                Err(err) => return Poll::Ready(Err(err)),
             }
         }
     }

@@ -19,7 +19,7 @@ const FRAME_TYPE_MASK: u8 = 0b1000_0000;
 pub enum Packet {
     /// An initialization packet is the first packet sent in a message, it starts a new transaction.
     ///
-    /// Offset  Length 	Mnemonic  Description
+    /// Offset  Length  Mnemonic  Description
     /// ------------------------------------------------------------------------------
     /// 0       4       CID       Channel identifier
     /// 4       1       CMD       Command identifier (bit 7 always set)
@@ -35,7 +35,7 @@ pub enum Packet {
     /// When a message does not fit in one packet, one or more continuation packets must be sent
     /// in strict assending order of sequence to complete the message transfer.
     ///
-    /// Offset  Length 	Mnemonic  Description
+    /// Offset  Length  Mnemonic  Description
     /// ------------------------------------------------------------------------------
     /// 0       4       CID       Channel identifier
     /// 4       1       SEQ       Packet sequence 0x00..0x7f (bit 7 always cleared)
@@ -93,6 +93,8 @@ impl Packet {
                 data,
                 payload_len,
             } => {
+                assert!(data.len() <= INITIAL_PACKET_DATA_LEN);
+
                 // Offset Length Mnemonic Description
                 // 0      4      CID      Channel identifier
                 channel_id.write(&mut bytes).unwrap();
@@ -105,18 +107,15 @@ impl Packet {
                 bytes.write_u16::<BigEndian>(*payload_len).unwrap();
 
                 // 7      (s-7)  DATA     Payload data (s is equal to the fixed packet size)
-                bytes.extend_from_slice(&data);
-
-                // Zero-pad to expected initial packet length
-                for _ in data.len()..INITIAL_PACKET_DATA_LEN {
-                    bytes.push(0u8);
-                }
+                bytes.extend_from_slice(data);
             }
             Packet::Continuation {
                 channel_id,
                 sequence_number,
                 data,
             } => {
+                assert!(data.len() <= CONTINUATION_PACKET_DATA_LEN);
+
                 // Offset Length Mnemonic Description
                 // 0      4      CID      Channel identifier
                 channel_id.write(&mut bytes).unwrap();
@@ -126,15 +125,12 @@ impl Packet {
                 bytes.push(*sequence_number);
 
                 // 5      (s-5)  DATA     Payload data (s is equal to the fixed packet size)
-                bytes.extend_from_slice(&data);
-
-                // Zero-pad to expected continuation packet length
-                for _ in data.len()..CONTINUATION_PACKET_DATA_LEN {
-                    bytes.push(0u8);
-                }
+                bytes.extend_from_slice(data);
             }
         }
-        assert_eq!(bytes.len(), HID_REPORT_LEN);
+
+        // Zero-pad to expected report length
+        bytes.resize(HID_REPORT_LEN, 0u8);
         bytes
     }
 

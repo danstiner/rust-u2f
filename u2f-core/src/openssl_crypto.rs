@@ -21,9 +21,7 @@ pub struct OpenSSLCryptoOperations {
 
 impl OpenSSLCryptoOperations {
     pub fn new(attestation: Attestation) -> OpenSSLCryptoOperations {
-        OpenSSLCryptoOperations {
-            attestation: attestation,
-        }
+        OpenSSLCryptoOperations { attestation }
     }
 
     fn generate_key() -> PrivateKey {

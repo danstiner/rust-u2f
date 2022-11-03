@@ -285,7 +285,7 @@ impl<C> minicbor::Encode<C> for GetInfoResponse {
         e.encode(&self.versions)?;
 
         e.u8(0x03)?;
-        e.encode(&self.aaguid)?;
+        e.encode(self.aaguid)?;
 
         if let Some(ref algorithms) = self.algorithms {
             e.u8(0x0A)?;

@@ -51,15 +51,19 @@ struct AppDirs {
 
 impl AppDirs {
     fn new() -> io::Result<Self> {
-        let user_dirs = UserDirs::new().ok_or(io::Error::new(
-            io::ErrorKind::NotFound,
-            "Home directory path could not be determined",
-        ))?;
-        let project_dirs =
-            ProjectDirs::from("com.github", "danstiner", "Rust U2F").ok_or(io::Error::new(
+        let user_dirs = UserDirs::new().ok_or_else(|| {
+            io::Error::new(
                 io::ErrorKind::NotFound,
                 "Home directory path could not be determined",
-            ))?;
+            )
+        })?;
+        let project_dirs =
+            ProjectDirs::from("com.github", "danstiner", "Rust U2F").ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Home directory path could not be determined",
+                )
+            })?;
 
         return Ok(AppDirs {
             home_dir: user_dirs.home_dir().to_owned(),

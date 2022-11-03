@@ -104,6 +104,7 @@ impl Request {
         let mut reader = Cursor::new(request_data);
         let request = match command_code {
             REGISTER_COMMAND_CODE => {
+                // TODO this isn't matching the constant, it's defining a variable
                 // The challenge parameter [32 bytes].
                 let mut challenge_parameter = [0u8; 32];
                 reader.read_exact(&mut challenge_parameter[..]).unwrap();

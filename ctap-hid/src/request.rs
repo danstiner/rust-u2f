@@ -73,7 +73,7 @@ impl Request {
                     })
                 } else {
                     let mut nonce = [0u8; COMMAND_INIT_DATA_LEN];
-                    nonce.copy_from_slice(&data[..]);
+                    nonce.copy_from_slice(data);
                     Ok(Request::Init { nonce })
                 }
             }
@@ -113,7 +113,7 @@ impl RequestMessage {
                 data,
                 payload_len,
             } => {
-                payload.extend_from_slice(&data);
+                payload.extend_from_slice(data);
                 (*channel_id, *command, *payload_len as usize)
             }
             Packet::Continuation { .. } => {
@@ -135,7 +135,7 @@ impl RequestMessage {
                     assert_eq!(*sequence_number, expected_sequence_number);
                     expected_sequence_number += 1;
 
-                    payload.extend_from_slice(&data);
+                    payload.extend_from_slice(data);
                 }
             }
         }

@@ -27,7 +27,7 @@ impl SecretServiceStore<secret_service::SecretService<'_>> {
 }
 
 impl<S> MutableSecretStore for SecretServiceStore<S> {
-    fn add_secret(&self, secret: Secret) -> io::Result<()> {
+    fn add_secret(&self, _secret: Secret) -> io::Result<()> {
         todo!()
     }
 }
@@ -194,13 +194,13 @@ pub(crate) trait SecretService {
     where
         Self: 'a;
 
-    fn get_default_collection<'a>(&'a self) -> secret_service::Result<Self::Collection<'a>>;
+    fn get_default_collection(&self) -> secret_service::Result<Self::Collection<'_>>;
 }
 
 impl SecretService for secret_service::SecretService<'_> {
     type Collection<'a> = secret_service::Collection<'a> where Self: 'a;
 
-    fn get_default_collection<'a>(&'a self) -> secret_service::Result<Self::Collection<'a>> {
+    fn get_default_collection(&self) -> secret_service::Result<Self::Collection<'_>> {
         self.get_default_collection()
     }
 }
@@ -208,9 +208,6 @@ impl SecretService for secret_service::SecretService<'_> {
 fn discoverable_credential_attributes(
     credential: &PrivateKeyCredentialSource,
 ) -> Vec<(&'static str, String)> {
-    let since_the_epoch = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("time moved backwards");
     let mut attributes = discoverable_search_attributes(&credential.rp_id);
     attributes.push((
         "user_handle",
@@ -245,7 +242,7 @@ fn find_item<'a, C: Collection>(
 ) -> io::Result<Option<C::Item<'a>>> {
     let attributes = handle_search_attributes(handle);
     let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    Ok(find_items(collection, attributes)?.into_iter().nth(0))
+    Ok(find_items(collection, attributes)?.into_iter().next())
 }
 
 fn find_items<'a, C: Collection>(
@@ -269,7 +266,7 @@ fn unlock_if_locked<C: Collection>(collection: &C) -> io::Result<()> {
     Ok(())
 }
 
-fn borrow_map<'a>(m: &'a HashMap<String, String>) -> HashMap<&'a str, &'a str> {
+fn borrow_map(m: &HashMap<String, String>) -> HashMap<&str, &str> {
     m.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()
 }
 

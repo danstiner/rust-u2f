@@ -18,6 +18,7 @@ use fido2_api::Sha256;
 use fido2_api::Signature;
 use fido2_api::UserHandle;
 use tracing::debug;
+use tracing::info;
 use tracing::trace;
 use tracing::warn;
 
@@ -273,8 +274,7 @@ where
         // 3. Select the first supported algorithm in pubKeyCredParams
         let pk_parameters = pub_key_cred_params
             .iter()
-            .filter(|param| param.alg == COSEAlgorithmIdentifier::ES256) // TODO filter other algorithm types
-            .next()
+            .find(|param| param.alg == COSEAlgorithmIdentifier::ES256) // TODO filter other algorithm types
             .ok_or(Error::UnsupportedAlgorithm)?;
 
         // 4. Initialize both "uv" and "up" as false.
@@ -307,7 +307,7 @@ where
         // 11. If the authenticator is protected by some form of user verification, then:
         // 11.1. If pinUvAuthParam parameter is present (implying the "uv" option is false (see Step 5)):
         if pin_uv_auth_param.is_some() {
-            assert_eq!(user_verified, false);
+            assert!(!user_verified);
             // If the authenticator is not protected by pinUvAuthToken,
             // or the authenticator is protected by pinUvAuthToken but pinUvAuthToken is disabled,
             // then end the operation by returning CTAP1_ERR_INVALID_PARAMETER.
@@ -406,21 +406,23 @@ where
         let applicable_credentials: Vec<CredentialHandle> = located_credentials
             .into_iter()
             .filter(|credential| {
-                if credential.protection.is_user_verification_required && user_verified == false {
+                if credential.protection.is_user_verification_required && !user_verified {
                     // 7.4. If credential protection for a credential is marked as userVerificationRequired,
                     // and the "uv" bit is false in the response, remove that credential from the
                     // applicable credentials list.
+                    trace!(?credential.descriptor.id, "Removing credential, user verification requirement not met");
                     false
                 } else if credential
                     .protection
                     .is_user_verification_optional_with_credential_id_list
                     && allow_list.is_none()
-                    && user_verified == false
+                    && !user_verified
                 {
                     // 7.5: If credential protection for a credential is marked as
                     // userVerificationOptionalWithCredentialIDList and there is no allowList passed
                     // by the client and the "uv" bit is false in the response, remove that credential
                     // from the applicable credentials list.
+                    trace!(?credential.descriptor.id, "Removing credential, user verification requirement not met and no allow list");
                     false
                 } else {
                     // Otherwise add the located credentials to the applicable credentials list.
@@ -435,16 +437,17 @@ where
 
         let credential_handle = if allow_list.is_some() {
             // 11. If the allowList parameter is present select any credential from the applicable credentials list
-            applicable_credentials.into_iter().nth(0).unwrap()
+            info!("Selecting credential from allow list");
+            applicable_credentials.into_iter().next().unwrap()
         }
         // 12. If allowList is not present, order the applicable credentials by create time, most recent first
-        else if user_verified == false && user_present == false {
+        else if !user_verified && !user_present {
             // 12.2. If the authenticator does not have a display, or the authenticator does have a display and the "uv" and "up" options are false:
             // 12.2.1. Remember the authenticatorGetAssertion parameters.
             // 12.2.2. Create a credential counter (credentialCounter) and set it to 1. This counter signifies the next credential to be returned by the authenticator, assuming zero-based indexing.
             // 12.2.3. Start a timer. This is used during authenticatorGetNextAssertion command. This step is OPTIONAL if transport is done over NFC.
             // 12.2.4. Select the first credential.
-            applicable_credentials.into_iter().nth(0).unwrap()
+            applicable_credentials.into_iter().next().unwrap()
         } else if user_verified || user_present {
             todo!()
         } else {

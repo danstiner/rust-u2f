@@ -9,10 +9,12 @@ pub(crate) fn overwrite<W>(path: &Path, writer_fn: W) -> io::Result<()>
 where
     W: FnOnce(Box<&mut dyn Write>) -> io::Result<()>,
 {
-    let directory = path.parent().ok_or(io::Error::new(
-        io::ErrorKind::InvalidInput,
-        "invalid file path, does not have a parent directory",
-    ))?;
+    let directory = path.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid file path, does not have a parent directory",
+        )
+    })?;
     fs::create_dir_all(directory)?;
     let tmp_path = make_tmp_path(path)?;
 
@@ -41,10 +43,12 @@ fn make_tmp_path(path: &Path) -> io::Result<PathBuf> {
     let mut tmp_path = PathBuf::from(path);
     let mut file_name = tmp_path
         .file_name()
-        .ok_or(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Invalid file path, does not end in a file name",
-        ))?
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Invalid file path, does not end in a file name",
+            )
+        })?
         .to_owned();
     file_name.push(".tmp");
     tmp_path.set_file_name(file_name);

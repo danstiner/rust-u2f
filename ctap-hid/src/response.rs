@@ -131,7 +131,7 @@ impl ResponseMessage {
                 data,
                 payload_len,
             } => {
-                payload.extend_from_slice(&data);
+                payload.extend_from_slice(data);
                 (*channel_id, *command, *payload_len as usize)
             }
             Packet::Continuation { .. } => {
@@ -153,7 +153,7 @@ impl ResponseMessage {
                     assert_eq!(*sequence_number, expected_sequence_number);
                     expected_sequence_number += 1;
 
-                    payload.extend_from_slice(&data);
+                    payload.extend_from_slice(data);
                 }
             }
         }
@@ -169,8 +169,8 @@ impl ResponseMessage {
     pub fn to_packets(&self) -> VecDeque<Packet> {
         let channel_id = self.channel_id;
         match &self.response {
-            Response::Ping { data } => Packet::encode_message(channel_id, CommandType::Ping, &data),
-            Response::Msg { data } => Packet::encode_message(channel_id, CommandType::Msg, &data),
+            Response::Ping { data } => Packet::encode_message(channel_id, CommandType::Ping, data),
+            Response::Msg { data } => Packet::encode_message(channel_id, CommandType::Msg, data),
             Response::Init {
                 nonce,
                 new_channel_id,
@@ -191,7 +191,7 @@ impl ResponseMessage {
                 assert_eq!(data.len(), 17);
                 Packet::encode_message(channel_id, CommandType::Init, &data)
             }
-            Response::Cbor { data } => Packet::encode_message(channel_id, CommandType::Cbor, &data),
+            Response::Cbor { data } => Packet::encode_message(channel_id, CommandType::Cbor, data),
             Response::KeepAlive { status: _ } => {
                 Packet::encode_message(channel_id, CommandType::KeepAlive, &[])
             }

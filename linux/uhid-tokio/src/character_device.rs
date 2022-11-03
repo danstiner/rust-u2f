@@ -64,7 +64,7 @@ impl futures::AsyncRead for CharacterDevice {
         loop {
             match this.state {
                 State::Ready(ref mut prev_read) => {
-                    if prev_read.len() > 0 {
+                    if !prev_read.is_empty() {
                         trace!(
                             "CharacterDevice::poll_read: Leftover bytes from previous read: {}",
                             prev_read.len()
@@ -121,7 +121,7 @@ impl futures::AsyncWrite for CharacterDevice {
     ) -> Poll<io::Result<usize>> {
         trace!("CharacterDevice::write; buf.len:{}", buf.len());
         // TODO: Async writes
-        let file = Arc::clone(&mut self.project().file);
+        let file = Arc::clone(self.project().file);
         let res = (&*file).write(buf);
         trace!("CharacterDevice::write; complete");
         Poll::Ready(res)

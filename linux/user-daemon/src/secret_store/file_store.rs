@@ -43,7 +43,7 @@ impl FileStore {
 
     pub fn iter(&self) -> io::Result<IntoIter<Secret>> {
         let data = self.load()?;
-        let secrets: Vec<Secret> = data
+        Ok(data
             .application_keys
             .values()
             .map(|application_key| {
@@ -56,8 +56,8 @@ impl FileStore {
                     counter: *counter,
                 }
             })
-            .collect();
-        Ok(secrets.into_iter())
+            .collect::<Vec<Secret>>()
+            .into_iter())
     }
 
     fn load(&self) -> io::Result<Data> {

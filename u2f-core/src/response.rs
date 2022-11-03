@@ -133,9 +133,9 @@ pub enum ResponseError {
     Signing(#[from] SignError),
 }
 
-impl Into<io::Error> for ResponseError {
-    fn into(self: Self) -> io::Error {
-        match self {
+impl From<ResponseError> for io::Error {
+    fn from(error: ResponseError) -> Self {
+        match error {
             ResponseError::Io(err) => err,
             ResponseError::Signing(_) => io::Error::new(io::ErrorKind::Other, "Signing error"),
         }

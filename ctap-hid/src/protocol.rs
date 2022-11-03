@@ -100,7 +100,9 @@ where
                     }
                     .to_packets(),
                 );
-                output_waker.take().map(|waker| waker.wake());
+                if let Some(waker) = output_waker.take() {
+                    waker.wake()
+                }
                 ServiceState::Ready(service)
             }
             Request::Msg { data } => ServiceState::Processing {
@@ -287,7 +289,9 @@ where
                             }
                             .to_packets(),
                         );
-                        this.output_waker.take().map(|waker| waker.wake());
+                        if let Some(waker) = this.output_waker.take() {
+                            waker.wake()
+                        }
                         Ok(())
                     }
                     _ => todo!("Err: Bad packet for broadcast channel"),

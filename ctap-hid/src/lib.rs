@@ -92,7 +92,7 @@ impl CommandType {
             CTAPHID_KEEPALIVE => CommandType::KeepAlive,
             CTAPHID_LOCK => CommandType::Lock,
             CTAPHID_WINK => CommandType::Wink,
-            id if id >= CTAPHID_VENDOR_FIRST && id <= CTAPHID_VENDOR_LAST => {
+            id if (CTAPHID_VENDOR_FIRST..=CTAPHID_VENDOR_LAST).contains(&id) => {
                 CommandType::Vendor { identifier: id }
             }
             id => CommandType::Unknown { identifier: id },

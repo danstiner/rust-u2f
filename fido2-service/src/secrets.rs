@@ -94,7 +94,7 @@ impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
     ) -> Result<(AuthenticatorData, AttestationStatement), Self::Error> {
         let data = self.0.lock().unwrap();
         if let Some(key) = data.store.get(credential_handle)? {
-            let key: PublicKeyCredentialSource = key.clone().try_into().unwrap();
+            let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
                 rp_id_hash: Sha256::digest(rp_id.as_bytes()),
                 user_present,
@@ -114,8 +114,8 @@ impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
                     alg: key.alg(),
                     sig: signature,
                     x5c: Some(AttestationCertificate {
-                        attestnCert: key.public_key_document().as_ref().to_vec(), // TODO this should be the authenticator's certificate
-                        caCerts: vec![],
+                        attestation_certificate: key.public_key_document().as_ref().to_vec(), // TODO this should be the authenticator's certificate
+                        ca_certificate_chain: vec![],
                     }),
                 }),
             ))
@@ -134,7 +134,7 @@ impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
     ) -> Result<(AuthenticatorData, fido2_api::Signature), Self::Error> {
         let data = self.0.lock().unwrap();
         if let Some(key) = data.store.get(credential_handle)? {
-            let key: PublicKeyCredentialSource = key.clone().try_into().unwrap();
+            let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
                 rp_id_hash: Sha256::digest(rp_id.as_bytes()),
                 user_present,
@@ -160,8 +160,8 @@ impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
 
     async fn list_specified_credentials(
         &self,
-        rp_id: &RelyingPartyIdentifier,
-        credential_list: &[PublicKeyCredentialDescriptor],
+        _rp_id: &RelyingPartyIdentifier,
+        _credential_list: &[PublicKeyCredentialDescriptor],
     ) -> Result<Vec<CredentialHandle>, Self::Error> {
         todo!()
     }

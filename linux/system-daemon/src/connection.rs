@@ -50,7 +50,7 @@ async fn handle_create_device_request(
         match input? {
             SocketInput::CreateDeviceRequest(CreateDeviceRequest) => {
                 let create_params = CreateParams {
-                    name: device_name(&ucred),
+                    name: device_name(ucred),
                     phys: String::from(""), // Physical location of device (not relevant)
                     uniq: String::from(""), // Unique identifier of device (serial #) (not relevant)
                     bus: Bus::USB,
@@ -111,7 +111,7 @@ async fn pipe_reports(
         (tokio::select! {
             Some(input) = user_socket.next() => match input? {
                 SocketInput::Report(report) => {
-                    trace!(len = report.data().len(), "Piping report from userspace: type:{}, len:{}, data:{}", report.type_(), report.data().len(), base64::encode(&report.data()[..]));
+                    trace!(len = report.data().len(), "Piping report from userspace: type:{}, len:{}, data:{}", report.type_(), report.data().len(), base64::encode(report.data()));
                     uhid_device.send(InputEvent::Input {
                         data: report.data().to_vec(),
                     }).await
@@ -182,7 +182,7 @@ fn device_name(ucred: &UCred) -> String {
                 ?err,
                 "Unable to determine hostname, defaulting to generic device name"
             );
-            format!("rust-u2f")
+            "rust-u2f".to_string()
         }
     }
 }

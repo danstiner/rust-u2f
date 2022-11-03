@@ -52,9 +52,9 @@ pub enum Error {
     NoCredentials,
 }
 
-impl Into<StatusCode> for Error {
-    fn into(self) -> StatusCode {
-        match self {
+impl From<Error> for StatusCode {
+    fn from(error: Error) -> Self {
+        match error {
             Error::Io(_) => StatusCode::Other,
             Error::UnsupportedAlgorithm => StatusCode::UnsupportedAlgorithm,
             Error::InvalidParameter => StatusCode::InvalidParameter,

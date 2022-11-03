@@ -20,7 +20,7 @@ impl AppId {
     }
 
     pub fn to_base64(&self) -> String {
-        base64::encode(&self.0)
+        base64::encode(self.0)
     }
 }
 
@@ -53,7 +53,7 @@ impl<'de> Deserialize<'de> for AppId {
 impl std::fmt::Debug for AppId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("AppId")
-            .field(&base64::encode(&self.0))
+            .field(&base64::encode(self.0))
             .finish()
     }
 }

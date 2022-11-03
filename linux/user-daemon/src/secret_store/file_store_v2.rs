@@ -105,26 +105,26 @@ impl SecretStore for FileStoreV2 {
 
     async fn assert(
         &self,
-        rp_id: &fido2_api::RelyingPartyIdentifier,
-        credential_handle: &fido2_service::CredentialHandle,
-        client_data_hash: &fido2_api::Sha256,
-        user_present: bool,
-        user_verified: bool,
+        _rp_id: &fido2_api::RelyingPartyIdentifier,
+        _credential_handle: &fido2_service::CredentialHandle,
+        _client_data_hash: &fido2_api::Sha256,
+        _user_present: bool,
+        _user_verified: bool,
     ) -> Result<(fido2_api::AuthenticatorData, fido2_api::Signature), Self::Error> {
         todo!()
     }
 
     async fn list_discoverable_credentials(
         &self,
-        rp_id: &fido2_api::RelyingPartyIdentifier,
+        _rp_id: &fido2_api::RelyingPartyIdentifier,
     ) -> Result<Vec<fido2_service::CredentialHandle>, Self::Error> {
         todo!()
     }
 
     async fn list_specified_credentials(
         &self,
-        rp_id: &fido2_api::RelyingPartyIdentifier,
-        allow_list: &[PublicKeyCredentialDescriptor],
+        _rp_id: &fido2_api::RelyingPartyIdentifier,
+        _allow_list: &[PublicKeyCredentialDescriptor],
     ) -> Result<Vec<fido2_service::CredentialHandle>, Self::Error> {
         todo!()
     }
