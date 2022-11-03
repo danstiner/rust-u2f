@@ -6,15 +6,15 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 
 RUN yum -y groupinstall 'Development Tools' && \
     yum -y install \
-      clang \
-      dbus-devel \
-      libselinux-devel \
-      openssl-devel \
-      pkg-config \
-      protobuf-compiler \
-      selinux-policy-devel \
-      systemd-devel \
-      rpm-build && \
+    clang \
+    dbus-devel \
+    libselinux-devel \
+    openssl1.1-devel \
+    pkg-config \
+    protobuf-compiler \
+    selinux-policy-devel \
+    systemd-devel \
+    rpm-build && \
     yum clean all
 
 RUN set -eux; \
@@ -22,7 +22,7 @@ RUN set -eux; \
     curl -sSf -o rustup-init "$url"; \
     sha256sum rustup-init; \
     chmod +x rustup-init; \
-    ./rustup-init -y --no-modify-path --default-toolchain stable; \
+    ./rustup-init -y --no-modify-path --default-toolchain 1.57.0; \
     rm rustup-init; \
     chmod -R a+w $RUSTUP_HOME $CARGO_HOME; \
     rustup --version; \
