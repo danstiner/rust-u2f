@@ -6,21 +6,120 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
 use fido2_api::RelyingPartyIdentifier;
 use fido2_service::{CredentialHandle, CredentialProtection, PrivateKeyCredentialSource};
+use secret_service::{EncryptionType, Error};
 
-/// Store keys to a keyring service runing in the user's login session.
+/// Store keys to a keyring service running in the user's login session.
 ///
 /// Supports services such as GNOME keyring and KWallet that implement the Secret Service API.
 /// Generally keys are encrypted at rest. The service may need to be unlocked by the user in order
 /// to decrypt keys, if the service does not automatically unlock at login with the user's password.
-pub struct KeyRing<S> {
+pub(crate) struct KeyRing<S: SecretService> {
     service: S,
 }
 
 impl KeyRing<secret_service::SecretService<'_>> {
-    pub fn new() -> Result<Self, secret_service::Error> {
+    pub fn new() -> Result<Self, Error> {
         Ok(Self {
-            service: secret_service::SecretService::new(secret_service::EncryptionType::Dh)?,
+            service: secret_service::SecretService::new(EncryptionType::Dh)?,
         })
+    }
+}
+
+/// The org.freedesktop.Secret.Service interface for managing collections of secrets.
+///
+/// Only the subset of methods used in this module are included. This trait is primarily meant
+/// to provide an abstraction where we can inject a faked implementation in tests.
+pub(crate) trait SecretService {
+    type Collection<'a>: Collection
+    where
+        Self: 'a;
+
+    fn get_default_collection(&self) -> Result<Self::Collection<'_>, Error>;
+}
+
+impl SecretService for secret_service::SecretService<'_> {
+    type Collection<'a> = secret_service::Collection<'a> where Self: 'a;
+
+    fn get_default_collection(&self) -> Result<Self::Collection<'_>, Error> {
+        self.get_default_collection()
+    }
+}
+
+/// The org.freedesktop.Secret.Collection interface for managing secrets in a collection.
+///
+/// Only the subset of methods used in this module are included. This trait is primarily meant
+/// to provide an abstraction where we can inject a faked implementation in tests.
+pub(crate) trait Collection {
+    type Item<'a>: Item
+    where
+        Self: 'a;
+
+    fn create_item<'a>(
+        &'a self,
+        label: &str,
+        attributes: HashMap<&str, &str>,
+        secret: &[u8],
+        replace: bool,
+        content_type: &str,
+    ) -> Result<Self::Item<'a>, Error>;
+
+    fn search_items<'a>(
+        &'a self,
+        attributes: HashMap<&str, &str>,
+    ) -> Result<Vec<Self::Item<'a>>, Error>;
+
+    fn is_locked(&self) -> Result<bool, Error>;
+
+    fn unlock(&self) -> Result<(), Error>;
+}
+
+impl Collection for secret_service::Collection<'_> {
+    type Item<'a> = secret_service::Item<'a> where Self: 'a;
+
+    fn create_item<'a>(
+        &'a self,
+        label: &str,
+        attributes: HashMap<&str, &str>,
+        secret: &[u8],
+        replace: bool,
+        content_type: &str,
+    ) -> Result<Self::Item<'a>, Error> {
+        self.create_item(label, attributes, secret, replace, content_type)
+    }
+
+    fn search_items<'a>(
+        &'a self,
+        attributes: HashMap<&str, &str>,
+    ) -> Result<Vec<Self::Item<'a>>, Error> {
+        self.search_items(attributes)
+    }
+
+    fn is_locked(&self) -> Result<bool, Error> {
+        self.is_locked()
+    }
+
+    fn unlock(&self) -> Result<(), Error> {
+        self.unlock()
+    }
+}
+
+/// The org.freedesktop.Secret.Item interface for managing an item containing a secret value.
+///
+/// Only the subset of methods used in this module are included. This trait is primarily meant
+/// to provide an abstraction where we can inject a faked implementation in tests.
+pub(crate) trait Item {
+    fn get_secret(&self) -> Result<Vec<u8>, Error>;
+
+    fn get_created(&self) -> Result<SystemTime, Error>;
+}
+
+impl Item for secret_service::Item<'_> {
+    fn get_secret(&self) -> Result<Vec<u8>, Error> {
+        self.get_secret()
+    }
+
+    fn get_created(&self) -> Result<SystemTime, Error> {
+        Ok(UNIX_EPOCH + Duration::from_secs(self.get_created()?))
     }
 }
 
@@ -109,92 +208,6 @@ impl<S: SecretService> fido2_service::SecretStoreActual for KeyRing<S> {
             })
             .collect();
         handles
-    }
-}
-
-pub(crate) trait Item {
-    fn get_secret(&self) -> secret_service::Result<Vec<u8>>;
-
-    fn get_created(&self) -> secret_service::Result<SystemTime>;
-}
-
-impl Item for secret_service::Item<'_> {
-    fn get_secret(&self) -> secret_service::Result<Vec<u8>> {
-        self.get_secret()
-    }
-
-    fn get_created(&self) -> secret_service::Result<SystemTime> {
-        Ok(UNIX_EPOCH + Duration::from_secs(self.get_created()?))
-    }
-}
-
-pub(crate) trait Collection {
-    type Item<'a>: Item
-    where
-        Self: 'a;
-
-    fn create_item<'a>(
-        &'a self,
-        label: &str,
-        attributes: HashMap<&str, &str>,
-        secret: &[u8],
-        replace: bool,
-        content_type: &str,
-    ) -> secret_service::Result<Self::Item<'a>>;
-
-    fn search_items<'a>(
-        &'a self,
-        attributes: HashMap<&str, &str>,
-    ) -> secret_service::Result<Vec<Self::Item<'a>>>;
-
-    fn is_locked(&self) -> secret_service::Result<bool>;
-
-    fn unlock(&self) -> secret_service::Result<()>;
-}
-
-impl Collection for secret_service::Collection<'_> {
-    type Item<'a> = secret_service::Item<'a> where Self: 'a;
-
-    fn create_item<'a>(
-        &'a self,
-        label: &str,
-        attributes: HashMap<&str, &str>,
-        secret: &[u8],
-        replace: bool,
-        content_type: &str,
-    ) -> secret_service::Result<Self::Item<'a>> {
-        self.create_item(label, attributes, secret, replace, content_type)
-    }
-
-    fn search_items<'a>(
-        &'a self,
-        attributes: HashMap<&str, &str>,
-    ) -> secret_service::Result<Vec<Self::Item<'a>>> {
-        self.search_items(attributes)
-    }
-
-    fn is_locked(&self) -> secret_service::Result<bool> {
-        self.is_locked()
-    }
-
-    fn unlock(&self) -> secret_service::Result<()> {
-        self.unlock()
-    }
-}
-
-pub(crate) trait SecretService {
-    type Collection<'a>: Collection
-    where
-        Self: 'a;
-
-    fn get_default_collection(&self) -> secret_service::Result<Self::Collection<'_>>;
-}
-
-impl SecretService for secret_service::SecretService<'_> {
-    type Collection<'a> = secret_service::Collection<'a> where Self: 'a;
-
-    fn get_default_collection(&self) -> secret_service::Result<Self::Collection<'_>> {
-        self.get_default_collection()
     }
 }
 
