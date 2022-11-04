@@ -8,7 +8,7 @@ default: build
 
 .PHONY: build
 build:
-	cargo build --manifest-path ../Cargo.toml
+	cargo build --release --manifest-path ../Cargo.toml
 
 
 .PHONY: install
