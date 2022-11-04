@@ -1,16 +1,3 @@
-extern crate clap;
-extern crate futures;
-extern crate hostname;
-extern crate libc;
-extern crate libsystemd;
-extern crate nanoid;
-extern crate take_mut;
-extern crate tokio;
-extern crate tokio_linux_uhid;
-extern crate tokio_util;
-extern crate tower;
-extern crate users;
-
 use std::io;
 use std::os::unix::net;
 use std::os::unix::prelude::FromRawFd;

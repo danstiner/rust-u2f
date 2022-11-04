@@ -467,7 +467,7 @@ dependencies = [
  "bitflags",
  "byteorder",
  "fido2-api",
- "futures 0.3.25",
+ "futures",
  "itertools",
  "lazy_static",
  "openssl",
@@ -522,15 +522,6 @@ dependencies = [
  "block-buffer 0.10.3",
  "crypto-common",
  "subtle",
-]
-
-[[package]]
-name = "directories"
-version = "4.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f51c5d4ddabd36886dd3e1438cb358cdcb0d7c499cb99cb4ac2e38e18b5cb210"
-dependencies = [
- "dirs-sys",
 ]
 
 [[package]]
@@ -671,7 +662,7 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 name = "example"
 version = "0.2.0"
 dependencies = [
- "futures 0.3.25",
+ "futures",
  "termion",
  "tokio",
  "tokio-linux-uhid",
@@ -695,7 +686,7 @@ dependencies = [
  "base64",
  "bitflags",
  "byteorder",
- "futures 0.3.25",
+ "futures",
  "hex",
  "lazy_static",
  "minicbor",
@@ -722,7 +713,7 @@ dependencies = [
  "base64",
  "byteorder",
  "fido2-api",
- "futures 0.3.25",
+ "futures",
  "hex",
  "lazy_static",
  "openssl",
@@ -761,12 +752,6 @@ checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 
 [[package]]
 name = "futures"
-version = "0.1.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
-
-[[package]]
-name = "futures"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38390104763dc37a5145a53c29c63c1290b5d316d6086ec32c293f6736051bb0"
@@ -795,16 +780,6 @@ name = "futures-core"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04909a7a7e4633ae6c4a9ab280aeb86da1236243a77b694a49eacd659a4bd3ac"
-
-[[package]]
-name = "futures-cpupool"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab90cde24b3319636588d0c35fe03b1333857621051837ed769faefb4c2162e4"
-dependencies = [
- "futures 0.1.31",
- "num_cpus",
-]
 
 [[package]]
 name = "futures-executor"
@@ -1211,15 +1186,6 @@ dependencies = [
  "log",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys",
-]
-
-[[package]]
-name = "nanoid"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
-dependencies = [
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -2051,15 +2017,12 @@ dependencies = [
  "bytes",
  "clap",
  "ctap-hid",
- "futures 0.3.25",
+ "futures",
  "hostname",
- "libc",
  "libsystemd",
- "nanoid",
  "pin-project",
  "serde",
  "serde_derive",
- "take_mut",
  "thiserror",
  "tokio",
  "tokio-linux-uhid",
@@ -2081,12 +2044,9 @@ dependencies = [
  "bincode",
  "clap",
  "ctap-hid",
- "directories",
- "dirs",
  "fido2-api",
  "fido2-service",
- "futures 0.3.25",
- "futures-cpupool",
+ "futures",
  "lazy_static",
  "libsystemd",
  "notify-rust",
@@ -2164,12 +2124,6 @@ dependencies = [
  "quote",
  "unicode-ident",
 ]
-
-[[package]]
-name = "take_mut"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f764005d11ee5f36500a149ace24e00e3da98b0158b3e2d53a7495660d3f4d60"
 
 [[package]]
 name = "tauri-winrt-notification"
@@ -2311,7 +2265,7 @@ version = "0.5.0"
 dependencies = [
  "bitflags",
  "bytes",
- "futures 0.3.25",
+ "futures",
  "pin-project",
  "thiserror",
  "tokio",
@@ -2515,7 +2469,7 @@ dependencies = [
  "async-trait",
  "base64",
  "byteorder",
- "futures 0.3.25",
+ "futures",
  "hex",
  "lazy_static",
  "openssl",
@@ -2859,7 +2813,7 @@ dependencies = [
  "derivative",
  "enumflags2 0.6.4",
  "fastrand",
- "futures 0.3.25",
+ "futures",
  "nb-connect",
  "nix 0.22.3",
  "once_cell",

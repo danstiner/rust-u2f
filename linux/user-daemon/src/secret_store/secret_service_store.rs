@@ -9,6 +9,7 @@ use fido2_service::{CredentialHandle, CredentialProtection, PrivateKeyCredential
 
 use crate::secret_store::{MutableSecretStore, Secret};
 
+/// Stores
 pub struct SecretServiceStore<S> {
     service: S,
 }
@@ -18,10 +19,6 @@ impl SecretServiceStore<secret_service::SecretService<'_>> {
         Ok(Self {
             service: secret_service::SecretService::new(secret_service::EncryptionType::Dh)?,
         })
-    }
-
-    pub fn is_supported() -> bool {
-        SecretServiceStore::new().is_ok()
     }
 }
 

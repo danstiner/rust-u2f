@@ -1,25 +1,3 @@
-extern crate alloc;
-extern crate bincode;
-extern crate clap;
-extern crate core;
-extern crate ctap_hid;
-extern crate directories;
-extern crate dirs;
-extern crate futures;
-extern crate futures_cpupool;
-extern crate lazy_static;
-extern crate notify_rust;
-extern crate pin_project;
-extern crate secret_service;
-extern crate serde_derive;
-extern crate serde_json;
-extern crate softu2f_system_daemon;
-extern crate thiserror;
-extern crate tokio;
-extern crate tracing;
-extern crate tracing_subscriber;
-extern crate u2f_core;
-
 use std::{
     io,
     path::{Path, PathBuf},
@@ -46,8 +24,6 @@ use softu2f_system_daemon::{
 };
 use user_presence::NotificationUserPresence;
 
-mod atomic_file;
-mod config;
 mod secret_store;
 mod user_presence;
 
@@ -121,9 +97,8 @@ async fn main() {
 }
 
 async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
-    let config = config::Config::load()?;
     let user_presence = NotificationUserPresence::new();
-    let secrets = secret_store::build(&config)?;
+    let secrets = secret_store::build()?;
 
     let authenticator = SimpleAdapter::new(Authenticator::new(secrets, user_presence, AAGUID));
 
