@@ -6,7 +6,6 @@ use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use serde_json;
 use u2f_core::{AppId, ApplicationKey, Counter};
 
 use crate::secret_store::Secret;

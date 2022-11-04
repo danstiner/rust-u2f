@@ -66,7 +66,7 @@ const CTAPHID_VENDOR_LAST: u8 = 0x7f; // Last vendor defined command
 
 const COMMAND_INIT_DATA_LEN: usize = 8;
 
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub enum CommandType {
     Ping,      // Mandatory: echo data for debugging and performance testing
     Msg,       // Mandatory: encapsulated CTAP1/U2F message
@@ -126,7 +126,7 @@ bitflags! {
 
 #[allow(dead_code)]
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ErrorCode {
     None = 0x00,
     InvalidCommand = 0x01,

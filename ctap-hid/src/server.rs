@@ -250,10 +250,10 @@ mod integration_tests {
             Ok(())
         }
         async fn msg(&self, _msg: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-            Ok(vec!['m' as u8, 's' as u8, 'g' as u8])
+            Ok(vec![b'm', b's', b'g'])
         }
         async fn cbor(&self, _cbor: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-            Ok(vec!['c' as u8, 'b' as u8, 'o' as u8, 'r' as u8])
+            Ok(vec![b'c', b'b', b'o', b'r'])
         }
     }
 
@@ -320,7 +320,7 @@ mod integration_tests {
 
                 sleep(Duration::from_millis(100)).await;
 
-                let o = std::mem::replace(&mut s.lock().unwrap().output, vec![]);
+                let o = std::mem::take(&mut s.lock().unwrap().output);
 
                 assert_eq!(
                     ResponseMessage::decode(&o).unwrap(),
@@ -369,7 +369,7 @@ mod integration_tests {
 
                 sleep(Duration::from_millis(100)).await;
 
-                let o = std::mem::replace(&mut s.lock().unwrap().output, vec![]);
+                let o = std::mem::take(&mut s.lock().unwrap().output);
 
                 assert_eq!(
                     ResponseMessage::decode(&o).unwrap(),
@@ -399,7 +399,7 @@ mod integration_tests {
 
                 sleep(Duration::from_millis(100)).await;
 
-                let o = std::mem::replace(&mut s.lock().unwrap().output, vec![]);
+                let o = std::mem::take(&mut s.lock().unwrap().output);
 
                 assert_eq!(
                     ResponseMessage::decode(&o).unwrap(),
@@ -440,7 +440,7 @@ mod integration_tests {
 
                 sleep(Duration::from_millis(100)).await;
 
-                let o = std::mem::replace(&mut s.lock().unwrap().output, vec![]);
+                let o = std::mem::take(&mut s.lock().unwrap().output);
 
                 assert_eq!(
                     ResponseMessage::decode(&o).unwrap(),
@@ -470,7 +470,7 @@ mod integration_tests {
 
                 sleep(Duration::from_millis(100)).await;
 
-                let o = std::mem::replace(&mut s.lock().unwrap().output, vec![]);
+                let o = std::mem::take(&mut s.lock().unwrap().output);
 
                 assert_eq!(
                     ResponseMessage::decode(&o).unwrap(),
@@ -511,7 +511,7 @@ mod integration_tests {
 
                 sleep(Duration::from_millis(100)).await;
 
-                let o = std::mem::replace(&mut s.lock().unwrap().output, vec![]);
+                let o = std::mem::take(&mut s.lock().unwrap().output);
 
                 assert_eq!(
                     ResponseMessage::decode(&o).unwrap(),
@@ -541,14 +541,14 @@ mod integration_tests {
 
                 sleep(Duration::from_millis(100)).await;
 
-                let o = std::mem::replace(&mut s.lock().unwrap().output, vec![]);
+                let o = std::mem::take(&mut s.lock().unwrap().output);
 
                 assert_eq!(
                     ResponseMessage::decode(&o).unwrap(),
                     ResponseMessage {
                         channel_id: ChannelId(1),
                         response: Response::Msg {
-                            data: vec!['m' as u8, 's' as u8, 'g' as u8]
+                            data: vec![b'm', b's', b'g']
                         },
                     }
                 );
@@ -584,7 +584,7 @@ mod integration_tests {
 
                 sleep(Duration::from_millis(100)).await;
 
-                let o = std::mem::replace(&mut s.lock().unwrap().output, vec![]);
+                let o = std::mem::take(&mut s.lock().unwrap().output);
 
                 assert_eq!(
                     ResponseMessage::decode(&o).unwrap(),
@@ -623,14 +623,14 @@ mod integration_tests {
 
                 sleep(Duration::from_millis(100)).await;
 
-                let o = std::mem::replace(&mut s.lock().unwrap().output, vec![]);
+                let o = std::mem::take(&mut s.lock().unwrap().output);
 
                 assert_eq!(
                     ResponseMessage::decode(&o[0..1]).unwrap(),
                     ResponseMessage {
                         channel_id: ChannelId(1),
                         response: Response::Msg {
-                            data: vec!['m' as u8, 's' as u8, 'g' as u8]
+                            data: vec![b'm', b's', b'g']
                         },
                     }
                 );
@@ -640,7 +640,7 @@ mod integration_tests {
                     ResponseMessage {
                         channel_id: ChannelId(1),
                         response: Response::Msg {
-                            data: vec!['m' as u8, 's' as u8, 'g' as u8]
+                            data: vec![b'm', b's', b'g']
                         },
                     }
                 );

@@ -56,7 +56,8 @@ impl Channels {
         }
     }
 
-    pub fn is_valid(&self, channel_id: ChannelId) -> bool {
+    #[cfg(test)]
+    fn is_valid(&self, channel_id: ChannelId) -> bool {
         let is_broadcast = channel_id == BROADCAST_CHANNEL_ID;
         let is_in_allocated_range =
             channel_id >= MIN_CHANNEL_ID && channel_id < self.next_allocation;

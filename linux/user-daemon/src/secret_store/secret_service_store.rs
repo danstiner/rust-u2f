@@ -6,7 +6,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
 use fido2_api::RelyingPartyIdentifier;
 use fido2_service::{CredentialHandle, CredentialProtection, PrivateKeyCredentialSource};
-use serde_json;
 
 use crate::secret_store::{MutableSecretStore, Secret};
 
@@ -32,6 +31,7 @@ impl<S> MutableSecretStore for SecretServiceStore<S> {
     }
 }
 
+#[allow(clippy::let_and_return)]
 #[async_trait(?Send)]
 impl<S: SecretService> fido2_service::SecretStoreActual for SecretServiceStore<S> {
     type Error = io::Error;
@@ -266,10 +266,6 @@ fn unlock_if_locked<C: Collection>(collection: &C) -> io::Result<()> {
     Ok(())
 }
 
-fn borrow_map(m: &HashMap<String, String>) -> HashMap<&str, &str> {
-    m.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, rc::Rc};
@@ -277,6 +273,10 @@ mod tests {
     use fido2_service::SecretStoreActual;
 
     use super::*;
+
+    fn borrow_map(m: &HashMap<String, String>) -> HashMap<&str, &str> {
+        m.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()
+    }
 
     #[test]
     fn get_none() {
@@ -323,7 +323,7 @@ mod tests {
         .unwrap();
 
         {
-            let put = store.put_discoverable(key.clone()).unwrap();
+            store.put_discoverable(key.clone()).unwrap();
         }
 
         {
@@ -347,11 +347,11 @@ mod tests {
         .unwrap();
 
         {
-            let put = store.put_discoverable(key.clone()).unwrap();
+            store.put_discoverable(key.clone()).unwrap();
         }
 
         {
-            let put = store.put_discoverable(key.clone()).unwrap();
+            store.put_discoverable(key.clone()).unwrap();
         }
 
         {

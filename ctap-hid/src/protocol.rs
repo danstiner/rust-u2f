@@ -34,6 +34,7 @@ pub struct Protocol<'a, Api, Error> {
     output_waker: Option<Waker>,
 }
 
+#[allow(clippy::type_complexity)]
 enum ServiceState<'a, Service, Error> {
     Ready(Service),
     Processing {
@@ -431,10 +432,10 @@ mod tests {
             Ok(())
         }
         async fn msg(&self, _msg: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-            Ok(vec!['m' as u8, 's' as u8, 'g' as u8])
+            Ok(vec![b'm', b's', b'g'])
         }
         async fn cbor(&self, _cbor: Vec<u8>) -> Result<Vec<u8>, Self::Error> {
-            Ok(vec!['c' as u8, 'b' as u8, 'o' as u8, 'r' as u8])
+            Ok(vec![b'c', b'b', b'o', b'r'])
         }
     }
 
@@ -595,7 +596,7 @@ mod tests {
         assert_eq!(
             next_response(channel_id, &mut protocol).await,
             Response::Msg {
-                data: vec!['m' as u8, 's' as u8, 'g' as u8],
+                data: vec![b'm', b's', b'g'],
             }
         );
     }
@@ -618,7 +619,7 @@ mod tests {
         assert_eq!(
             next_response(channel_id, &mut protocol).await,
             Response::Cbor {
-                data: vec!['c' as u8, 'b' as u8, 'o' as u8, 'r' as u8],
+                data: vec![b'c', b'b', b'o', b'r'],
             }
         );
     }

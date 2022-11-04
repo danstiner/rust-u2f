@@ -18,7 +18,7 @@ use std::fmt::Debug;
 ///! Messages are encoded as CTAP2 canonical CBOR: https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#ctap2-canonical-cbor-encoding-form
 
 /// Messages from the host to authenticator, called "commands" in the CTAP2 protocol
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 // #[cbor(index_only)]
 pub enum Command {
     MakeCredential(MakeCredentialCommand),
@@ -51,7 +51,7 @@ impl Command {
 }
 
 /// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorMakeCredential
-#[derive(Debug, Encode, Decode, PartialEq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 #[cbor(map)]
 pub struct MakeCredentialCommand {
     #[n(0x01)]
@@ -107,20 +107,20 @@ pub struct MakeCredentialCommand {
 //     }
 // }
 
-#[derive(Debug, Encode, Decode, PartialEq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub struct Extensions;
 
-#[derive(Debug, Encode, Decode, PartialEq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub struct Options;
 
-#[derive(Debug, Encode, Decode, PartialEq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub struct PinUvAuthParam;
 
-#[derive(Debug, Encode, Decode, PartialEq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub struct PinUvAuthProtocol;
 
 /// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorGetAssertion
-#[derive(Debug, Encode, Decode, PartialEq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 #[cbor(map)]
 pub struct GetAssertionCommand {
     #[n(0x01)]
@@ -140,7 +140,8 @@ pub struct GetAssertionCommand {
 }
 
 /// Messages from authenticator to the host, called a "response" in the CTAP2 protocol
-#[derive(Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Response {
     MakeCredential(MakeCredentialResponse),
     GetAssertion(GetAssertionResponse),
@@ -179,7 +180,7 @@ impl Response {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct MakeCredentialResponse {
     pub auth_data: AuthenticatorData,
     pub att_stmt: AttestationStatement,
@@ -210,7 +211,7 @@ impl<C> minicbor::Encode<C> for MakeCredentialResponse {
     }
 }
 
-#[derive(Debug, minicbor_derive::Encode, PartialEq)]
+#[derive(Debug, minicbor_derive::Encode, PartialEq, Eq)]
 #[cbor(map)]
 pub struct GetAssertionResponse {
     #[n(0x01)]
@@ -222,7 +223,7 @@ pub struct GetAssertionResponse {
     // todo optional fields
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 // #[cbor(map)]
 pub struct GetInfoResponse {
     // #[n(0x01)]

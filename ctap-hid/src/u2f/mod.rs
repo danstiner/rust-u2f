@@ -19,9 +19,6 @@ pub enum StatusCode {
     NoError,
     TestOfUserPresenceNotSatisfied,
     InvalidKeyHandle,
-    RequestLengthInvalid,
-    RequestClassNotSupported,
-    RequestInstructionNotSuppored,
     UnknownError,
 }
 
@@ -31,9 +28,6 @@ impl StatusCode {
             StatusCode::NoError => SW_NO_ERROR,
             StatusCode::TestOfUserPresenceNotSatisfied => SW_CONDITIONS_NOT_SATISFIED,
             StatusCode::InvalidKeyHandle => SW_WRONG_DATA,
-            StatusCode::RequestLengthInvalid => SW_WRONG_LENGTH,
-            StatusCode::RequestClassNotSupported => SW_CLA_NOT_SUPPORTED,
-            StatusCode::RequestInstructionNotSuppored => SW_INS_NOT_SUPPORTED,
             StatusCode::UnknownError => SW_UNKNOWN,
         };
         write.write_u16::<BigEndian>(value).unwrap();

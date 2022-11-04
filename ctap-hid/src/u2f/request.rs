@@ -16,6 +16,7 @@ pub enum AuthenticateControlCode {
     DontEnforceUserPresenceAndSign,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum Request {
     Register {

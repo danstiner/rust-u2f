@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use fido2_api::PublicKeyCredentialDescriptor;
 use fido2_service::SecretStore;
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use crate::atomic_file;
 use crate::secret_store::{MutableSecretStore, Secret};

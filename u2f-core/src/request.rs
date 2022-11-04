@@ -1,3 +1,4 @@
+use std::io;
 use std::io::Cursor;
 use std::io::Read;
 use std::result::Result;
@@ -11,6 +12,10 @@ use super::Challenge;
 const AUTH_CONTROL_CODE_ENFORCE: u8 = 0x03; // Enforce user presence and sign
 const AUTH_CONTROL_CODE_CHECK_ONLY: u8 = 0x07; // Check only
 const AUTH_CONTROL_CODE_DONT_ENFORCE: u8 = 0x08; // Don't enforce user presence and sign
+
+const REGISTER_COMMAND_CODE: u8 = 0x01;
+const AUTHENTICATE_COMMAND_CODE: u8 = 0x02;
+const VERSION_COMMAND_CODE: u8 = 0x03;
 
 #[derive(Debug)]
 pub enum AuthenticateControlCode {
@@ -37,24 +42,24 @@ pub enum Request {
 
 impl Request {
     /// Only supports Extended Length Encoding
-    pub fn decode(data: &[u8]) -> Result<Request, ()> {
+    pub fn decode(data: &[u8]) -> Result<Request, io::Error> {
         let mut reader = Cursor::new(data);
 
         // CLA: Reserved to be used by the underlying transport protocol
-        let _class_byte = reader.read_u8().unwrap();
+        let _class_byte = reader.read_u8()?;
         // TODO check or error with RequestClassNotSupported
 
         // INS: U2F command code
-        let command_code = reader.read_u8().unwrap();
+        let command_code = reader.read_u8()?;
         // TODO check or error with RequestInstructionNotSuppored
 
         // P1, P2: Parameter 1 and 2, defined by each command.
-        let parameter1 = reader.read_u8().unwrap();
-        let parameter2 = reader.read_u8().unwrap();
+        let parameter1 = reader.read_u8()?;
+        let parameter2 = reader.read_u8()?;
 
         // Extended Length Encoding
         // Always begins with a byte of value 0
-        let zero_byte = reader.read_u8().unwrap();
+        let zero_byte = reader.read_u8()?;
         assert_eq!(zero_byte, 0);
 
         // Nc: Length of the request-data, range 0..65 535
@@ -68,13 +73,13 @@ impl Request {
             }
             _ => {
                 // Lc in big-endian order
-                reader.read_u16::<BigEndian>().unwrap() as usize
+                reader.read_u16::<BigEndian>()? as usize
             }
         };
 
         // Request-data
         let mut request_data = vec![0u8; request_data_len];
-        reader.read_exact(&mut request_data[..]).unwrap();
+        reader.read_exact(&mut request_data[..])?;
 
         // Ne: Maximum length of the response data, range 0..65 536
         // Le: Encoding of Ne as two bytes
@@ -87,7 +92,7 @@ impl Request {
             }
             2 => {
                 // Encoded as: Le1 Le2
-                let mut value = reader.read_u16::<BigEndian>().unwrap() as usize;
+                let mut value = reader.read_u16::<BigEndian>()? as usize;
                 // When Ne = 65 536, let Le1 = 0 and Le2 = 0.
                 if value == 0 {
                     // The MSB is lost when encoding to two bytes, but
@@ -97,7 +102,7 @@ impl Request {
                 }
                 value
             }
-            _ => return Err(()),
+            _ => todo!("return Error"),
         };
 
         // TODO If the instruction is not expected to yield any response bytes, L e may be omitted. O
@@ -107,11 +112,11 @@ impl Request {
                 // TODO this isn't matching the constant, it's defining a variable
                 // The challenge parameter [32 bytes].
                 let mut challenge_parameter = [0u8; 32];
-                reader.read_exact(&mut challenge_parameter[..]).unwrap();
+                reader.read_exact(&mut challenge_parameter[..])?;
 
                 // The application parameter [32 bytes].
                 let mut application_parameter = [0u8; 32];
-                reader.read_exact(&mut application_parameter[..]).unwrap();
+                reader.read_exact(&mut application_parameter[..])?;
 
                 assert_eq!(reader.position() as usize, request_data_len);
                 Request::Register {
@@ -136,18 +141,18 @@ impl Request {
 
                 // The challenge parameter [32 bytes].
                 let mut challenge_parameter = [0u8; 32];
-                reader.read_exact(&mut challenge_parameter[..]).unwrap();
+                reader.read_exact(&mut challenge_parameter[..])?;
 
                 // The application parameter [32 bytes].
                 let mut application_parameter = [0u8; 32];
-                reader.read_exact(&mut application_parameter[..]).unwrap();
+                reader.read_exact(&mut application_parameter[..])?;
 
                 // key handle length byte [1 byte]
-                let key_handle_len = reader.read_u8().unwrap();
+                let key_handle_len = reader.read_u8()?;
 
                 // key handle [length specified in previous field]
                 let mut key_handle_bytes = vec![0u8; key_handle_len as usize];
-                reader.read_exact(&mut key_handle_bytes[..]).unwrap();
+                reader.read_exact(&mut key_handle_bytes[..])?;
 
                 Request::Authenticate {
                     application: AppId(application_parameter),

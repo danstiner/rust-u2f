@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use crate::{channel::ChannelId, packet::Packet, CommandType, COMMAND_INIT_DATA_LEN};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum Request {
     Ping { data: Vec<u8> },
@@ -16,7 +16,7 @@ pub enum Request {
     Wink,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct RequestMessage {
     pub channel_id: ChannelId,
     pub request: Request,
@@ -29,7 +29,7 @@ pub enum KeepAliveStatus {
     UserPresenceNeeded = 0x02,
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum RequestMessageDecodeError {
     #[error("Incomplete message")]
     Incomplete,
@@ -44,7 +44,7 @@ pub enum RequestMessageDecodeError {
     RequestDecodeError(#[from] RequestDecodeError),
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum RequestDecodeError {
     #[error("Payload length ({actual_len}) longer than expected ({expected_len})")]
     PayloadLength {
@@ -148,6 +148,7 @@ impl RequestMessage {
         })
     }
 
+    #[allow(dead_code)]
     pub fn to_packets(&self) -> VecDeque<Packet> {
         let channel_id = self.channel_id;
         match &self.request {
@@ -174,7 +175,7 @@ mod tests {
     #[test]
     fn request_decode_ping() {
         assert_eq!(
-            Request::decode(CommandType::Ping, &vec![0, 1, 2, 3, 4, 5, 6, 7]),
+            Request::decode(CommandType::Ping, &[0, 1, 2, 3, 4, 5, 6, 7]),
             Ok(Request::Ping {
                 data: vec![0, 1, 2, 3, 4, 5, 6, 7]
             })
@@ -184,7 +185,7 @@ mod tests {
     #[test]
     fn request_decode_msg() {
         assert_eq!(
-            Request::decode(CommandType::Msg, &vec![0, 1, 2, 3, 4, 5, 6, 7]),
+            Request::decode(CommandType::Msg, &[0, 1, 2, 3, 4, 5, 6, 7]),
             Ok(Request::Msg {
                 data: vec![0, 1, 2, 3, 4, 5, 6, 7]
             })
@@ -194,7 +195,7 @@ mod tests {
     #[test]
     fn request_decode_init() {
         assert_eq!(
-            Request::decode(CommandType::Init, &vec![0, 1, 2, 3, 4, 5, 6, 7]),
+            Request::decode(CommandType::Init, &[0, 1, 2, 3, 4, 5, 6, 7]),
             Ok(Request::Init {
                 nonce: [0, 1, 2, 3, 4, 5, 6, 7]
             })
@@ -204,7 +205,7 @@ mod tests {
     #[test]
     fn request_decode_init_invalid_data() {
         assert_eq!(
-            Request::decode(CommandType::Init, &vec![0, 1]),
+            Request::decode(CommandType::Init, &[0, 1]),
             Err(RequestDecodeError::PayloadLength {
                 expected_len: COMMAND_INIT_DATA_LEN,
                 actual_len: 2,
@@ -215,7 +216,7 @@ mod tests {
     #[test]
     fn request_decode_cbor() {
         assert_eq!(
-            Request::decode(CommandType::Cbor, &vec![0, 1, 2, 3, 4, 5, 6, 7]),
+            Request::decode(CommandType::Cbor, &[0, 1, 2, 3, 4, 5, 6, 7]),
             Ok(Request::Cbor {
                 data: vec![0, 1, 2, 3, 4, 5, 6, 7]
             })
@@ -224,16 +225,13 @@ mod tests {
 
     #[test]
     fn request_decode_wink() {
-        assert_eq!(
-            Request::decode(CommandType::Wink, &vec![]),
-            Ok(Request::Wink)
-        );
+        assert_eq!(Request::decode(CommandType::Wink, &[]), Ok(Request::Wink));
     }
 
     #[test]
     fn request_message_decode_init() {
         assert_eq!(
-            RequestMessage::decode(&vec![Packet::Initialization {
+            RequestMessage::decode(&[Packet::Initialization {
                 channel_id: crate::channel::BROADCAST_CHANNEL_ID,
                 command: CommandType::Init,
                 data: vec![0, 1, 2, 3, 4, 5, 6, 7],
@@ -251,7 +249,7 @@ mod tests {
     #[test]
     fn request_message_decode_multi_packet_msg() {
         assert_eq!(
-            RequestMessage::decode(&vec![
+            RequestMessage::decode(&[
                 Packet::Initialization {
                     channel_id: ChannelId(1),
                     command: CommandType::Msg,

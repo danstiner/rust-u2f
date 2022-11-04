@@ -11,6 +11,7 @@ use super::SignError;
 use super::Signature;
 use super::StatusCode;
 
+#[allow(dead_code)]
 pub enum Response {
     Registration {
         user_public_key: Vec<u8>,
@@ -133,9 +134,9 @@ pub enum ResponseError {
     Signing(#[from] SignError),
 }
 
-impl Into<io::Error> for ResponseError {
-    fn into(self: ResponseError) -> io::Error {
-        match self {
+impl From<ResponseError> for io::Error {
+    fn from(error: ResponseError) -> Self {
+        match error {
             ResponseError::Io(err) => err,
             ResponseError::Signing(_) => io::Error::new(io::ErrorKind::Other, "Signing error"),
         }

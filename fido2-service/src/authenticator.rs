@@ -279,7 +279,6 @@ where
 
         // 4. Initialize both "uv" and "up" as false.
         let user_verified = false;
-        let user_present;
 
         // 5. Process options parameter if present, treat any option keys that are not understood as absent.
         if let Some(_options) = options {
@@ -324,7 +323,7 @@ where
         // 13. If evidence of user interaction was provided as part of Step 11 (i.e., by invoking performBuiltInUv()):
         // TODO evidence of user interaction
         // Set the "up" bit to true in the response.
-        user_present = self.presence.approve_make_credential(&rp.name).await?;
+        let user_present = self.presence.approve_make_credential(&rp.name).await?;
         // Go to Step 15
         // TODO
 

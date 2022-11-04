@@ -44,6 +44,7 @@ pub fn generate_credential_id(
 }
 
 /// https://www.w3.org/TR/webauthn-2/#public-key-credential-source
+#[allow(unused)]
 pub struct PublicKeyCredentialSource {
     type_: PublicKeyCredentialType,
     id: CredentialId,

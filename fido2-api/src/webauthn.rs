@@ -1,8 +1,9 @@
+use std::fmt;
+
 use bitflags::bitflags;
 use byteorder::{BigEndian, WriteBytesExt};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
-use tracing::Value;
 
 use crate::{Aaguid, Sha256};
 
@@ -57,7 +58,7 @@ impl<'b, C> Decode<'b, C> for COSEAlgorithmIdentifier {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PublicKeyCredentialDescriptor {
     pub type_: PublicKeyCredentialType,
     pub id: CredentialId,
@@ -111,7 +112,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialDescriptor {
 
 /// Parameters for Credential Generation from WebAuthn spec
 /// https://www.w3.org/TR/webauthn-2/#dictionary-credential-params
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PublicKeyCredentialParameters {
     pub alg: COSEAlgorithmIdentifier,
     pub type_: PublicKeyCredentialType,
@@ -173,7 +174,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialParameters {
 }
 
 /// https://www.w3.org/TR/webauthn-2/#enumdef-publickeycredentialtype
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum PublicKeyCredentialType {
     PublicKey,
     Unknown(String),
@@ -206,7 +207,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
 }
 
 /// Relying Party attribute map, used when creating a new credential
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PublicKeyCredentialRpEntity {
     // A unique identifier for the Relying Party entity, used as the RP ID
     pub id: RelyingPartyIdentifier,
@@ -271,7 +272,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialRpEntity {
 }
 
 // Additional user account attribute map used when creating a new credential
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PublicKeyCredentialUserEntity {
     /// The user handle of the user account. Authentication and authorization
     /// decisions MUST be made on the basis of this member, not displayName or name
@@ -362,7 +363,7 @@ pub struct UserHandle(Vec<u8>);
 
 impl UserHandle {
     pub fn new(id: Vec<u8>) -> Self {
-        assert!(id.len() > 0);
+        assert!(!id.is_empty());
         assert!(id.len() <= 64);
         UserHandle(id)
     }
@@ -458,16 +459,17 @@ impl RelyingPartyIdentifier {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
-
-    pub fn to_string(&self) -> String {
-        self.0.clone()
-    }
 }
 
+impl fmt::Display for RelyingPartyIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 /// The authenticator data structure is a byte array of 37 bytes or more that
 /// encodes contextual bindings made by the authenticator.
 /// https://www.w3.org/TR/webauthn-2/#authenticator-data
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AuthenticatorData {
     /// SHA-256 hash of the RP ID the credential is scoped to.
     pub rp_id_hash: Sha256,
@@ -536,7 +538,7 @@ bitflags! {
 }
 
 /// https://www.w3.org/TR/webauthn-2/#sctn-attested-credential-data
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AttestedCredentialData {
     pub aaguid: Aaguid,
     pub credential_id: CredentialId,
@@ -558,7 +560,7 @@ pub struct AttestedCredentialData {
 ///
 /// Note: The credential public key is referred to as the user public key in FIDO UAF and U2F.
 /// https://www.w3.org/TR/webauthn-2/#credential-public-key
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 // #[cbor(map)]
 pub struct CredentialPublicKey {
     // #[n(0x01)]
@@ -596,7 +598,7 @@ impl<C> Encode<C> for CredentialPublicKey {
 
 /// Key types define a format for transmitting pblic and private keys.
 /// https://www.rfc-editor.org/rfc/rfc8152#section-13
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum KeyType {
     /// This value is reserved
     Reserved = 0,
@@ -619,7 +621,7 @@ impl<C> Encode<C> for KeyType {
 }
 
 /// https://www.rfc-editor.org/rfc/rfc8152#section-13.1
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum EllipticCurve {
     /// NIST P-256 also known as secp256r1, uses KeyType::EC2
     P256 = 1,
@@ -635,7 +637,7 @@ impl<C> Encode<C> for EllipticCurve {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum AttestationStatement {
     Packed(PackedAttestationStatement),
 }
@@ -649,7 +651,7 @@ impl AttestationStatement {
 }
 
 /// https://www.w3.org/TR/webauthn-2/#sctn-packed-attestation
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PackedAttestationStatement {
     pub alg: COSEAlgorithmIdentifier,
     pub sig: Signature,
@@ -672,7 +674,7 @@ impl<C> Encode<C> for PackedAttestationStatement {
 }
 
 /// An attestation certificate and its certificate chain (if any), each encoded in X.509 format
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AttestationCertificate {
     pub attestation_certificate: Vec<u8>,
     pub ca_certificate_chain: Vec<Vec<u8>>,
@@ -681,7 +683,7 @@ pub struct AttestationCertificate {
 /// A WebAuthn signature is the result of signing authenticator data and the client data hash.
 /// It can be an attestation signature or assertion signature.
 /// https://www.w3.org/TR/webauthn-2/#webauthn-signature
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Signature(Vec<u8>);
 
 impl Signature {

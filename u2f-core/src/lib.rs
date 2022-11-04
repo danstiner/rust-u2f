@@ -589,7 +589,7 @@ mod tests {
     }
 
     fn fake_key_handle() -> KeyHandle {
-        KeyHandle::from(&vec![0u8; 128])
+        KeyHandle::from(&[0u8; 128])
     }
 
     struct FakeUserPresence {
@@ -649,7 +649,7 @@ mod tests {
         fn get_and_increment_counter(
             &self,
             application: &AppId,
-            handle: &KeyHandle,
+            _handle: &KeyHandle,
         ) -> Result<Counter, io::Error> {
             let mut borrow = self.0.lock().unwrap();
             if let Some(counter) = borrow.counters.get_mut(application) {
@@ -727,7 +727,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let application = fake_app_id();
         let challenge = fake_challenge();
-        let registration = u2f.register(application.clone(), challenge).await.unwrap();
+        let registration = u2f.register(application, challenge).await.unwrap();
 
         assert_matches!(
             u2f.is_valid_key_handle(&registration.key_handle, &application),
@@ -762,7 +762,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let application = fake_app_id();
         let challenge = fake_challenge();
         let registration = u2f
-            .register(application.clone(), challenge.clone())
+            .register(application, challenge.clone())
             .await
             .unwrap();
 
@@ -784,7 +784,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let application = fake_app_id();
         let challenge = fake_challenge();
         let registration = u2f
-            .register(application.clone(), challenge.clone())
+            .register(application, challenge.clone())
             .await
             .unwrap();
 
@@ -825,14 +825,14 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let register_challenge = Challenge(rand::random());
 
         let registration = u2f
-            .register(application.clone(), register_challenge.clone())
+            .register(application, register_challenge.clone())
             .await
             .unwrap();
 
         let authentication_challenge = Challenge(rand::random());
         let authentication = u2f
             .authenticate(
-                application.clone(),
+                application,
                 authentication_challenge.clone(),
                 registration.key_handle.clone(),
             )
@@ -866,7 +866,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let challenge = Challenge(rand::random());
 
         let registration = u2f
-            .register(application.clone(), challenge.clone())
+            .register(application, challenge.clone())
             .await
             .unwrap();
 

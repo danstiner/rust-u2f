@@ -6,15 +6,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Copy, Clone, Eq, Hash, PartialEq)]
 pub struct AppId(pub(crate) [u8; 32]);
 
-impl AppId {
-    pub fn from_bytes(slice: &[u8]) -> AppId {
-        assert_eq!(slice.len(), 32);
-        let mut bytes = [0u8; 32];
-        bytes.copy_from_slice(slice);
-        AppId(bytes)
-    }
-}
-
 impl AsRef<[u8]> for AppId {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()

@@ -7,7 +7,8 @@ use thiserror::Error;
 
 use crate::{channel::ChannelId, packet::Packet, CapabilityFlags, CommandType, ErrorCode};
 
-#[derive(Debug, PartialEq)]
+#[allow(dead_code)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Response {
     Ping {
         data: Vec<u8>,
@@ -37,7 +38,7 @@ pub enum Response {
     Lock,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ResponseMessage {
     pub channel_id: ChannelId,
     pub response: Response,
@@ -50,13 +51,15 @@ pub enum KeepAliveStatus {
     UserPresenceNeeded = 0x02,
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[allow(dead_code)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum ResponseDecodeError {
     #[error("Invalid command: {0:?}")]
     InvalidCommand(CommandType),
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[allow(dead_code)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum ResponseMessageDecodeError {
     #[error("Incomplete message")]
     Incomplete,
@@ -72,6 +75,7 @@ pub enum ResponseMessageDecodeError {
 }
 
 impl Response {
+    #[allow(unused)]
     pub fn decode(command: CommandType, data: &[u8]) -> Result<Response, ResponseDecodeError> {
         match command {
             CommandType::Msg => Ok(Response::Msg {
@@ -116,6 +120,7 @@ impl Response {
 }
 
 impl ResponseMessage {
+    #[cfg(test)]
     pub fn decode(packets: &[Packet]) -> Result<Self, ResponseMessageDecodeError> {
         if packets.is_empty() {
             return Err(ResponseMessageDecodeError::Incomplete);

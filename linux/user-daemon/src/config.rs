@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use directories::ProjectDirs;
 use directories::UserDirs;
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use crate::atomic_file;
 use crate::secret_store::SecretStoreType;

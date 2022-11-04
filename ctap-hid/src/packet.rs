@@ -1,8 +1,8 @@
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize};
-use std::cmp;
 use std::collections::VecDeque;
 use std::io::{Cursor, Read};
+use std::{cmp, io};
 
 use crate::channel::ChannelId;
 use crate::CommandType;
@@ -15,7 +15,7 @@ const FRAME_TYPE_INIT: u8 = 0b1000_0000;
 const FRAME_TYPE_CONT: u8 = 0b0000_0000;
 const FRAME_TYPE_MASK: u8 = 0b1000_0000;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub enum Packet {
     /// An initialization packet is the first packet sent in a message, it starts a new transaction.
     ///
@@ -55,17 +55,17 @@ impl Packet {
         }
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Packet, ()> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Packet, io::Error> {
         assert_eq!(bytes.len(), HID_REPORT_LEN);
         let mut reader = Cursor::new(bytes);
 
-        let channel_id = ChannelId(reader.read_u32::<BigEndian>().unwrap());
-        let first_byte = reader.read_u8().unwrap();
+        let channel_id = ChannelId(reader.read_u32::<BigEndian>()?);
+        let first_byte = reader.read_u8()?;
         if first_byte & FRAME_TYPE_MASK == FRAME_TYPE_INIT {
             let command = CommandType::from_byte(first_byte);
-            let payload_len = reader.read_u16::<BigEndian>().unwrap();
+            let payload_len = reader.read_u16::<BigEndian>()?;
             let mut packet_data = vec![0u8; INITIAL_PACKET_DATA_LEN];
-            reader.read_exact(&mut packet_data[..]).unwrap();
+            reader.read_exact(&mut packet_data[..])?;
             Ok(Packet::Initialization {
                 channel_id,
                 command,
