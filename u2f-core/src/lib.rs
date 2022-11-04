@@ -761,10 +761,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let application = fake_app_id();
         let challenge = fake_challenge();
-        let registration = u2f
-            .register(application, challenge.clone())
-            .await
-            .unwrap();
+        let registration = u2f.register(application, challenge.clone()).await.unwrap();
 
         u2f.authenticate(application, challenge, registration.key_handle)
             .await
@@ -783,10 +780,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         let application = fake_app_id();
         let challenge = fake_challenge();
-        let registration = u2f
-            .register(application, challenge.clone())
-            .await
-            .unwrap();
+        let registration = u2f.register(application, challenge.clone()).await.unwrap();
 
         assert_matches!(
             u2f.authenticate(application, challenge, registration.key_handle)
@@ -865,10 +859,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         let application = AppId(rand::random());
         let challenge = Challenge(rand::random());
 
-        let registration = u2f
-            .register(application, challenge.clone())
-            .await
-            .unwrap();
+        let registration = u2f.register(application, challenge.clone()).await.unwrap();
 
         let public_key = registration.attestation_certificate.0.public_key().unwrap();
         let signed_data = message_to_sign_for_register(
