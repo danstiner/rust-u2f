@@ -56,9 +56,6 @@ pub enum Error {
     #[error("{0}")]
     AuthenticatorError(#[from] fido2_service::Error),
 
-    #[error("Home directory path could not be retrieved from the operating system")]
-    HomeDirectoryNotFound,
-
     #[error("{0}")]
     KeyStoreError(#[from] key_stores::Error),
 }
