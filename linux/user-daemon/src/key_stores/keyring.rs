@@ -53,19 +53,19 @@ pub(crate) trait Collection {
     where
         Self: 'a;
 
-    fn create_item<'a>(
-        &'a self,
+    fn create_item(
+        &self,
         label: &str,
         attributes: HashMap<&str, &str>,
         secret: &[u8],
         replace: bool,
         content_type: &str,
-    ) -> Result<Self::Item<'a>, secret_service::Error>;
+    ) -> Result<Self::Item<'_>, secret_service::Error>;
 
-    fn search_items<'a>(
-        &'a self,
+    fn search_items(
+        &self,
         attributes: HashMap<&str, &str>,
-    ) -> Result<Vec<Self::Item<'a>>, secret_service::Error>;
+    ) -> Result<Vec<Self::Item<'_>>, secret_service::Error>;
 
     fn is_locked(&self) -> Result<bool, secret_service::Error>;
 
@@ -76,21 +76,21 @@ impl Collection for secret_service::Collection<'_> {
     /// Lifetime models how Item borrows the D-Bus Session from the Collection instance.
     type Item<'a> = secret_service::Item<'a> where Self: 'a;
 
-    fn create_item<'a>(
-        &'a self,
+    fn create_item(
+        &self,
         label: &str,
         attributes: HashMap<&str, &str>,
         secret: &[u8],
         replace: bool,
         content_type: &str,
-    ) -> Result<Self::Item<'a>, secret_service::Error> {
+    ) -> Result<Self::Item<'_>, secret_service::Error> {
         self.create_item(label, attributes, secret, replace, content_type)
     }
 
-    fn search_items<'a>(
-        &'a self,
+    fn search_items(
+        &self,
         attributes: HashMap<&str, &str>,
-    ) -> Result<Vec<Self::Item<'a>>, secret_service::Error> {
+    ) -> Result<Vec<Self::Item<'_>>, secret_service::Error> {
         self.search_items(attributes)
     }
 
@@ -351,7 +351,7 @@ mod tests {
     impl SecretService for FakeSecretService {
         type Collection<'a> = FakeCollection<'a> where Self: 'a;
 
-        fn get_default_collection<'a>(&'a self) -> secret_service::Result<Self::Collection<'a>> {
+        fn get_default_collection(&self) -> secret_service::Result<Self::Collection<'_>> {
             Ok(FakeCollection(&self.0))
         }
     }
@@ -369,14 +369,14 @@ mod tests {
     impl Collection for FakeCollection<'_> {
         type Item<'a> = FakeItem where Self: 'a;
 
-        fn create_item<'a>(
-            &'a self,
+        fn create_item(
+            &self,
             label: &str,
             attributes: HashMap<&str, &str>,
             secret: &[u8],
             replace: bool,
             content_type: &str,
-        ) -> secret_service::Result<Self::Item<'a>> {
+        ) -> secret_service::Result<Self::Item<'_>> {
             if replace {
                 self.remove_item(&attributes);
             }
@@ -393,10 +393,10 @@ mod tests {
             Ok(FakeItem(Rc::clone(self.0.borrow().last().unwrap())))
         }
 
-        fn search_items<'a>(
-            &'a self,
+        fn search_items(
+            &self,
             attributes: HashMap<&str, &str>,
-        ) -> secret_service::Result<Vec<Self::Item<'a>>> {
+        ) -> secret_service::Result<Vec<Self::Item<'_>>> {
             Ok(self
                 .0
                 .borrow()
