@@ -148,7 +148,8 @@ dependencies = [
 [[package]]
 name = "authenticator"
 version = "0.3.1"
-source = "git+https://github.com/mozilla/authenticator-rs?tag=v0.3.1#660a701b45977cb5d184380061dfc8cec4f696be"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08cee7a0952628fde958e149507c2bb321ab4fccfafd225da0b20adc956ef88a"
 dependencies = [
  "bitflags",
  "core-foundation",
