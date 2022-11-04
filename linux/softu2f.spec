@@ -7,7 +7,6 @@ License:        MIT
 URL:            https://github.com/danstiner/softu2f-linux
 
 Requires:       softu2f-user-daemon
-BuildArch:      noarch
 
 %description
 

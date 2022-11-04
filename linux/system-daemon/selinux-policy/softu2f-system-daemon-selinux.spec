@@ -21,7 +21,6 @@ Source2:	softu2f-system-daemon-selinux.8
 Requires: policycoreutils, libselinux-utils
 Requires(post): selinux-policy-base >= %{selinux_policyver}, policycoreutils
 Requires(postun): policycoreutils
-BuildArch: noarch
 
 %description
 This package installs and sets up the SELinux policy security module for softu2f-system-daemon.
