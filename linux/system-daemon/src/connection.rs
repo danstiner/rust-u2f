@@ -2,6 +2,7 @@ use std::io;
 
 use ctap_hid::{REPORT_DESCRIPTOR, REPORT_TYPE_OUTPUT};
 use futures::{SinkExt, StreamExt};
+use nanoid::nanoid;
 use softu2f_system_daemon::{
     CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
 };
@@ -84,9 +85,7 @@ async fn send_create_device_response(
         result.is_ok()
     );
     let response = match result {
-        Ok(_device) => Ok(DeviceDescription {
-            id: String::from("TODO"),
-        }),
+        Ok(_device) => Ok(DeviceDescription { id: nanoid!() }),
         Err(StreamError::Io(err)) => {
             warn!("Creating UHID device failed: I/O error: {}", err);
             Err(CreateDeviceError::IoError)
