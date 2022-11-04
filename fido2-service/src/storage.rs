@@ -1,19 +1,17 @@
-use std::sync::Mutex;
-
+use crate::{
+    authenticator::CredentialHandle,
+    crypto::{PrivateKeyCredentialSource, PublicKeyCredentialSource},
+    CredentialProtection, CredentialStore,
+};
 use async_trait::async_trait;
 use fido2_api::{
     Aaguid, AttestationCertificate, AttestationStatement, AttestedCredentialData,
     AuthenticatorData, PackedAttestationStatement, PublicKeyCredentialDescriptor,
     RelyingPartyIdentifier, Sha256,
 };
+use std::sync::Mutex;
 
-use crate::{
-    authenticator::CredentialHandle,
-    crypto::{PrivateKeyCredentialSource, PublicKeyCredentialSource},
-    CredentialProtection, SecretStore,
-};
-
-pub trait SecretStoreActual {
+pub trait CredentialStorage {
     type Error;
 
     fn put_discoverable(
@@ -32,11 +30,11 @@ pub trait SecretStoreActual {
     ) -> Result<Vec<CredentialHandle>, Self::Error>;
 }
 
-pub struct SimpleSecrets<S>(Mutex<SimpleSecretsData<S>>);
+pub struct SoftwareCryptoStore<S>(Mutex<Data<S>>);
 
-impl<S> SimpleSecrets<S> {
+impl<S> SoftwareCryptoStore<S> {
     pub fn new(store: S, aaguid: Aaguid) -> Self {
-        Self(Mutex::new(SimpleSecretsData {
+        Self(Mutex::new(Data {
             aaguid,
             rng: ring::rand::SystemRandom::new(),
             store,
@@ -44,14 +42,14 @@ impl<S> SimpleSecrets<S> {
     }
 }
 
-pub(crate) struct SimpleSecretsData<S> {
+pub(crate) struct Data<S> {
     aaguid: Aaguid,
     rng: ring::rand::SystemRandom,
     store: S,
 }
 
 #[async_trait(?Send)]
-impl<S: SecretStoreActual> SecretStore for SimpleSecrets<S> {
+impl<S: CredentialStorage> CredentialStore for SoftwareCryptoStore<S> {
     type Error = S::Error;
 
     async fn make_credential(

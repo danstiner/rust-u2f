@@ -64,8 +64,15 @@ pub struct CredentialHandle {
     pub rp_id: RelyingPartyIdentifier,
 }
 
+/// Manage cryptographic keypairs inside a container. Keys can be created and used for cryptographic
+/// operations such as asserting the private part of the keypair is known by signing a challenge.
+///
+/// Key material cannot be exported through this trait, but is it up to the implementation exactly
+/// how keys are managed. An implemenation could leverage a Trusted Execution Environment (TEE) so
+/// that key material is never exposed outside of secure hardware, or an implementation could store
+/// keys unencrypted in files on disk. This interface cannot enforce implementation details.
 #[async_trait(?Send)]
-pub trait SecretStore {
+pub trait CredentialStore {
     type Error;
 
     async fn make_credential(
@@ -106,7 +113,7 @@ pub trait SecretStore {
 }
 
 #[async_trait(?Send)]
-impl<W: SecretStore + ?Sized> SecretStore for Box<W> {
+impl<W: CredentialStore + ?Sized> CredentialStore for Box<W> {
     type Error = W::Error;
 
     async fn make_credential(
@@ -182,24 +189,24 @@ impl<W: SecretStore + ?Sized> SecretStore for Box<W> {
 /// that perform the actual cryptographic operations, secret storage, and user interaction.
 ///
 /// See https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticator-api
-pub struct Authenticator<Secrets, Presence>
+pub struct Authenticator<Credentials, Presence>
 where
-    Secrets: SecretStore,
+    Credentials: CredentialStore,
     Presence: UserPresence,
 {
-    pub(crate) secrets: Secrets,
+    pub(crate) credentials: Credentials,
     pub(crate) presence: Presence,
     pub(crate) aaguid: Aaguid,
 }
 
-impl<Secrets, Presence> Authenticator<Secrets, Presence>
+impl<Credentials, Presence> Authenticator<Credentials, Presence>
 where
-    Secrets: SecretStore,
+    Credentials: CredentialStore,
     Presence: UserPresence,
 {
-    pub fn new(secrets: Secrets, presence: Presence, aaguid: Aaguid) -> Self {
+    pub fn new(credentials: Credentials, presence: Presence, aaguid: Aaguid) -> Self {
         Self {
-            secrets,
+            credentials,
             presence,
             aaguid,
         }
@@ -233,11 +240,11 @@ where
 }
 
 #[async_trait(?Send)]
-impl<Secrets, Presence> AuthenticatorAPI for Authenticator<Secrets, Presence>
+impl<Credentials, Presence> AuthenticatorAPI for Authenticator<Credentials, Presence>
 where
-    Secrets: SecretStore + 'static,
+    Credentials: CredentialStore + 'static,
     Presence: UserPresence + 'static,
-    super::Error: From<Secrets::Error>,
+    super::Error: From<Credentials::Error>,
     super::Error: From<Presence::Error>,
 {
     type Error = super::Error;
@@ -350,14 +357,14 @@ where
 
         trace!("Make credential");
         let credential = self
-            .secrets
+            .credentials
             .make_credential(pk_parameters, &rp.id, &user.id)
             .await?;
 
         // 19. Generate an attestation statement for the newly-created credential using clientDataHash, taking into account the value of the enterpriseAttestation parameter, if present, as described above in Step 9.
         trace!("Generate attestation statement");
         let (auth_data, att_stmt) = self
-            .secrets
+            .credentials
             .attest(
                 &rp.id,
                 &credential,
@@ -399,13 +406,15 @@ where
                 warn!("Invalid allow_list, if present the list must not be empty per spec");
                 return Err(Error::InvalidParameter);
             }
-            self.secrets
+            self.credentials
                 .list_specified_credentials(&rp_id, allow_list)
                 .await?
         } else {
             // 7.2. If an allowList is not present, locate all discoverable credentials that are
             // created by this authenticator and bound to the specified rpId.
-            self.secrets.list_discoverable_credentials(&rp_id).await?
+            self.credentials
+                .list_discoverable_credentials(&rp_id)
+                .await?
         };
 
         // 7.3. Create an applicable credentials list populated with the located credentials.
@@ -461,7 +470,7 @@ where
         };
 
         let (auth_data, signature) = self
-            .secrets
+            .credentials
             .assert(
                 &rp_id,
                 &credential_handle,
@@ -503,7 +512,7 @@ mod tests {
     use super::*;
     use crate::{
         crypto::PrivateKeyCredentialSource,
-        secrets::{SecretStoreActual, SimpleSecrets},
+        storage::{CredentialStorage, SoftwareCryptoStore},
     };
 
     #[test]
@@ -760,7 +769,8 @@ mod tests {
 
     const FAKE_AAGUID: Aaguid = Aaguid(uuid!("00000000-0000-0000-0000-000000000000"));
 
-    fn fake_authenticator() -> Authenticator<SimpleSecrets<InMemorySecretStore>, FakeUserPresence> {
+    fn fake_authenticator(
+    ) -> Authenticator<SoftwareCryptoStore<InMemorySecretStore>, FakeUserPresence> {
         Authenticator::new(
             InMemorySecretStore::new(),
             FakeUserPresence::always_approve(),
@@ -802,8 +812,8 @@ mod tests {
     }
 
     impl InMemorySecretStore {
-        fn new() -> SimpleSecrets<InMemorySecretStore> {
-            SimpleSecrets::new(
+        fn new() -> SoftwareCryptoStore<InMemorySecretStore> {
+            SoftwareCryptoStore::new(
                 InMemorySecretStore {
                     discoverable: HashMap::new(),
                     keys: HashMap::new(),
@@ -813,7 +823,7 @@ mod tests {
         }
     }
 
-    impl SecretStoreActual for InMemorySecretStore {
+    impl CredentialStorage for InMemorySecretStore {
         type Error = io::Error;
 
         fn put_discoverable(

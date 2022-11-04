@@ -1,23 +1,21 @@
-use std::collections::HashMap;
-use std::io;
-use std::io::ErrorKind;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
+use super::Error;
 use async_trait::async_trait;
 use fido2_api::RelyingPartyIdentifier;
 use fido2_service::{CredentialHandle, CredentialProtection, PrivateKeyCredentialSource};
-use secret_service::{EncryptionType, Error};
+use secret_service::EncryptionType;
+use std::collections::HashMap;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Store keys to a keyring service running in the user's login session.
 ///
 /// Supports services such as GNOME keyring and KWallet that implement the Secret Service API.
 /// Generally keys are encrypted at rest. The service may need to be unlocked by the user in order
 /// to decrypt keys, if the service does not automatically unlock at login with the user's password.
-pub(crate) struct KeyRing<S: SecretService> {
+pub(crate) struct Keyring<S: SecretService> {
     service: S,
 }
 
-impl KeyRing<secret_service::SecretService<'_>> {
+impl Keyring<secret_service::SecretService<'_>> {
     pub fn new() -> Result<Self, Error> {
         Ok(Self {
             service: secret_service::SecretService::new(EncryptionType::Dh)?,
@@ -34,13 +32,14 @@ pub(crate) trait SecretService {
     where
         Self: 'a;
 
-    fn get_default_collection(&self) -> Result<Self::Collection<'_>, Error>;
+    fn get_default_collection(&self) -> Result<Self::Collection<'_>, secret_service::Error>;
 }
 
 impl SecretService for secret_service::SecretService<'_> {
+    /// Lifetime models how Collection borrows the D-Bus Session from the SecretService instance.
     type Collection<'a> = secret_service::Collection<'a> where Self: 'a;
 
-    fn get_default_collection(&self) -> Result<Self::Collection<'_>, Error> {
+    fn get_default_collection(&self) -> Result<Self::Collection<'_>, secret_service::Error> {
         self.get_default_collection()
     }
 }
@@ -61,19 +60,20 @@ pub(crate) trait Collection {
         secret: &[u8],
         replace: bool,
         content_type: &str,
-    ) -> Result<Self::Item<'a>, Error>;
+    ) -> Result<Self::Item<'a>, secret_service::Error>;
 
     fn search_items<'a>(
         &'a self,
         attributes: HashMap<&str, &str>,
-    ) -> Result<Vec<Self::Item<'a>>, Error>;
+    ) -> Result<Vec<Self::Item<'a>>, secret_service::Error>;
 
-    fn is_locked(&self) -> Result<bool, Error>;
+    fn is_locked(&self) -> Result<bool, secret_service::Error>;
 
-    fn unlock(&self) -> Result<(), Error>;
+    fn unlock(&self) -> Result<(), secret_service::Error>;
 }
 
 impl Collection for secret_service::Collection<'_> {
+    /// Lifetime models how Item borrows the D-Bus Session from the Collection instance.
     type Item<'a> = secret_service::Item<'a> where Self: 'a;
 
     fn create_item<'a>(
@@ -83,22 +83,22 @@ impl Collection for secret_service::Collection<'_> {
         secret: &[u8],
         replace: bool,
         content_type: &str,
-    ) -> Result<Self::Item<'a>, Error> {
+    ) -> Result<Self::Item<'a>, secret_service::Error> {
         self.create_item(label, attributes, secret, replace, content_type)
     }
 
     fn search_items<'a>(
         &'a self,
         attributes: HashMap<&str, &str>,
-    ) -> Result<Vec<Self::Item<'a>>, Error> {
+    ) -> Result<Vec<Self::Item<'a>>, secret_service::Error> {
         self.search_items(attributes)
     }
 
-    fn is_locked(&self) -> Result<bool, Error> {
+    fn is_locked(&self) -> Result<bool, secret_service::Error> {
         self.is_locked()
     }
 
-    fn unlock(&self) -> Result<(), Error> {
+    fn unlock(&self) -> Result<(), secret_service::Error> {
         self.unlock()
     }
 }
@@ -108,44 +108,39 @@ impl Collection for secret_service::Collection<'_> {
 /// Only the subset of methods used in this module are included. This trait is primarily meant
 /// to provide an abstraction where we can inject a faked implementation in tests.
 pub(crate) trait Item {
-    fn get_secret(&self) -> Result<Vec<u8>, Error>;
+    fn get_secret(&self) -> Result<Vec<u8>, secret_service::Error>;
 
-    fn get_created(&self) -> Result<SystemTime, Error>;
+    fn get_created(&self) -> Result<SystemTime, secret_service::Error>;
 }
 
 impl Item for secret_service::Item<'_> {
-    fn get_secret(&self) -> Result<Vec<u8>, Error> {
+    fn get_secret(&self) -> Result<Vec<u8>, secret_service::Error> {
         self.get_secret()
     }
 
-    fn get_created(&self) -> Result<SystemTime, Error> {
+    fn get_created(&self) -> Result<SystemTime, secret_service::Error> {
         Ok(UNIX_EPOCH + Duration::from_secs(self.get_created()?))
     }
 }
 
 #[allow(clippy::let_and_return)]
 #[async_trait(?Send)]
-impl<S: SecretService> fido2_service::SecretStoreActual for KeyRing<S> {
-    type Error = io::Error;
+impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
+    type Error = Error;
 
     fn put_discoverable(
         &mut self,
         credential: fido2_service::PrivateKeyCredentialSource,
     ) -> Result<(), Self::Error> {
-        let collection = self
-            .service
-            .get_default_collection()
-            .map_err(|_error| io::Error::new(ErrorKind::Other, "get_default_collection"))?;
+        let collection = self.service.get_default_collection()?;
         unlock_if_locked(&collection)?;
         let attributes = discoverable_credential_attributes(&credential);
         let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
         let label = format!("FIDO2 credential for {}", credential.rp_id.as_str());
-        let secret = serde_json::to_string(&credential)
-            .map_err(|error| io::Error::new(ErrorKind::Other, error))?;
+        let secret = serde_json::to_string(&credential)?;
         let content_type = "application/json";
-        let _item = collection
-            .create_item(&label, attributes, secret.as_bytes(), true, content_type)
-            .map_err(|_error| io::Error::new(ErrorKind::Other, "create_item"))?;
+        let _item =
+            collection.create_item(&label, attributes, secret.as_bytes(), true, content_type)?;
         Ok(())
     }
 
@@ -153,22 +148,15 @@ impl<S: SecretService> fido2_service::SecretStoreActual for KeyRing<S> {
         &self,
         credential_handle: &CredentialHandle,
     ) -> Result<Option<fido2_service::PrivateKeyCredentialSource>, Self::Error> {
-        let collection = self
-            .service
-            .get_default_collection()
-            .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
+        let collection = self.service.get_default_collection()?;
         unlock_if_locked(&collection)?;
-        let option = find_item(&collection, credential_handle)
-            .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
+        let option = find_item(&collection, credential_handle)?;
         if option.is_none() {
             return Ok(None);
         }
         let item = option.unwrap();
-        let secret_bytes = item
-            .get_secret()
-            .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-        let credential: PrivateKeyCredentialSource = serde_json::from_slice(&secret_bytes)
-            .map_err(|error| io::Error::new(ErrorKind::Other, error))?;
+        let secret_bytes = item.get_secret()?;
+        let credential: PrivateKeyCredentialSource = serde_json::from_slice(&secret_bytes)?;
         Ok(Some(credential))
     }
 
@@ -176,24 +164,17 @@ impl<S: SecretService> fido2_service::SecretStoreActual for KeyRing<S> {
         &self,
         rp_id: &fido2_api::RelyingPartyIdentifier,
     ) -> Result<Vec<CredentialHandle>, Self::Error> {
-        let collection = self
-            .service
-            .get_default_collection()
-            .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
+        let collection = self.service.get_default_collection()?;
         unlock_if_locked(&collection)?;
 
         let attributes = discoverable_search_attributes(rp_id);
         let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
         let handles = collection
-            .search_items(attributes)
-            .map_err(|_error| io::Error::new(ErrorKind::Other, "search_items"))?
+            .search_items(attributes)?
             .into_iter()
             .map(|item| {
-                let secret_bytes = item
-                    .get_secret()
-                    .map_err(|error| io::Error::new(ErrorKind::Other, error.to_string()))?;
-                let credential: PrivateKeyCredentialSource = serde_json::from_slice(&secret_bytes)
-                    .map_err(|error| io::Error::new(ErrorKind::Other, error))?;
+                let secret_bytes = item.get_secret()?;
+                let credential: PrivateKeyCredentialSource = serde_json::from_slice(&secret_bytes)?;
                 Ok(CredentialHandle {
                     descriptor: fido2_api::PublicKeyCredentialDescriptor {
                         type_: credential.type_,
@@ -245,7 +226,7 @@ fn handle_search_attributes(handle: &CredentialHandle) -> Vec<(&'static str, Str
 fn find_item<'a, C: Collection>(
     collection: &'a C,
     handle: &CredentialHandle,
-) -> io::Result<Option<C::Item<'a>>> {
+) -> Result<Option<C::Item<'a>>, Error> {
     let attributes = handle_search_attributes(handle);
     let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
     Ok(find_items(collection, attributes)?.into_iter().next())
@@ -254,20 +235,13 @@ fn find_item<'a, C: Collection>(
 fn find_items<'a, C: Collection>(
     collection: &'a C,
     attributes: HashMap<&str, &str>,
-) -> io::Result<Vec<C::Item<'a>>> {
-    collection
-        .search_items(attributes)
-        .map_err(|_error| io::Error::new(ErrorKind::Other, "search_items"))
+) -> Result<Vec<C::Item<'a>>, Error> {
+    Ok(collection.search_items(attributes)?)
 }
 
-fn unlock_if_locked<C: Collection>(collection: &C) -> io::Result<()> {
-    if collection
-        .is_locked()
-        .map_err(|_error| io::Error::new(ErrorKind::Other, "is_locked"))?
-    {
-        collection
-            .unlock()
-            .map_err(|_error| io::Error::new(ErrorKind::Other, "unlock"))?;
+fn unlock_if_locked<C: Collection>(collection: &C) -> Result<(), Error> {
+    if collection.is_locked()? {
+        collection.unlock()?;
     }
     Ok(())
 }
@@ -276,7 +250,7 @@ fn unlock_if_locked<C: Collection>(collection: &C) -> io::Result<()> {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use fido2_service::SecretStoreActual;
+    use fido2_service::CredentialStorage;
 
     use super::*;
 
@@ -286,7 +260,7 @@ mod tests {
 
     #[test]
     fn get_none() {
-        let store = KeyRing {
+        let store = Keyring {
             service: FakeSecretService::new(),
         };
         let credential_handle = CredentialHandle {
@@ -306,7 +280,7 @@ mod tests {
 
     #[test]
     fn list_none() {
-        let store = KeyRing {
+        let store = Keyring {
             service: FakeSecretService::new(),
         };
         let rp_id = RelyingPartyIdentifier::new("test".to_string());
@@ -316,7 +290,7 @@ mod tests {
 
     #[test]
     fn put_discoverable_then_list() {
-        let mut store = KeyRing {
+        let mut store = Keyring {
             service: FakeSecretService::new(),
         };
         let key = fido2_service::PrivateKeyCredentialSource::generate(
@@ -340,7 +314,7 @@ mod tests {
 
     #[test]
     fn put_discoverable_should_replace() {
-        let mut store = KeyRing {
+        let mut store = Keyring {
             service: FakeSecretService::new(),
         };
         let key = fido2_service::PrivateKeyCredentialSource::generate(

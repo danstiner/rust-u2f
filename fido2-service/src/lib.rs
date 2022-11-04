@@ -17,7 +17,7 @@ extern crate assert_matches;
 
 mod authenticator;
 mod crypto;
-mod secrets;
+mod storage;
 
 use std::fmt::Debug;
 use std::io;
@@ -28,10 +28,10 @@ use tracing::error;
 
 // TODO hack
 pub use crate::crypto::PrivateKeyCredentialSource;
-pub use crate::secrets::{SecretStoreActual, SimpleSecrets};
+pub use crate::storage::{CredentialStorage, SoftwareCryptoStore};
 
 pub use crate::authenticator::{
-    Authenticator, CredentialHandle, CredentialProtection, SecretStore, UserPresence,
+    Authenticator, CredentialHandle, CredentialProtection, CredentialStore, UserPresence,
 };
 
 #[derive(Debug, Error)]
@@ -50,6 +50,9 @@ pub enum Error {
 
     #[error("TODO")]
     NoCredentials,
+
+    #[error(transparent)]
+    Other(Box<dyn std::error::Error>),
 }
 
 impl From<Error> for StatusCode {
@@ -60,6 +63,7 @@ impl From<Error> for StatusCode {
             Error::InvalidParameter => StatusCode::InvalidParameter,
             Error::Unspecified => StatusCode::Other,
             Error::NoCredentials => StatusCode::NoCredentials,
+            Error::Other(_) => StatusCode::Other,
         }
     }
 }

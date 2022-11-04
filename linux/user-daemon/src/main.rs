@@ -1,30 +1,28 @@
+use clap::{Arg, Command};
+use ctap_hid::{Packet, Server, SimpleAdapter, REPORT_TYPE_INPUT};
+use fido2_api::Aaguid;
+use fido2_service::Authenticator;
+use futures::{ready, Sink, SinkExt, Stream, StreamExt};
+use pin_project::pin_project;
+use softu2f_system_daemon::{
+    CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
+};
 use std::{
     io,
     path::{Path, PathBuf},
     pin::Pin,
     task::{Context, Poll},
 };
-
-use clap::{Arg, Command};
-use fido2_api::Aaguid;
-use fido2_service::Authenticator;
-use futures::{ready, Sink, SinkExt, Stream, StreamExt};
-use pin_project::pin_project;
 use thiserror::Error;
 use tokio::net::UnixStream;
 use tokio_serde::formats::Bincode;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::prelude::*;
+use user_presence::NotificationUserPresence;
 use uuid::uuid;
 
-use ctap_hid::{Packet, Server, SimpleAdapter, REPORT_TYPE_INPUT};
-use softu2f_system_daemon::{
-    CreateDeviceError, CreateDeviceRequest, DeviceDescription, Report, SocketInput, SocketOutput,
-};
-use user_presence::NotificationUserPresence;
-
-mod key_store;
+mod key_stores;
 mod user_presence;
 
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -60,6 +58,9 @@ pub enum Error {
 
     #[error("Home directory path could not be retrieved from the operating system")]
     HomeDirectoryNotFound,
+
+    #[error("{0}")]
+    KeyStoreError(#[from] key_stores::Error),
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
@@ -98,7 +99,7 @@ async fn main() {
 
 async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let user_presence = NotificationUserPresence::new();
-    let secrets = key_store::build()?;
+    let secrets = key_stores::build()?;
 
     let authenticator = SimpleAdapter::new(Authenticator::new(secrets, user_presence, AAGUID));
 
