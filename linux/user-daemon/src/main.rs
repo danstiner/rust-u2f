@@ -24,7 +24,7 @@ use softu2f_system_daemon::{
 };
 use user_presence::NotificationUserPresence;
 
-mod secret_store;
+mod key_store;
 mod user_presence;
 
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -98,7 +98,7 @@ async fn main() {
 
 async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let user_presence = NotificationUserPresence::new();
-    let secrets = secret_store::build()?;
+    let secrets = key_store::build()?;
 
     let authenticator = SimpleAdapter::new(Authenticator::new(secrets, user_presence, AAGUID));
 

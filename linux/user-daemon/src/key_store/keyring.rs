@@ -7,14 +7,16 @@ use async_trait::async_trait;
 use fido2_api::RelyingPartyIdentifier;
 use fido2_service::{CredentialHandle, CredentialProtection, PrivateKeyCredentialSource};
 
-use crate::secret_store::{MutableSecretStore, Secret};
-
-/// Stores
-pub struct SecretServiceStore<S> {
+/// Store keys to a keyring service runing in the user's login session.
+///
+/// Supports services such as GNOME keyring and KWallet that implement the Secret Service API.
+/// Generally keys are encrypted at rest. The service may need to be unlocked by the user in order
+/// to decrypt keys, if the service does not automatically unlock at login with the user's password.
+pub struct KeyRing<S> {
     service: S,
 }
 
-impl SecretServiceStore<secret_service::SecretService<'_>> {
+impl KeyRing<secret_service::SecretService<'_>> {
     pub fn new() -> Result<Self, secret_service::Error> {
         Ok(Self {
             service: secret_service::SecretService::new(secret_service::EncryptionType::Dh)?,
@@ -22,15 +24,9 @@ impl SecretServiceStore<secret_service::SecretService<'_>> {
     }
 }
 
-impl<S> MutableSecretStore for SecretServiceStore<S> {
-    fn add_secret(&self, _secret: Secret) -> io::Result<()> {
-        todo!()
-    }
-}
-
 #[allow(clippy::let_and_return)]
 #[async_trait(?Send)]
-impl<S: SecretService> fido2_service::SecretStoreActual for SecretServiceStore<S> {
+impl<S: SecretService> fido2_service::SecretStoreActual for KeyRing<S> {
     type Error = io::Error;
 
     fn put_discoverable(
@@ -277,7 +273,7 @@ mod tests {
 
     #[test]
     fn get_none() {
-        let store = SecretServiceStore {
+        let store = KeyRing {
             service: FakeSecretService::new(),
         };
         let credential_handle = CredentialHandle {
@@ -297,7 +293,7 @@ mod tests {
 
     #[test]
     fn list_none() {
-        let store = SecretServiceStore {
+        let store = KeyRing {
             service: FakeSecretService::new(),
         };
         let rp_id = RelyingPartyIdentifier::new("test".to_string());
@@ -307,7 +303,7 @@ mod tests {
 
     #[test]
     fn put_discoverable_then_list() {
-        let mut store = SecretServiceStore {
+        let mut store = KeyRing {
             service: FakeSecretService::new(),
         };
         let key = fido2_service::PrivateKeyCredentialSource::generate(
@@ -331,7 +327,7 @@ mod tests {
 
     #[test]
     fn put_discoverable_should_replace() {
-        let mut store = SecretServiceStore {
+        let mut store = KeyRing {
             service: FakeSecretService::new(),
         };
         let key = fido2_service::PrivateKeyCredentialSource::generate(
