@@ -45,7 +45,7 @@ enum Error {
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
-async fn main() {
+async fn main() -> Result<(), Error> {
     let args = Command::new("Rust-Fido System Daemon")
         .version(VERSION)
         .author(AUTHORS)
@@ -70,13 +70,7 @@ async fn main() {
 
     info!(version = VERSION, "Starting rust-fido system daemon");
 
-    if let Err(ref err) = run(socket_path.map(|x| &**x)).await {
-        error!(error = ?err, "Error encountered, exiting");
-    }
-}
-
-async fn run(socket_path: Option<&str>) -> Result<(), Error> {
-    let socket = socket_listener(socket_path)?;
+    let socket = socket_listener(socket_path.map(|s| s.as_str()))?;
     let handler = ConnectionHandler::new();
 
     SocketServer::serve(socket, handler).await

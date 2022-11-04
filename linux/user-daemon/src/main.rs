@@ -61,7 +61,7 @@ pub enum Error {
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
-async fn main() {
+async fn main() -> Result<(), Error> {
     let args = Command::new("Rust-Fido User Daemon")
         .version(VERSION)
         .author(AUTHORS)
@@ -89,12 +89,6 @@ async fn main() {
 
     info!(version = VERSION, "Starting rust-fido user daemon");
 
-    if let Err(ref err) = run(system_daemon_socket).await {
-        error!("Error encountered, exiting: {}", err);
-    }
-}
-
-async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
     let user_presence = NotificationUserPresence::new();
     let secrets = key_stores::build()?;
 
