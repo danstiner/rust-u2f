@@ -35,7 +35,8 @@ systemctl --user   enable --now softu2f.service
 ```bash
 curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.rpm.sh | sudo bash
 sudo dnf install softu2f
-systemctl --user start softu2f
+systemctl --system start softu2f.socket
+systemctl --user   start softu2f.service
 ```
 
 ### Ubuntu
@@ -44,7 +45,8 @@ systemctl --user start softu2f
 sudo apt install -y curl
 curl -s https://packagecloud.io/install/repositories/danstiner/softu2f/script.deb.sh | sudo bash
 sudo apt install -y softu2f
-systemctl --user start softu2f
+systemctl --system start softu2f.socket
+systemctl --user   start softu2f.service
 ```
 
 ## Building
