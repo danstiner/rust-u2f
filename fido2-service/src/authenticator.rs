@@ -829,29 +829,4 @@ mod tests {
                 .collect())
         }
     }
-
-    //     fn fake_attestation() -> Attestation {
-    //         Attestation {
-    //             certificate: AttestationCertificate::from_pem(
-    //                 "-----BEGIN CERTIFICATE-----
-    // MIIBfzCCASagAwIBAgIJAJaMtBXq9XVHMAoGCCqGSM49BAMCMBsxGTAXBgNVBAMM
-    // EFNvZnQgVTJGIFRlc3RpbmcwHhcNMTcxMDIwMjE1NzAzWhcNMjcxMDIwMjE1NzAz
-    // WjAbMRkwFwYDVQQDDBBTb2Z0IFUyRiBUZXN0aW5nMFkwEwYHKoZIzj0CAQYIKoZI
-    // zj0DAQcDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
-    // 30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSqNTMFEwHQYDVR0OBBYEFHjWu2kQGzvn
-    // KfCIKULVtb4WZnAEMB8GA1UdIwQYMBaAFHjWu2kQGzvnKfCIKULVtb4WZnAEMA8G
-    // A1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDRwAwRAIgaiIS0Rb+Hw8WSO9fcsln
-    // ERLGHDWaV+MS0kr5HgmvAjQCIEU0qjr86VDcpLvuGnTkt2djzapR9iO9PPZ5aErv
-    // 3GCT
-    // -----END CERTIFICATE-----",
-    //             ),
-    //             key: PrivateKey::from_pem(
-    //                 "-----BEGIN EC PRIVATE KEY-----
-    // MHcCAQEEIEijhKU+RGVbusHs9jNSUs9ZycXRSvtz0wrBJKozKuh1oAoGCCqGSM49
-    // AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
-    // 30rPR35HvZI/zKWELnhl5BG3hZIrBEjpSg==
-    // -----END EC PRIVATE KEY-----",
-    //             ),
-    //         }
-    //     }
 }
