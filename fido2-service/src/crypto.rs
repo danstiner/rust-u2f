@@ -198,15 +198,19 @@ impl PrivateKeyCredentialSource {
 
     pub fn handle(&self) -> CredentialHandle {
         CredentialHandle {
-            descriptor: PublicKeyCredentialDescriptor {
-                type_: self.type_.clone(),
-                id: self.id.clone(),
-            },
+            descriptor: self.descriptor(),
             protection: KeyProtection {
                 is_user_verification_required: false,
                 is_user_verification_optional_with_allow_list: false,
             },
             rp: self.rp.clone(),
+        }
+    }
+
+    pub fn descriptor(&self) -> PublicKeyCredentialDescriptor {
+        PublicKeyCredentialDescriptor {
+            type_: self.type_.clone(),
+            id: self.id.clone(),
         }
     }
 }

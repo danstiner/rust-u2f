@@ -29,6 +29,12 @@ pub trait CredentialStorage {
         &self,
         rp_id: &RelyingPartyIdentifier,
     ) -> Result<Vec<CredentialHandle>, Self::Error>;
+
+    fn list_specified(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+        credential_list: &[PublicKeyCredentialDescriptor],
+    ) -> Result<Vec<CredentialHandle>, Self::Error>;
 }
 
 pub struct SoftwareCryptoStore<S>(Mutex<Data<S>>);
@@ -153,16 +159,17 @@ where
         &self,
         rp_id: &RelyingPartyIdentifier,
     ) -> Result<Vec<CredentialHandle>, Self::Error> {
-        let data = self.0.lock().unwrap();
-        data.store.list_discoverable(rp_id)
+        let this = self.0.lock().unwrap();
+        this.store.list_discoverable(rp_id)
     }
 
     async fn list_specified_credentials(
         &self,
-        _rp_id: &RelyingPartyIdentifier,
-        _credential_list: &[PublicKeyCredentialDescriptor],
+        rp_id: &RelyingPartyIdentifier,
+        credential_list: &[PublicKeyCredentialDescriptor],
     ) -> Result<Vec<CredentialHandle>, Self::Error> {
-        todo!()
+        let this = self.0.lock().unwrap();
+        this.store.list_specified(rp_id, credential_list)
     }
 }
 

@@ -1,6 +1,6 @@
 use super::Error;
 use async_trait::async_trait;
-use fido2_api::RelyingPartyIdentifier;
+use fido2_api::{PublicKeyCredentialDescriptor, RelyingPartyIdentifier, UserHandle};
 use fido2_service::{CredentialHandle, PrivateKeyCredentialSource};
 use secret_service::EncryptionType;
 use std::collections::HashMap;
@@ -41,6 +41,15 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
         credential: fido2_service::PrivateKeyCredentialSource,
     ) -> Result<(), Self::Error> {
         let collection = self.collection()?;
+
+        // Delete existing discoverable credentials for this rp and user
+        for i in collection.find_items(Attributes::discoverable_user_search(
+            &credential.rp.id,
+            &credential.user_handle,
+        ))? {
+            i.delete()?;
+        }
+
         let secret = serde_json::to_string(&credential)?;
         let _item = collection.create_item(
             &format!("FIDO2 credential for {}", credential.rp),
@@ -71,16 +80,36 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
         rp_id: &fido2_api::RelyingPartyIdentifier,
     ) -> Result<Vec<CredentialHandle>, Self::Error> {
         let collection = self.collection()?;
-        let key_handles = collection
-            .search_items(Attributes::discoverable_search(rp_id).get())?
-            .into_iter()
-            .map(|item| {
+        let mut handles = Vec::new();
+
+        for item in collection.search_items(Attributes::discoverable_search(rp_id).get())? {
+            let secret = item.get_secret()?;
+            let credential: PrivateKeyCredentialSource = serde_json::from_slice(&secret)?;
+            handles.push(credential.handle());
+        }
+
+        Ok(handles)
+    }
+
+    fn list_specified(
+        &self,
+        rp_id: &fido2_api::RelyingPartyIdentifier,
+        credential_list: &[PublicKeyCredentialDescriptor],
+    ) -> Result<Vec<CredentialHandle>, Self::Error> {
+        let collection = self.collection()?;
+        let mut handles = Vec::new();
+
+        for descriptor in credential_list {
+            if let Some(item) =
+                collection.find_item(Attributes::specific_search(rp_id, descriptor))?
+            {
                 let secret = item.get_secret()?;
                 let credential: PrivateKeyCredentialSource = serde_json::from_slice(&secret)?;
-                Ok(credential.handle())
-            })
-            .collect();
-        key_handles
+                handles.push(credential.handle());
+            }
+        }
+
+        Ok(handles)
     }
 }
 
@@ -180,6 +209,8 @@ pub(crate) trait Item {
     fn get_secret(&self) -> Result<Vec<u8>, secret_service::Error>;
 
     fn get_created(&self) -> Result<SystemTime, secret_service::Error>;
+
+    fn delete(&self) -> Result<(), secret_service::Error>;
 }
 
 impl Item for secret_service::Item<'_> {
@@ -189,6 +220,10 @@ impl Item for secret_service::Item<'_> {
 
     fn get_created(&self) -> Result<SystemTime, secret_service::Error> {
         Ok(UNIX_EPOCH + Duration::from_secs(self.get_created()?))
+    }
+
+    fn delete(&self) -> Result<(), secret_service::Error> {
+        self.delete()
     }
 }
 
@@ -204,11 +239,14 @@ impl Attributes {
     }
 
     fn new_discoverable_credential(credential: &PrivateKeyCredentialSource) -> Self {
-        let mut attributes = Self::discoverable_search(&credential.rp.id);
+        let mut attributes =
+            Self::discoverable_user_search(&credential.rp.id, &credential.user_handle);
         attributes.insert(
             "user_handle",
             base64::encode(credential.user_handle.as_bytes()),
         );
+        attributes.insert("credential_id", base64::encode(credential.id.as_bytes()));
+        attributes.insert("credential_type", credential.type_.to_string());
         attributes
     }
 
@@ -218,13 +256,25 @@ impl Attributes {
         attributes
     }
 
-    fn handle_search(handle: &CredentialHandle) -> Self {
+    fn discoverable_user_search(rp_id: &RelyingPartyIdentifier, user_handle: &UserHandle) -> Self {
         let mut attributes = Attributes::base();
-        attributes.insert("rp_id", handle.rp.id.to_string());
-        attributes.insert(
-            "credential_id",
-            base64::encode(handle.descriptor.id.as_bytes()),
-        );
+        attributes.insert("rp_id", rp_id.to_string());
+        attributes.insert("user_handle", base64::encode(user_handle.as_bytes()));
+        attributes
+    }
+
+    fn handle_search(handle: &CredentialHandle) -> Self {
+        Attributes::specific_search(&handle.rp.id, &handle.descriptor)
+    }
+
+    fn specific_search(
+        rp_id: &RelyingPartyIdentifier,
+        descriptor: &PublicKeyCredentialDescriptor,
+    ) -> Self {
+        let mut attributes = Attributes::base();
+        attributes.insert("rp_id", rp_id.to_string());
+        attributes.insert("credential_id", base64::encode(descriptor.id.as_bytes()));
+        attributes.insert("credential_type", descriptor.type_.to_string());
         attributes
     }
 
@@ -331,6 +381,24 @@ mod tests {
         assert_eq!(list[0].descriptor.id, key2.id);
     }
 
+    #[test]
+    fn put_discoverable_then_get_returns_credential() {
+        let mut store = keyring();
+        let key = PrivateKeyCredentialSource::generate(
+            &PARAMETERS,
+            &RP,
+            &USER_HANDLE,
+            &ring::rand::SystemRandom::new(),
+        )
+        .unwrap();
+        let handle = key.handle();
+
+        store.put_discoverable(key.clone()).unwrap();
+
+        let result = store.get(&handle).unwrap();
+        assert!(result.is_some());
+    }
+
     lazy_static! {
         static ref PARAMETERS: PublicKeyCredentialParameters = PublicKeyCredentialParameters {
             alg: COSEAlgorithmIdentifier::ES256,
@@ -390,7 +458,7 @@ mod tests {
             secret: &[u8],
             replace: bool,
             content_type: &str,
-        ) -> secret_service::Result<Self::Item<'_>> {
+        ) -> Result<Self::Item<'_>, secret_service::Error> {
             if replace {
                 self.remove_item(&attributes);
             }
@@ -403,6 +471,7 @@ mod tests {
                     .into_iter()
                     .map(|(k, v)| (k.to_owned(), v.to_owned()))
                     .collect(),
+                deleted: false,
             })));
             Ok(FakeItem(Rc::clone(self.0.borrow().last().unwrap())))
         }
@@ -410,7 +479,7 @@ mod tests {
         fn search_items(
             &self,
             attributes: HashMap<&str, &str>,
-        ) -> secret_service::Result<Vec<Self::Item<'_>>> {
+        ) -> Result<Vec<Self::Item<'_>>, secret_service::Error> {
             Ok(self
                 .0
                 .borrow()
@@ -422,17 +491,17 @@ mod tests {
                             .get(*k)
                             .map(|x| x.as_str() == *v)
                             .unwrap_or_default()
-                    })
+                    }) && !i.borrow().deleted
                 })
                 .map(|d| FakeItem(Rc::clone(d)))
                 .collect())
         }
 
-        fn is_locked(&self) -> secret_service::Result<bool> {
+        fn is_locked(&self) -> Result<bool, secret_service::Error> {
             Ok(true)
         }
 
-        fn unlock(&self) -> secret_service::Result<()> {
+        fn unlock(&self) -> Result<(), secret_service::Error> {
             Ok(())
         }
     }
@@ -440,12 +509,18 @@ mod tests {
     struct FakeItem(Rc<RefCell<ItemData>>);
 
     impl Item for FakeItem {
-        fn get_secret(&self) -> secret_service::Result<Vec<u8>> {
+        fn get_secret(&self) -> Result<Vec<u8>, secret_service::Error> {
             Ok(self.0.as_ref().borrow().secret.clone())
         }
 
-        fn get_created(&self) -> secret_service::Result<SystemTime> {
+        fn get_created(&self) -> Result<SystemTime, secret_service::Error> {
             Ok(self.0.as_ref().borrow().created)
+        }
+
+        fn delete(&self) -> Result<(), secret_service::Error> {
+            assert!(!self.0.as_ref().borrow().deleted);
+            self.0.as_ref().borrow_mut().deleted = true;
+            Ok(())
         }
     }
 
@@ -456,6 +531,7 @@ mod tests {
         content_type: String,
         attributes: HashMap<String, String>,
         created: SystemTime,
+        deleted: bool,
     }
 
     #[test]
@@ -467,6 +543,7 @@ mod tests {
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([]),
             created: *NOW,
+            deleted: false,
         };
 
         // Create new item
@@ -497,6 +574,7 @@ mod tests {
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([]),
             created: *NOW,
+            deleted: false,
         };
 
         // First create
@@ -537,6 +615,7 @@ mod tests {
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([]),
             created: *NOW,
+            deleted: false,
         };
 
         // First create
@@ -579,6 +658,7 @@ mod tests {
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([("attribute".to_owned(), "match".to_owned())]),
             created: *NOW,
+            deleted: false,
         })));
 
         let results = service
@@ -602,6 +682,7 @@ mod tests {
                 ("extra_attribute".to_owned(), "no_match".to_owned()),
             ]),
             created: *NOW,
+            deleted: false,
         })));
 
         let results = service
@@ -623,6 +704,7 @@ mod tests {
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([]),
             created: *NOW,
+            deleted: false,
         })));
 
         let results = service
@@ -630,6 +712,27 @@ mod tests {
             .search_items(HashMap::from([("no_such_attribute", "wow")]))?;
 
         assert!(results.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn fake_service_search_deleted_item_finds_nothing() -> secret_service::Result<()> {
+        let service = FakeSecretService::new();
+        service.0.borrow_mut().push(Rc::new(RefCell::new(ItemData {
+            label: "label".to_owned(),
+            secret: "secret".as_bytes().to_owned(),
+            content_type: "content_type".to_owned(),
+            attributes: HashMap::from([("attribute".to_owned(), "match".to_owned())]),
+            created: *NOW,
+            deleted: true,
+        })));
+
+        let results = service
+            .get_default_collection()?
+            .search_items(HashMap::from([("attribute", "match")]))?;
+
+        assert_eq!(results.len(), 0);
 
         Ok(())
     }

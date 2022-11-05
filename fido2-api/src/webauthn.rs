@@ -1,9 +1,8 @@
-use std::fmt;
-
 use bitflags::bitflags;
 use byteorder::{BigEndian, WriteBytesExt};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use crate::{Aaguid, Sha256};
 
@@ -178,6 +177,15 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialParameters {
 pub enum PublicKeyCredentialType {
     PublicKey,
     Unknown(String),
+}
+
+impl fmt::Display for PublicKeyCredentialType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PublicKeyCredentialType::PublicKey => write!(f, "public-key"),
+            PublicKeyCredentialType::Unknown(type_) => write!(f, "{}", type_),
+        }
+    }
 }
 
 impl<C> Encode<C> for PublicKeyCredentialType {

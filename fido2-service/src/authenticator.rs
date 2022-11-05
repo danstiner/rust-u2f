@@ -815,6 +815,19 @@ mod tests {
                 Ok(vec![])
             }
         }
+
+        fn list_specified(
+            &self,
+            rp_id: &RelyingPartyIdentifier,
+            credential_list: &[PublicKeyCredentialDescriptor],
+        ) -> Result<Vec<CredentialHandle>, Self::Error> {
+            Ok(self
+                .keys
+                .values()
+                .filter(|key| rp_id == &key.rp.id && credential_list.contains(&key.descriptor()))
+                .map(|key| key.handle())
+                .collect())
+        }
     }
 
     //     fn fake_attestation() -> Attestation {
