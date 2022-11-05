@@ -207,13 +207,19 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
 }
 
 /// Relying Party attribute map, used when creating a new credential
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PublicKeyCredentialRpEntity {
     // A unique identifier for the Relying Party entity, used as the RP ID
     pub id: RelyingPartyIdentifier,
 
     // A human-palatable name for the Relying Party, intended only for display
     pub name: String,
+}
+
+impl fmt::Display for PublicKeyCredentialRpEntity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} ({})", self.id, self.name)
+    }
 }
 
 impl<C> Encode<C> for PublicKeyCredentialRpEntity {
@@ -455,10 +461,6 @@ impl RelyingPartyIdentifier {
     pub fn as_bytes(&self) -> &[u8] {
         self.0.as_bytes()
     }
-
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
 }
 
 impl fmt::Display for RelyingPartyIdentifier {
@@ -466,6 +468,7 @@ impl fmt::Display for RelyingPartyIdentifier {
         write!(f, "{}", self.0)
     }
 }
+
 /// The authenticator data structure is a byte array of 37 bytes or more that
 /// encodes contextual bindings made by the authenticator.
 /// https://www.w3.org/TR/webauthn-2/#authenticator-data

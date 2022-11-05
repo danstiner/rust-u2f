@@ -27,11 +27,12 @@ use thiserror::Error;
 use tracing::error;
 
 // TODO hack
-pub use crate::crypto::PrivateKeyCredentialSource;
+pub use crate::crypto::{AttestationSource, PrivateKeyCredentialSource};
 pub use crate::storage::{CredentialStorage, SoftwareCryptoStore};
+pub use ring::error::Unspecified;
 
 pub use crate::authenticator::{
-    Authenticator, CredentialHandle, CredentialProtection, CredentialStore, UserPresence,
+    Authenticator, CredentialHandle, CredentialStore, KeyProtection, UserPresence,
 };
 
 #[derive(Debug, Error)]
@@ -42,13 +43,13 @@ pub enum Error {
     #[error("Unsupported algorithm")]
     UnsupportedAlgorithm,
 
-    #[error("Invalid Parameter")]
+    #[error("Invalid parameter")]
     InvalidParameter,
 
-    #[error("TODO")]
+    #[error("Unspecified")]
     Unspecified,
 
-    #[error("TODO")]
+    #[error("No credentials")]
     NoCredentials,
 
     #[error(transparent)]
@@ -65,6 +66,12 @@ impl From<Error> for StatusCode {
             Error::NoCredentials => StatusCode::NoCredentials,
             Error::Other(_) => StatusCode::Other,
         }
+    }
+}
+
+impl From<Unspecified> for Error {
+    fn from(_: Unspecified) -> Self {
+        Error::Unspecified
     }
 }
 

@@ -1,13 +1,14 @@
 use crate::{
     authenticator::CredentialHandle,
-    crypto::{PrivateKeyCredentialSource, PublicKeyCredentialSource},
-    CredentialProtection, CredentialStore,
+    crypto::{AttestationSource, PrivateKeyCredentialSource, PublicKeyCredentialSource},
+    CredentialStore,
 };
 use async_trait::async_trait;
 use fido2_api::{
     Aaguid, AttestationCertificate, AttestationStatement, AttestedCredentialData,
     AuthenticatorData, PackedAttestationStatement, PublicKeyCredentialDescriptor,
-    RelyingPartyIdentifier, Sha256,
+    PublicKeyCredentialParameters, PublicKeyCredentialRpEntity, RelyingPartyIdentifier, Sha256,
+    UserHandle,
 };
 use std::sync::Mutex;
 
@@ -33,11 +34,17 @@ pub trait CredentialStorage {
 pub struct SoftwareCryptoStore<S>(Mutex<Data<S>>);
 
 impl<S> SoftwareCryptoStore<S> {
-    pub fn new(store: S, aaguid: Aaguid) -> Self {
+    pub fn new(
+        store: S,
+        aaguid: Aaguid,
+        attestation_source: AttestationSource,
+        rng: ring::rand::SystemRandom,
+    ) -> Self {
         Self(Mutex::new(Data {
             aaguid,
-            rng: ring::rand::SystemRandom::new(),
+            rng,
             store,
+            attestation_source,
         }))
     }
 }
@@ -46,40 +53,28 @@ pub(crate) struct Data<S> {
     aaguid: Aaguid,
     rng: ring::rand::SystemRandom,
     store: S,
+    attestation_source: AttestationSource,
 }
 
 #[async_trait(?Send)]
-impl<S: CredentialStorage> CredentialStore for SoftwareCryptoStore<S> {
+impl<S: CredentialStorage> CredentialStore for SoftwareCryptoStore<S>
+where
+    S: CredentialStorage,
+    S::Error: From<ring::error::Unspecified>,
+{
     type Error = S::Error;
 
     async fn make_credential(
         &self,
-        pub_key_cred_params: &fido2_api::PublicKeyCredentialParameters,
-        rp_id: &fido2_api::RelyingPartyIdentifier,
-        user_handle: &fido2_api::UserHandle,
+        parameters: &PublicKeyCredentialParameters,
+        rp: &PublicKeyCredentialRpEntity,
+        user_handle: &UserHandle,
     ) -> Result<CredentialHandle, Self::Error> {
-        let mut data = self.0.lock().unwrap();
-        let key = PrivateKeyCredentialSource::generate(
-            &pub_key_cred_params.alg,
-            &pub_key_cred_params.type_,
-            rp_id,
-            user_handle,
-            &data.rng,
-        )
-        .unwrap();
-        let descriptor = PublicKeyCredentialDescriptor {
-            type_: key.type_.clone(),
-            id: key.id.clone(),
-        };
-        data.store.put_discoverable(key)?;
-        Ok(CredentialHandle {
-            descriptor,
-            protection: CredentialProtection {
-                is_user_verification_required: false,
-                is_user_verification_optional_with_credential_id_list: false,
-            },
-            rp_id: rp_id.clone(),
-        })
+        let mut this = self.0.lock().unwrap();
+        let key = PrivateKeyCredentialSource::generate(parameters, rp, user_handle, &this.rng)?;
+        let handle = key.handle();
+        this.store.put_discoverable(key)?;
+        Ok(handle)
     }
 
     async fn attest(
@@ -90,29 +85,35 @@ impl<S: CredentialStorage> CredentialStore for SoftwareCryptoStore<S> {
         user_present: bool,
         user_verified: bool,
     ) -> Result<(AuthenticatorData, AttestationStatement), Self::Error> {
-        let data = self.0.lock().unwrap();
-        if let Some(key) = data.store.get(credential_handle)? {
+        let this = self.0.lock().unwrap();
+        if let Some(key) = this.store.get(credential_handle)? {
             let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
                 rp_id_hash: Sha256::digest(rp_id.as_bytes()),
                 user_present,
                 user_verified,
-                sign_count: 1,
+                sign_count: 1, // TODO increment use counter
                 attested_credential_data: Some(vec![AttestedCredentialData {
-                    aaguid: data.aaguid,
+                    aaguid: this.aaguid,
                     credential_id: credential_handle.descriptor.id.clone(),
                     credential_public_key: key.credential_public_key(),
                 }]),
             };
-            // TODO increment use counter
-            let signature = key.sign(&auth_data, client_data_hash, &data.rng).unwrap();
+            let signature = this
+                .attestation_source
+                .sign(&auth_data, client_data_hash, &this.rng)
+                .unwrap();
             Ok((
                 auth_data,
                 AttestationStatement::Packed(PackedAttestationStatement {
                     alg: key.alg(),
                     sig: signature,
                     x5c: Some(AttestationCertificate {
-                        attestation_certificate: key.public_key_document().as_ref().to_vec(), // TODO this should be the authenticator's certificate
+                        attestation_certificate: this
+                            .attestation_source
+                            .public_key_document()
+                            .as_ref()
+                            .to_vec(),
                         ca_certificate_chain: vec![],
                     }),
                 }),
@@ -130,8 +131,8 @@ impl<S: CredentialStorage> CredentialStore for SoftwareCryptoStore<S> {
         user_present: bool,
         user_verified: bool,
     ) -> Result<(AuthenticatorData, fido2_api::Signature), Self::Error> {
-        let data = self.0.lock().unwrap();
-        if let Some(key) = data.store.get(credential_handle)? {
+        let this = self.0.lock().unwrap();
+        if let Some(key) = this.store.get(credential_handle)? {
             let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
                 rp_id_hash: Sha256::digest(rp_id.as_bytes()),
@@ -141,7 +142,7 @@ impl<S: CredentialStorage> CredentialStore for SoftwareCryptoStore<S> {
                 attested_credential_data: None,
             };
             // TODO increment use counter
-            let signature = key.sign(&auth_data, client_data_hash, &data.rng).unwrap();
+            let signature = key.sign(&auth_data, client_data_hash, &this.rng).unwrap();
             Ok((auth_data, signature))
         } else {
             todo!("error")
@@ -163,4 +164,10 @@ impl<S: CredentialStorage> CredentialStore for SoftwareCryptoStore<S> {
     ) -> Result<Vec<CredentialHandle>, Self::Error> {
         todo!()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn pass() {}
 }

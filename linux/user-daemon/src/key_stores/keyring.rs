@@ -1,7 +1,7 @@
 use super::Error;
 use async_trait::async_trait;
 use fido2_api::RelyingPartyIdentifier;
-use fido2_service::{CredentialHandle, CredentialProtection, PrivateKeyCredentialSource};
+use fido2_service::{CredentialHandle, PrivateKeyCredentialSource};
 use secret_service::EncryptionType;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -20,6 +20,67 @@ impl Keyring<secret_service::SecretService<'_>> {
         Ok(Self {
             service: secret_service::SecretService::new(EncryptionType::Dh)?,
         })
+    }
+}
+
+impl<S: SecretService> Keyring<S> {
+    fn collection(&self) -> Result<<S as SecretService>::Collection<'_>, Error> {
+        let collection = self.service.get_default_collection()?;
+        unlock_if_locked(&collection)?;
+        Ok(collection)
+    }
+}
+
+#[allow(clippy::let_and_return)]
+#[async_trait(?Send)]
+impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
+    type Error = Error;
+
+    fn put_discoverable(
+        &mut self,
+        credential: fido2_service::PrivateKeyCredentialSource,
+    ) -> Result<(), Self::Error> {
+        let collection = self.collection()?;
+        let secret = serde_json::to_string(&credential)?;
+        let _item = collection.create_item(
+            &format!("FIDO2 credential for {}", credential.rp),
+            Attributes::new_discoverable_credential(&credential).get(),
+            secret.as_bytes(),
+            true,
+            "application/json",
+        )?;
+        Ok(())
+    }
+
+    fn get(
+        &self,
+        credential_handle: &CredentialHandle,
+    ) -> Result<Option<fido2_service::PrivateKeyCredentialSource>, Self::Error> {
+        let collection = self.collection()?;
+        let item = collection.find_item(Attributes::handle_search(credential_handle))?;
+        if let Some(item) = item {
+            let secret = item.get_secret()?;
+            Ok(Some(serde_json::from_slice(&secret)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn list_discoverable(
+        &self,
+        rp_id: &fido2_api::RelyingPartyIdentifier,
+    ) -> Result<Vec<CredentialHandle>, Self::Error> {
+        let collection = self.collection()?;
+        let key_handles = collection
+            .search_items(Attributes::discoverable_search(rp_id).get())?
+            .into_iter()
+            .map(|item| {
+                let secret = item.get_secret()?;
+                let credential: PrivateKeyCredentialSource = serde_json::from_slice(&secret)?;
+                Ok(credential.handle())
+            })
+            .collect();
+        key_handles
     }
 }
 
@@ -70,6 +131,14 @@ pub(crate) trait Collection {
     fn is_locked(&self) -> Result<bool, secret_service::Error>;
 
     fn unlock(&self) -> Result<(), secret_service::Error>;
+
+    fn find_items(&self, attributes: Attributes) -> Result<Vec<Self::Item<'_>>, Error> {
+        Ok(self.search_items(attributes.get())?)
+    }
+
+    fn find_item(&self, attributes: Attributes) -> Result<Option<Self::Item<'_>>, Error> {
+        Ok(self.search_items(attributes.get())?.into_iter().next())
+    }
 }
 
 impl Collection for secret_service::Collection<'_> {
@@ -123,120 +192,52 @@ impl Item for secret_service::Item<'_> {
     }
 }
 
-#[allow(clippy::let_and_return)]
-#[async_trait(?Send)]
-impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
-    type Error = Error;
+pub(crate) struct Attributes(HashMap<&'static str, String>);
 
-    fn put_discoverable(
-        &mut self,
-        credential: fido2_service::PrivateKeyCredentialSource,
-    ) -> Result<(), Self::Error> {
-        let collection = self.service.get_default_collection()?;
-        unlock_if_locked(&collection)?;
-        let attributes = discoverable_credential_attributes(&credential);
-        let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        let label = format!("FIDO2 credential for {}", credential.rp_id.as_str());
-        let secret = serde_json::to_string(&credential)?;
-        let content_type = "application/json";
-        let _item =
-            collection.create_item(&label, attributes, secret.as_bytes(), true, content_type)?;
-        Ok(())
+impl Attributes {
+    fn new() -> Self {
+        Attributes(HashMap::new())
     }
 
-    fn get(
-        &self,
-        credential_handle: &CredentialHandle,
-    ) -> Result<Option<fido2_service::PrivateKeyCredentialSource>, Self::Error> {
-        let collection = self.service.get_default_collection()?;
-        unlock_if_locked(&collection)?;
-        let option = find_item(&collection, credential_handle)?;
-        if option.is_none() {
-            return Ok(None);
-        }
-        let item = option.unwrap();
-        let secret_bytes = item.get_secret()?;
-        let credential: PrivateKeyCredentialSource = serde_json::from_slice(&secret_bytes)?;
-        Ok(Some(credential))
+    fn insert(&mut self, k: &'static str, v: String) -> Option<String> {
+        self.0.insert(k, v)
     }
 
-    fn list_discoverable(
-        &self,
-        rp_id: &fido2_api::RelyingPartyIdentifier,
-    ) -> Result<Vec<CredentialHandle>, Self::Error> {
-        let collection = self.service.get_default_collection()?;
-        unlock_if_locked(&collection)?;
-
-        let attributes = discoverable_search_attributes(rp_id);
-        let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        let handles = collection
-            .search_items(attributes)?
-            .into_iter()
-            .map(|item| {
-                let secret_bytes = item.get_secret()?;
-                let credential: PrivateKeyCredentialSource = serde_json::from_slice(&secret_bytes)?;
-                Ok(CredentialHandle {
-                    descriptor: fido2_api::PublicKeyCredentialDescriptor {
-                        type_: credential.type_,
-                        id: credential.id,
-                    },
-                    protection: CredentialProtection {
-                        is_user_verification_required: false,
-                        is_user_verification_optional_with_credential_id_list: false,
-                    },
-                    rp_id: credential.rp_id,
-                })
-            })
-            .collect();
-        handles
+    fn new_discoverable_credential(credential: &PrivateKeyCredentialSource) -> Self {
+        let mut attributes = Self::discoverable_search(&credential.rp.id);
+        attributes.insert(
+            "user_handle",
+            base64::encode(credential.user_handle.as_bytes()),
+        );
+        attributes
     }
-}
 
-fn discoverable_credential_attributes(
-    credential: &PrivateKeyCredentialSource,
-) -> Vec<(&'static str, String)> {
-    let mut attributes = discoverable_search_attributes(&credential.rp_id);
-    attributes.push((
-        "user_handle",
-        base64::encode(credential.user_handle.as_bytes()),
-    ));
-    attributes
-}
+    fn discoverable_search(rp_id: &RelyingPartyIdentifier) -> Self {
+        let mut attributes = Attributes::base();
+        attributes.insert("rp_id", rp_id.to_string());
+        attributes
+    }
 
-fn discoverable_search_attributes(rp_id: &RelyingPartyIdentifier) -> Vec<(&'static str, String)> {
-    vec![
-        ("application", "com.github.danstiner.rust-fido".to_string()),
-        ("xdg:schema", "com.github.danstiner.rust-fido".to_string()),
-        ("rp_id", rp_id.to_string()),
-    ]
-}
-
-fn handle_search_attributes(handle: &CredentialHandle) -> Vec<(&'static str, String)> {
-    vec![
-        ("application", "com.github.danstiner.rust-fido".to_string()),
-        ("xdg:schema", "com.github.danstiner.rust-fido".to_string()),
-        ("rp_id", handle.rp_id.to_string()),
-        (
+    fn handle_search(handle: &CredentialHandle) -> Self {
+        let mut attributes = Attributes::base();
+        attributes.insert("rp_id", handle.rp.id.to_string());
+        attributes.insert(
             "credential_id",
             base64::encode(handle.descriptor.id.as_bytes()),
-        ),
-    ]
-}
+        );
+        attributes
+    }
 
-fn find_item<'a, C: Collection>(
-    collection: &'a C,
-    handle: &CredentialHandle,
-) -> Result<Option<C::Item<'a>>, Error> {
-    let attributes = handle_search_attributes(handle);
-    let attributes = attributes.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    Ok(find_items(collection, attributes)?.into_iter().next())
-}
+    fn base() -> Self {
+        let mut attributes = Attributes::new();
+        attributes.insert("application", "com.github.danstiner.rust-fido".to_string());
+        attributes.insert("xdg:schema", "com.github.danstiner.rust-fido".to_string());
+        attributes
+    }
 
-fn find_items<'a, C: Collection>(
-    collection: &'a C,
-    attributes: HashMap<&str, &str>,
-) -> Result<Vec<C::Item<'a>>, Error> {
-    Ok(collection.search_items(attributes)?)
+    fn get(&self) -> HashMap<&str, &str> {
+        self.0.iter().map(|(k, v)| (*k, v.as_str())).collect()
+    }
 }
 
 fn unlock_if_locked<C: Collection>(collection: &C) -> Result<(), Error> {
@@ -248,96 +249,109 @@ fn unlock_if_locked<C: Collection>(collection: &C) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
+    use fido2_api::{
+        COSEAlgorithmIdentifier, CredentialId, PublicKeyCredentialDescriptor,
+        PublicKeyCredentialParameters, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
+        RelyingPartyIdentifier, UserHandle,
+    };
+    use fido2_service::{CredentialStorage, KeyProtection, PrivateKeyCredentialSource};
+    use lazy_static::lazy_static;
     use std::{cell::RefCell, rc::Rc};
-
-    use fido2_service::CredentialStorage;
 
     use super::*;
 
+    #[test]
+    fn get_with_empty_store_is_none() {
+        let keyring = keyring();
+        let key_handle = CredentialHandle {
+            descriptor: PublicKeyCredentialDescriptor {
+                type_: PublicKeyCredentialType::PublicKey,
+                id: CredentialId::new(&[1, 2, 3]),
+            },
+            protection: KeyProtection {
+                is_user_verification_required: false,
+                is_user_verification_optional_with_allow_list: false,
+            },
+            rp: RP.clone(),
+        };
+
+        assert!(keyring.get(&key_handle).unwrap().is_none());
+    }
+
+    #[test]
+    fn list_with_empty_store_is_empty() {
+        let keyring = keyring();
+
+        assert!(keyring.list_discoverable(&RP.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn put_discoverable_then_list_returns_credential() {
+        let mut store = keyring();
+        let key = PrivateKeyCredentialSource::generate(
+            &PARAMETERS,
+            &RP,
+            &USER_HANDLE,
+            &ring::rand::SystemRandom::new(),
+        )
+        .unwrap();
+
+        store.put_discoverable(key.clone()).unwrap();
+
+        let list = store.list_discoverable(&key.rp.id).unwrap();
+        assert_eq!(list.len(), 1);
+    }
+
+    #[test]
+    fn put_discoverable_should_replace_existing_credential() {
+        let mut store = keyring();
+
+        // Put first discoverable key
+        let credential1 = PrivateKeyCredentialSource::generate(
+            &PARAMETERS,
+            &RP,
+            &USER_HANDLE,
+            &ring::rand::SystemRandom::new(),
+        )
+        .unwrap();
+        store.put_discoverable(credential1.clone()).unwrap();
+
+        // Put second discoverable key, should replace the first
+        let key2 = PrivateKeyCredentialSource::generate(
+            &PARAMETERS,
+            &RP,
+            &USER_HANDLE,
+            &ring::rand::SystemRandom::new(),
+        )
+        .unwrap();
+        store.put_discoverable(key2.clone()).unwrap();
+
+        let list = store.list_discoverable(&RP.id).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].descriptor.id, key2.id);
+    }
+
+    lazy_static! {
+        static ref PARAMETERS: PublicKeyCredentialParameters = PublicKeyCredentialParameters {
+            alg: COSEAlgorithmIdentifier::ES256,
+            type_: PublicKeyCredentialType::PublicKey
+        };
+        static ref NOW: SystemTime = UNIX_EPOCH + Duration::from_secs(1);
+        static ref RP: PublicKeyCredentialRpEntity = PublicKeyCredentialRpEntity {
+            id: RelyingPartyIdentifier::new("rusty.party".to_string()),
+            name: "Party Town".to_string(),
+        };
+        static ref USER_HANDLE: UserHandle = UserHandle::new(vec![0]);
+    }
+
+    fn keyring() -> Keyring<FakeSecretService> {
+        Keyring {
+            service: FakeSecretService::new(),
+        }
+    }
+
     fn borrow_map(m: &HashMap<String, String>) -> HashMap<&str, &str> {
         m.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()
-    }
-
-    #[test]
-    fn get_none() {
-        let store = Keyring {
-            service: FakeSecretService::new(),
-        };
-        let credential_handle = CredentialHandle {
-            descriptor: fido2_api::PublicKeyCredentialDescriptor {
-                type_: fido2_api::PublicKeyCredentialType::PublicKey,
-                id: fido2_api::CredentialId::new(&[]),
-            },
-            protection: CredentialProtection {
-                is_user_verification_required: false,
-                is_user_verification_optional_with_credential_id_list: false,
-            },
-            rp_id: RelyingPartyIdentifier::new("test".to_string()),
-        };
-
-        assert!(store.get(&credential_handle).unwrap().is_none());
-    }
-
-    #[test]
-    fn list_none() {
-        let store = Keyring {
-            service: FakeSecretService::new(),
-        };
-        let rp_id = RelyingPartyIdentifier::new("test".to_string());
-
-        assert!(store.list_discoverable(&rp_id).unwrap().is_empty());
-    }
-
-    #[test]
-    fn put_discoverable_then_list() {
-        let mut store = Keyring {
-            service: FakeSecretService::new(),
-        };
-        let key = fido2_service::PrivateKeyCredentialSource::generate(
-            &fido2_api::COSEAlgorithmIdentifier::ES256,
-            &fido2_api::PublicKeyCredentialType::PublicKey,
-            &fido2_api::RelyingPartyIdentifier::new("test".to_string()),
-            &fido2_api::UserHandle::new(vec![0]),
-            &ring::rand::SystemRandom::new(),
-        )
-        .unwrap();
-
-        {
-            store.put_discoverable(key.clone()).unwrap();
-        }
-
-        {
-            let list = store.list_discoverable(&key.rp_id).unwrap();
-            assert_eq!(list.len(), 1);
-        }
-    }
-
-    #[test]
-    fn put_discoverable_should_replace() {
-        let mut store = Keyring {
-            service: FakeSecretService::new(),
-        };
-        let key = fido2_service::PrivateKeyCredentialSource::generate(
-            &fido2_api::COSEAlgorithmIdentifier::ES256,
-            &fido2_api::PublicKeyCredentialType::PublicKey,
-            &fido2_api::RelyingPartyIdentifier::new("test".to_string()),
-            &fido2_api::UserHandle::new(vec![0]),
-            &ring::rand::SystemRandom::new(),
-        )
-        .unwrap();
-
-        {
-            store.put_discoverable(key.clone()).unwrap();
-        }
-
-        {
-            store.put_discoverable(key.clone()).unwrap();
-        }
-
-        {
-            let list = store.list_discoverable(&key.rp_id).unwrap();
-            assert_eq!(list.len(), 1);
-        }
     }
 
     struct FakeSecretService(RefCell<Vec<Rc<RefCell<ItemData>>>>);
@@ -381,7 +395,7 @@ mod tests {
                 self.remove_item(&attributes);
             }
             self.0.borrow_mut().push(Rc::new(RefCell::new(ItemData {
-                created: NOW,
+                created: *NOW,
                 secret: secret.to_owned(),
                 label: label.to_owned(),
                 content_type: content_type.to_owned(),
@@ -444,8 +458,6 @@ mod tests {
         created: SystemTime,
     }
 
-    const NOW: SystemTime = UNIX_EPOCH;
-
     #[test]
     fn fake_service_create_adds_one_item() -> secret_service::Result<()> {
         let service = FakeSecretService::new();
@@ -454,7 +466,7 @@ mod tests {
             secret: "secret".as_bytes().to_owned(),
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([]),
-            created: NOW,
+            created: *NOW,
         };
 
         // Create new item
@@ -484,7 +496,7 @@ mod tests {
             secret: "secret".as_bytes().to_owned(),
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([]),
-            created: NOW,
+            created: *NOW,
         };
 
         // First create
@@ -524,7 +536,7 @@ mod tests {
             secret: "secret".as_bytes().to_owned(),
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([]),
-            created: NOW,
+            created: *NOW,
         };
 
         // First create
@@ -566,7 +578,7 @@ mod tests {
             secret: "secret".as_bytes().to_owned(),
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([("attribute".to_owned(), "match".to_owned())]),
-            created: NOW,
+            created: *NOW,
         })));
 
         let results = service
@@ -589,7 +601,7 @@ mod tests {
                 ("attribute".to_owned(), "match".to_owned()),
                 ("extra_attribute".to_owned(), "no_match".to_owned()),
             ]),
-            created: NOW,
+            created: *NOW,
         })));
 
         let results = service
@@ -610,7 +622,7 @@ mod tests {
             secret: "secret".as_bytes().to_owned(),
             content_type: "content_type".to_owned(),
             attributes: HashMap::from([]),
-            created: NOW,
+            created: *NOW,
         })));
 
         let results = service

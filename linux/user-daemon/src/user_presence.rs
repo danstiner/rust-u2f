@@ -96,7 +96,7 @@ impl UserPresence for NotificationUserPresence {
         &self,
         rp: &PublicKeyCredentialRpEntity,
     ) -> Result<bool, Self::Error> {
-        let message = format!("Register with {} ({})", rp.id.as_str(), rp.name);
+        let message = format!("Register with {}", rp);
         self.test_user_presence(message).await
     }
 

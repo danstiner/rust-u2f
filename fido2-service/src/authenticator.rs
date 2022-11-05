@@ -52,16 +52,16 @@ impl<U: UserPresence + ?Sized> UserPresence for Box<U> {
 }
 
 #[derive(Debug, Clone)]
-pub struct CredentialProtection {
+pub struct KeyProtection {
     pub is_user_verification_required: bool,
-    pub is_user_verification_optional_with_credential_id_list: bool,
+    pub is_user_verification_optional_with_allow_list: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct CredentialHandle {
     pub descriptor: PublicKeyCredentialDescriptor,
-    pub protection: CredentialProtection,
-    pub rp_id: RelyingPartyIdentifier,
+    pub protection: KeyProtection,
+    pub rp: PublicKeyCredentialRpEntity,
 }
 
 /// Manage cryptographic keypairs inside a container. Keys can be created and used for cryptographic
@@ -78,7 +78,7 @@ pub trait CredentialStore {
     async fn make_credential(
         &self,
         pub_key_cred_params: &PublicKeyCredentialParameters,
-        rp_id: &RelyingPartyIdentifier,
+        rp: &PublicKeyCredentialRpEntity,
         user_handle: &UserHandle,
     ) -> Result<CredentialHandle, Self::Error>;
 
@@ -119,11 +119,11 @@ impl<W: CredentialStore + ?Sized> CredentialStore for Box<W> {
     async fn make_credential(
         &self,
         pub_key_cred_params: &PublicKeyCredentialParameters,
-        rp_id: &RelyingPartyIdentifier,
+        rp: &PublicKeyCredentialRpEntity,
         user_handle: &UserHandle,
     ) -> Result<CredentialHandle, Self::Error> {
         (**self)
-            .make_credential(pub_key_cred_params, rp_id, user_handle)
+            .make_credential(pub_key_cred_params, rp, user_handle)
             .await
     }
 
@@ -358,7 +358,7 @@ where
         trace!("Make credential");
         let credential = self
             .credentials
-            .make_credential(pk_parameters, &rp.id, &user.id)
+            .make_credential(pk_parameters, &rp, &user.id)
             .await?;
 
         // 19. Generate an attestation statement for the newly-created credential using clientDataHash, taking into account the value of the enterpriseAttestation parameter, if present, as described above in Step 9.
@@ -429,7 +429,7 @@ where
                     false
                 } else if credential
                     .protection
-                    .is_user_verification_optional_with_credential_id_list
+                    .is_user_verification_optional_with_allow_list
                     && allow_list.is_none()
                     && !user_verified
                 {
@@ -511,7 +511,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        crypto::PrivateKeyCredentialSource,
+        crypto::{AttestationSource, PrivateKeyCredentialSource},
         storage::{CredentialStorage, SoftwareCryptoStore},
     };
 
@@ -537,66 +537,107 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn make_credential_success() {
+    async fn make_discoverable_credential_then_get_assertion_success() {
         let authenticator = fake_authenticator();
         let client_data_hash = Sha256::digest(b"client data");
 
-        let result = authenticator
-            .make_credential(MakeCredentialCommand {
-                client_data_hash: client_data_hash.clone(),
-                rp: PublicKeyCredentialRpEntity {
-                    id: RelyingPartyIdentifier::new("example.com".into()),
-                    name: "Example RP".into(),
-                },
-                user: PublicKeyCredentialUserEntity {
-                    id: UserHandle::new(vec![0x01]),
-                    name: "user@example.com".into(),
-                    display_name: "Test User".into(),
-                },
-                pub_key_cred_params: vec![PublicKeyCredentialParameters {
-                    alg: COSEAlgorithmIdentifier::ES256,
-                    type_: PublicKeyCredentialType::PublicKey,
-                }],
-                exclude_list: None,
-                extensions: None,
-                options: None,
-                pin_uv_auth_param: None,
-                pin_uv_auth_protocol: None,
-                enterprise_attestation: None,
-            })
-            .await
-            .unwrap();
+        let mut credential_public_key;
 
-        assert_eq!(
-            result.auth_data.rp_id_hash,
-            Sha256::digest("example.com".as_bytes())
-        );
-        assert_eq!(result.auth_data.user_present, true);
-        assert_eq!(result.auth_data.user_verified, false);
-        assert_eq!(result.auth_data.sign_count, 1);
+        // Make discoverable credential to discover
+        {
+            let result = authenticator
+                .make_credential(MakeCredentialCommand {
+                    client_data_hash: client_data_hash.clone(),
+                    rp: PublicKeyCredentialRpEntity {
+                        id: RelyingPartyIdentifier::new("example.com".into()),
+                        name: "Example RP".into(),
+                    },
+                    user: PublicKeyCredentialUserEntity {
+                        id: UserHandle::new(vec![0x01]),
+                        name: "user@example.com".into(),
+                        display_name: "Test User".into(),
+                    },
+                    pub_key_cred_params: vec![PublicKeyCredentialParameters {
+                        alg: COSEAlgorithmIdentifier::ES256,
+                        type_: PublicKeyCredentialType::PublicKey,
+                    }],
+                    exclude_list: None,
+                    extensions: None,
+                    options: None,
+                    pin_uv_auth_param: None,
+                    pin_uv_auth_protocol: None,
+                    enterprise_attestation: None,
+                })
+                .await
+                .unwrap();
 
-        let data = result.auth_data.attested_credential_data.clone();
-        let attested_credential: AttestedCredentialData = data.unwrap().first().unwrap().clone();
-        let mut message = result.auth_data.to_bytes();
-        message.extend_from_slice(client_data_hash.as_ref());
-        match result.att_stmt {
-            AttestationStatement::Packed(statement) => {
-                assert_eq!(statement.alg, COSEAlgorithmIdentifier::ES256);
+            assert_eq!(
+                result.auth_data.rp_id_hash,
+                Sha256::digest("example.com".as_bytes())
+            );
+            assert_eq!(result.auth_data.user_present, true);
+            assert_eq!(result.auth_data.user_verified, false);
+            assert_eq!(result.auth_data.sign_count, 1);
 
-                // Verify signature
-                let mut public_key_bytes = Vec::new();
-                public_key_bytes.push(4u8);
-                public_key_bytes.extend_from_slice(&attested_credential.credential_public_key.x);
-                public_key_bytes.extend_from_slice(&attested_credential.credential_public_key.y);
-                let peer_public_key = ring::signature::UnparsedPublicKey::new(
-                    &ring::signature::ECDSA_P256_SHA256_FIXED,
-                    &public_key_bytes,
-                );
-                peer_public_key
-                    .verify(&message, statement.sig.as_ref())
-                    .unwrap();
-            }
-        };
+            let data = result.auth_data.attested_credential_data.clone();
+            let attested_credential: AttestedCredentialData =
+                data.unwrap().first().unwrap().clone();
+            let mut message = result.auth_data.to_bytes();
+            message.extend_from_slice(client_data_hash.as_ref());
+            match result.att_stmt {
+                AttestationStatement::Packed(statement) => {
+                    assert_eq!(statement.alg, COSEAlgorithmIdentifier::ES256);
+
+                    // Store credential public key for verfiying assertions later
+                    credential_public_key = Vec::new();
+                    credential_public_key.push(4u8);
+                    credential_public_key
+                        .extend_from_slice(&attested_credential.credential_public_key.x);
+                    credential_public_key
+                        .extend_from_slice(&attested_credential.credential_public_key.y);
+
+                    // Verify attestation
+                    let x5c = statement.x5c.unwrap();
+                    let peer_public_key = ring::signature::UnparsedPublicKey::new(
+                        &ring::signature::ECDSA_P256_SHA256_FIXED,
+                        &x5c.attestation_certificate,
+                    );
+                    peer_public_key
+                        .verify(&message, statement.sig.as_ref())
+                        .unwrap();
+                }
+            };
+        }
+
+        {
+            let result = authenticator
+                .get_assertion(GetAssertionCommand {
+                    client_data_hash: client_data_hash.clone(),
+                    rp_id: RelyingPartyIdentifier::new("example.com".into()),
+                    allow_list: None,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                result.auth_data.rp_id_hash,
+                Sha256::digest("example.com".as_bytes())
+            );
+            assert_eq!(result.auth_data.user_present, false);
+            assert_eq!(result.auth_data.user_verified, false);
+            assert_eq!(result.auth_data.sign_count, 2);
+
+            // Verify signature
+            let mut message = result.auth_data.to_bytes();
+            message.extend_from_slice(client_data_hash.as_ref());
+            let peer_public_key = ring::signature::UnparsedPublicKey::new(
+                &ring::signature::ECDSA_P256_SHA256_FIXED,
+                &credential_public_key,
+            );
+            peer_public_key
+                .verify(&message, result.signature.as_ref())
+                .unwrap();
+        }
     }
 
     #[tokio::test]
@@ -666,107 +707,6 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn make_discoverable_credential_then_get_assertion_success() {
-        let authenticator = fake_authenticator();
-        let client_data_hash = Sha256::digest(b"client data");
-
-        let mut public_key_bytes;
-
-        // TODO make discoverable credential to discover
-        {
-            let result = authenticator
-                .make_credential(MakeCredentialCommand {
-                    client_data_hash: client_data_hash.clone(),
-                    rp: PublicKeyCredentialRpEntity {
-                        id: RelyingPartyIdentifier::new("example.com".into()),
-                        name: "Example RP".into(),
-                    },
-                    user: PublicKeyCredentialUserEntity {
-                        id: UserHandle::new(vec![0x01]),
-                        name: "user@example.com".into(),
-                        display_name: "Test User".into(),
-                    },
-                    pub_key_cred_params: vec![PublicKeyCredentialParameters {
-                        alg: COSEAlgorithmIdentifier::ES256,
-                        type_: PublicKeyCredentialType::PublicKey,
-                    }],
-                    exclude_list: None,
-                    extensions: None,
-                    options: None,
-                    pin_uv_auth_param: None,
-                    pin_uv_auth_protocol: None,
-                    enterprise_attestation: None,
-                })
-                .await
-                .unwrap();
-
-            assert_eq!(
-                result.auth_data.rp_id_hash,
-                Sha256::digest("example.com".as_bytes())
-            );
-            assert_eq!(result.auth_data.user_present, true);
-            assert_eq!(result.auth_data.user_verified, false);
-            assert_eq!(result.auth_data.sign_count, 1);
-
-            let data = result.auth_data.attested_credential_data.clone();
-            let attested_credential: AttestedCredentialData =
-                data.unwrap().first().unwrap().clone();
-            let mut message = result.auth_data.to_bytes();
-            message.extend_from_slice(client_data_hash.as_ref());
-            match result.att_stmt {
-                AttestationStatement::Packed(statement) => {
-                    assert_eq!(statement.alg, COSEAlgorithmIdentifier::ES256);
-
-                    // Verify signature
-                    public_key_bytes = Vec::new();
-                    public_key_bytes.push(4u8);
-                    public_key_bytes
-                        .extend_from_slice(&attested_credential.credential_public_key.x);
-                    public_key_bytes
-                        .extend_from_slice(&attested_credential.credential_public_key.y);
-                    let peer_public_key = ring::signature::UnparsedPublicKey::new(
-                        &ring::signature::ECDSA_P256_SHA256_FIXED,
-                        &public_key_bytes,
-                    );
-                    peer_public_key
-                        .verify(&message, statement.sig.as_ref())
-                        .unwrap();
-                }
-            };
-        }
-
-        {
-            let result = authenticator
-                .get_assertion(GetAssertionCommand {
-                    client_data_hash: client_data_hash.clone(),
-                    rp_id: RelyingPartyIdentifier::new("example.com".into()),
-                    allow_list: None,
-                })
-                .await
-                .unwrap();
-
-            assert_eq!(
-                result.auth_data.rp_id_hash,
-                Sha256::digest("example.com".as_bytes())
-            );
-            assert_eq!(result.auth_data.user_present, false);
-            assert_eq!(result.auth_data.user_verified, false);
-            assert_eq!(result.auth_data.sign_count, 2);
-
-            // Verify signature
-            let mut message = result.auth_data.to_bytes();
-            message.extend_from_slice(client_data_hash.as_ref());
-            let peer_public_key = ring::signature::UnparsedPublicKey::new(
-                &ring::signature::ECDSA_P256_SHA256_FIXED,
-                &public_key_bytes,
-            );
-            peer_public_key
-                .verify(&message, result.signature.as_ref())
-                .unwrap();
-        }
-    }
-
     const FAKE_AAGUID: Aaguid = Aaguid(uuid!("00000000-0000-0000-0000-000000000000"));
 
     fn fake_authenticator(
@@ -813,25 +753,28 @@ mod tests {
 
     impl InMemorySecretStore {
         fn new() -> SoftwareCryptoStore<InMemorySecretStore> {
+            let rng = ring::rand::SystemRandom::new();
             SoftwareCryptoStore::new(
                 InMemorySecretStore {
                     discoverable: HashMap::new(),
                     keys: HashMap::new(),
                 },
                 FAKE_AAGUID,
+                AttestationSource::generate(&rng).unwrap(),
+                rng,
             )
         }
     }
 
     impl CredentialStorage for InMemorySecretStore {
-        type Error = io::Error;
+        type Error = ring::error::Unspecified;
 
         fn put_discoverable(
             &mut self,
             credential: PrivateKeyCredentialSource,
         ) -> Result<(), Self::Error> {
             self.discoverable
-                .entry(credential.rp_id.clone())
+                .entry(credential.rp.id.clone())
                 .or_default()
                 .insert(
                     credential.user_handle.clone(),
@@ -840,11 +783,11 @@ mod tests {
                             type_: credential.type_.clone(),
                             id: credential.id.clone(),
                         },
-                        protection: CredentialProtection {
+                        protection: KeyProtection {
                             is_user_verification_required: false,
-                            is_user_verification_optional_with_credential_id_list: false,
+                            is_user_verification_optional_with_allow_list: false,
                         },
-                        rp_id: credential.rp_id.clone(),
+                        rp: credential.rp.clone(),
                     },
                 );
             self.keys.insert(credential.id.clone(), credential);

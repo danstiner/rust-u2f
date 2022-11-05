@@ -1,43 +1,18 @@
 use fido2_api::{
     AuthenticatorData, COSEAlgorithmIdentifier, CredentialId, CredentialPublicKey, EllipticCurve,
-    KeyType, PublicKeyCredentialType, RelyingPartyIdentifier, Sha256, Signature, UserHandle,
+    KeyType, PublicKeyCredentialDescriptor, PublicKeyCredentialParameters,
+    PublicKeyCredentialRpEntity, PublicKeyCredentialType, Sha256, Signature, UserHandle,
 };
 use ring::{
-    error, rand,
+    error::Unspecified,
+    rand,
     signature::{self, KeyPair},
 };
 use serde::{Deserialize, Serialize};
 
-fn _test() -> Result<(), ring::error::Unspecified> {
-    // Generate a key pair in PKCS#8 (v2) format.
-    let rng = rand::SystemRandom::new();
-    let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
+use crate::{CredentialHandle, KeyProtection};
 
-    // Normally the application would store the PKCS#8 file persistently. Later
-    // it would read the PKCS#8 file from persistent storage to use it.
-
-    let key_pair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
-    // Sign the message "hello, world".
-    const MESSAGE: &[u8] = b"hello, world";
-    let sig = key_pair.sign(MESSAGE);
-
-    // Normally an application would extract the bytes of the signature and
-    // send them in a protocol message to the peer(s). Here we just get the
-    // public key key directly from the key pair.
-    let peer_public_key_bytes = key_pair.public_key().as_ref();
-
-    // Verify the signature of the message using the public key. Normally the
-    // verifier of the message would parse the inputs to this code out of the
-    // protocol message(s) sent by the signer.
-    let peer_public_key =
-        signature::UnparsedPublicKey::new(&signature::ED25519, peer_public_key_bytes);
-    peer_public_key.verify(MESSAGE, sig.as_ref())?;
-    Ok(())
-}
-
-pub fn generate_credential_id(
-    rng: &dyn rand::SecureRandom,
-) -> Result<CredentialId, error::Unspecified> {
+pub fn generate_credential_id(rng: &dyn rand::SecureRandom) -> Result<CredentialId, Unspecified> {
     let mut buf = [0u8; 16];
     rng.fill(&mut buf)?;
     Ok(CredentialId::new(&buf))
@@ -48,7 +23,7 @@ pub fn generate_credential_id(
 pub struct PublicKeyCredentialSource {
     type_: PublicKeyCredentialType,
     id: CredentialId,
-    rp_id: RelyingPartyIdentifier,
+    rp: PublicKeyCredentialRpEntity,
     user_handle: UserHandle,
     private_key: PrivateKey,
 }
@@ -60,14 +35,10 @@ impl PublicKeyCredentialSource {
         auth_data: &AuthenticatorData,
         client_data_hash: &Sha256,
         rng: &dyn rand::SecureRandom,
-    ) -> Result<Signature, error::Unspecified> {
+    ) -> Result<Signature, Unspecified> {
         let mut message = auth_data.to_bytes();
         message.extend_from_slice(client_data_hash.as_ref());
         self.private_key.sign(rng, &message)
-    }
-
-    pub(crate) fn public_key_document(&self) -> PublicKeyDocument {
-        self.private_key.public_key_document()
     }
 
     pub(crate) fn alg(&self) -> COSEAlgorithmIdentifier {
@@ -80,16 +51,46 @@ impl PublicKeyCredentialSource {
 }
 
 impl TryFrom<PrivateKeyCredentialSource> for PublicKeyCredentialSource {
-    type Error = error::Unspecified;
+    type Error = Unspecified;
 
     fn try_from(pkcs: PrivateKeyCredentialSource) -> Result<Self, Self::Error> {
         Ok(Self {
             type_: pkcs.type_,
             id: pkcs.id,
-            rp_id: pkcs.rp_id,
+            rp: pkcs.rp,
             user_handle: pkcs.user_handle,
             private_key: pkcs.private_key_document.try_into()?,
         })
+    }
+}
+
+/// https://www.w3.org/TR/webauthn-2/#public-key-credential-source
+#[allow(unused)]
+pub struct AttestationSource {
+    private_key: PrivateKey,
+}
+
+impl AttestationSource {
+    pub fn generate(rng: &dyn rand::SecureRandom) -> Result<Self, Unspecified> {
+        Ok(Self {
+            private_key: PrivateKeyDocument::generate_es256(rng)?.try_into()?,
+        })
+    }
+
+    /// https://www.w3.org/TR/webauthn-2/#fig-signature
+    pub fn sign(
+        &self,
+        auth_data: &AuthenticatorData,
+        client_data_hash: &Sha256,
+        rng: &dyn rand::SecureRandom,
+    ) -> Result<Signature, Unspecified> {
+        let mut message = auth_data.to_bytes();
+        message.extend_from_slice(client_data_hash.as_ref());
+        self.private_key.sign(rng, &message)
+    }
+
+    pub(crate) fn public_key_document(&self) -> PublicKeyDocument {
+        self.private_key.public_key_document()
     }
 }
 
@@ -98,11 +99,7 @@ enum PrivateKey {
 }
 
 impl PrivateKey {
-    fn sign(
-        &self,
-        rng: &dyn rand::SecureRandom,
-        message: &[u8],
-    ) -> Result<Signature, error::Unspecified> {
+    fn sign(&self, rng: &dyn rand::SecureRandom, message: &[u8]) -> Result<Signature, Unspecified> {
         match self {
             PrivateKey::ES256(key_pair) => match key_pair.sign(rng, message) {
                 Ok(signature) => Ok(Signature::new(signature.as_ref())),
@@ -148,7 +145,7 @@ impl PrivateKey {
 }
 
 impl TryFrom<PrivateKeyDocument> for PrivateKey {
-    type Error = error::Unspecified;
+    type Error = Unspecified;
 
     fn try_from(document: PrivateKeyDocument) -> Result<Self, Self::Error> {
         Ok(match document {
@@ -174,30 +171,43 @@ impl AsRef<[u8]> for PublicKeyDocument {
 pub struct PrivateKeyCredentialSource {
     pub type_: PublicKeyCredentialType,
     pub id: CredentialId,
-    pub rp_id: RelyingPartyIdentifier,
+    pub rp: PublicKeyCredentialRpEntity,
     pub user_handle: UserHandle,
     private_key_document: PrivateKeyDocument,
 }
 
 impl PrivateKeyCredentialSource {
     pub fn generate(
-        alg: &COSEAlgorithmIdentifier,
-        type_: &PublicKeyCredentialType,
-        rp_id: &RelyingPartyIdentifier,
+        parameters: &PublicKeyCredentialParameters,
+        rp: &PublicKeyCredentialRpEntity,
         user_handle: &UserHandle,
         rng: &dyn rand::SecureRandom,
-    ) -> Result<Self, error::Unspecified> {
-        let private_key_document = match alg {
+    ) -> Result<Self, Unspecified> {
+        let private_key_document = match parameters.alg {
             COSEAlgorithmIdentifier::ES256 => PrivateKeyDocument::generate_es256(rng),
             _ => todo!("error that indicated unsupported algorithm"),
         }?;
         Ok(Self {
-            type_: type_.clone(),
+            type_: parameters.type_.clone(),
             id: generate_credential_id(rng)?,
-            rp_id: rp_id.clone(),
+            rp: rp.clone(),
             user_handle: user_handle.clone(),
             private_key_document,
         })
+    }
+
+    pub fn handle(&self) -> CredentialHandle {
+        CredentialHandle {
+            descriptor: PublicKeyCredentialDescriptor {
+                type_: self.type_.clone(),
+                id: self.id.clone(),
+            },
+            protection: KeyProtection {
+                is_user_verification_required: false,
+                is_user_verification_optional_with_allow_list: false,
+            },
+            rp: self.rp.clone(),
+        }
     }
 }
 
@@ -207,7 +217,7 @@ pub enum PrivateKeyDocument {
 }
 
 impl PrivateKeyDocument {
-    pub fn generate_es256(rng: &dyn rand::SecureRandom) -> Result<Self, error::Unspecified> {
+    pub fn generate_es256(rng: &dyn rand::SecureRandom) -> Result<Self, Unspecified> {
         Ok(Self::ES256 {
             pkcs8_bytes: signature::EcdsaKeyPair::generate_pkcs8(
                 &signature::ECDSA_P256_SHA256_FIXED_SIGNING,
