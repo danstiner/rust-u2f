@@ -25,6 +25,3 @@ uuid = "^1.0"
 
 [dependencies.fido2-api]
 path = "../fido2-api"
-
-[dependencies.u2f-core]
-path = "../u2f-core"

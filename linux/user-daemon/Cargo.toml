@@ -43,9 +43,6 @@ path = "../../fido2-service"
 [dependencies.softu2f-system-daemon]
 path = "../system-daemon"
 
-[dependencies.u2f-core]
-path = "../../u2f-core"
-
 [dev-dependencies]
 ring = "0.16"
 tempdir = "0.3"

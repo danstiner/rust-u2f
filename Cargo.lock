@@ -726,7 +726,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "u2f-core",
  "uuid 1.2.1",
 ]
 
@@ -2067,7 +2066,6 @@ dependencies = [
  "tracing",
  "tracing-journald",
  "tracing-subscriber",
- "u2f-core",
  "uuid 1.2.1",
 ]
 
@@ -2460,30 +2458,6 @@ name = "typenum"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
-
-[[package]]
-name = "u2f-core"
-version = "0.5.0"
-dependencies = [
- "assert_matches",
- "async-trait",
- "base64",
- "byteorder",
- "futures",
- "hex",
- "lazy_static",
- "openssl",
- "pkg-version",
- "rand 0.8.5",
- "ring",
- "serde",
- "serde_derive",
- "subtle",
- "thiserror",
- "tokio",
- "tower",
- "tracing",
-]
 
 [[package]]
 name = "uds_windows"

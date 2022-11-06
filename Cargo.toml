@@ -9,7 +9,6 @@ members = [
     "linux/user-daemon",
     "linux/system-daemon",
     "linux/test-authenticator",
-    "u2f-core",
 ]
 
 # Reduce binary size to reduce RSS at runtime: https://github.com/johnthagen/min-sized-rust
