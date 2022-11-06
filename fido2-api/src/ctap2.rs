@@ -17,13 +17,15 @@ use std::fmt::Debug;
 ///!
 ///! Messages are encoded as CTAP2 canonical CBOR: https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#ctap2-canonical-cbor-encoding-form
 
-/// Messages from the host to authenticator, called "commands" in the CTAP2 protocol
+/// Messages from the host to authenticator, called "commands" in the CTAP2 protocol.
+/// Command parameters are encoded using a CBOR map (CBOR major type 5). The CBOR map MUST be encoded using the definite length variant.
+/// Some commands have optional parameters. Therefore, the length of the parameter map for these commands may vary.
 #[derive(Debug, PartialEq, Eq)]
-// #[cbor(index_only)]
 pub enum Command {
     MakeCredential(MakeCredentialCommand),
     GetAssertion(GetAssertionCommand),
     GetInfo,
+    Unrecognized(u8),
 }
 
 impl<'b, C> minicbor::Decode<'b, C> for Command {
@@ -35,11 +37,7 @@ impl<'b, C> minicbor::Decode<'b, C> for Command {
             0x01 => Ok(Command::MakeCredential(d.decode()?)),
             0x02 => Ok(Command::GetAssertion(d.decode()?)),
             0x04 => Ok(Command::GetInfo),
-            type_ => Err(minicbor::decode::Error::message(format!(
-                "Unrecognized command type {}",
-                type_,
-            ))
-            .at(d.position())),
+            type_ => Ok(Command::Unrecognized(type_)),
         }
     }
 }

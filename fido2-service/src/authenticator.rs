@@ -125,6 +125,8 @@ pub trait CredentialStore {
         rp_id: &RelyingPartyIdentifier,
         allow_list: &[PublicKeyCredentialDescriptor],
     ) -> Result<Vec<CredentialHandle>, Self::Error>;
+
+    fn list_supported_algorithms(&self) -> Vec<PublicKeyCredentialParameters>;
 }
 
 #[async_trait(?Send)]
@@ -197,6 +199,10 @@ impl<W: CredentialStore + ?Sized> CredentialStore for Box<W> {
             .list_specified_credentials(rp_id, credential_list)
             .await
     }
+
+    fn list_supported_algorithms(&self) -> Vec<PublicKeyCredentialParameters> {
+        (**self).list_supported_algorithms()
+    }
 }
 
 /// Service implementing the FIDO authenticator API.
@@ -225,32 +231,6 @@ where
             credentials,
             presence,
             aaguid,
-        }
-    }
-
-    fn get_info_internal(&self) -> GetInfoResponse {
-        GetInfoResponse {
-            versions: vec![String::from("FIDO_2_1")],
-            extensions: None,
-            aaguid: self.aaguid,
-            options: None,
-            max_msg_size: None,
-            pin_uv_auth_protocols: None,
-            max_credential_count_in_list: None,
-            max_credential_id_length: None,
-            transports: None,
-            algorithms: Some(vec![PublicKeyCredentialParameters::es256()]),
-            max_serialized_large_blob_array: None,
-            force_pin_change: None,
-            min_pin_length: None,
-            firmware_version: None,
-            max_cred_blob_len: None,
-            max_rp_ids_for_set_min_pin_length: None,
-            preferred_platform_uv_attempts: None,
-            uv_modality: None,
-            certifications: None,
-            remaining_discoverable_credentials: Some(0),
-            vendor_prototype_config_commands: None,
         }
     }
 }
@@ -526,7 +506,30 @@ where
     }
 
     fn get_info(&self) -> Result<GetInfoResponse, Error> {
-        Ok(self.get_info_internal())
+        let algorithms = self.credentials.list_supported_algorithms();
+        Ok(GetInfoResponse {
+            versions: vec![String::from("FIDO_2_1")],
+            extensions: None,
+            aaguid: self.aaguid,
+            options: None,
+            max_msg_size: None,
+            pin_uv_auth_protocols: None,
+            max_credential_count_in_list: None,
+            max_credential_id_length: None,
+            transports: None,
+            algorithms: Some(algorithms),
+            max_serialized_large_blob_array: None,
+            force_pin_change: None,
+            min_pin_length: None,
+            firmware_version: None,
+            max_cred_blob_len: None,
+            max_rp_ids_for_set_min_pin_length: None,
+            preferred_platform_uv_attempts: None,
+            uv_modality: None,
+            certifications: None,
+            remaining_discoverable_credentials: Some(0),
+            vendor_prototype_config_commands: None,
+        })
     }
 
     async fn wink(&self) -> Result<(), Self::Error> {

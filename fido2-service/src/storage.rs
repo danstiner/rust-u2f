@@ -178,6 +178,10 @@ where
         let this = self.0.lock().unwrap();
         this.store.list_specified(rp_id, credential_list)
     }
+
+    fn list_supported_algorithms(&self) -> Vec<PublicKeyCredentialParameters> {
+        vec![PublicKeyCredentialParameters::es256()]
+    }
 }
 
 #[cfg(test)]

@@ -124,7 +124,7 @@ where
                 Response::GetInfo(info)
             }
             Command::Unrecognized(_) => {
-                return Ok(vec![0x01]); // TODO fix, hacking in invalid command handling
+                todo!("Unrecognized command type")
             }
         };
         trace!("response: {:?}", response);
