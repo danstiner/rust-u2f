@@ -230,7 +230,7 @@ where
 
     fn get_info_internal(&self) -> GetInfoResponse {
         GetInfoResponse {
-            versions: vec![String::from("FIDO_2_1"), String::from("U2F_V2")],
+            versions: vec![String::from("FIDO_2_1")],
             extensions: None,
             aaguid: self.aaguid,
             options: None,

@@ -72,7 +72,7 @@ where
             major: version.version_major,
             minor: version.version_minor,
             build: version.version_build,
-            capabilities: CapabilityFlags::CBOR | wink_capabitlity,
+            capabilities: CapabilityFlags::CBOR | CapabilityFlags::NMSG | wink_capabitlity,
         })
     }
 
@@ -122,6 +122,9 @@ where
             Command::GetInfo => {
                 let info = self.0.get_info()?;
                 Response::GetInfo(info)
+            }
+            Command::Unrecognized(_) => {
+                return Ok(vec![0x01]); // TODO fix, hacking in invalid command handling
             }
         };
         trace!("response: {:?}", response);
