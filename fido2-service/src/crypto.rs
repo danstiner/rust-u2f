@@ -6,7 +6,7 @@ use fido2_api::{
 use ring::{
     error::Unspecified,
     rand,
-    signature::{self, KeyPair},
+    signature::{self, EcdsaKeyPair, KeyPair},
 };
 use serde::{Deserialize, Serialize};
 
@@ -132,17 +132,24 @@ impl PrivateKey {
                     x: [0u8; 32],
                     y: [0u8; 32],
                 };
-                assert_eq!(key_pair.public_key().as_ref()[0], 0x04);
-                public_key
-                    .x
-                    .copy_from_slice(&key_pair.public_key().as_ref()[1..33]);
-                public_key
-                    .y
-                    .copy_from_slice(&key_pair.public_key().as_ref()[33..65]);
+                get_public_numbers(key_pair, &mut public_key.x, &mut public_key.y);
                 public_key
             }
         }
     }
+}
+
+/// Extract public numbers from a EcdsaKeyPair.
+fn get_public_numbers(key_pair: &EcdsaKeyPair, x: &mut [u8; 32], y: &mut [u8; 32]) {
+    // The public key is encoded in uncompressed form using the Octet-String-to-Elliptic-Curve-Point
+    // algorithm in [SEC 1: Elliptic Curve Cryptography, Version 2.0](http://www.secg.org/sec1-v2.pdf).
+    let public = key_pair.public_key().as_ref();
+
+    // Assert uncompressed encoding form
+    assert_eq!(public[0], 0x04);
+
+    x.copy_from_slice(&public[1..33]);
+    y.copy_from_slice(&public[33..65]);
 }
 
 impl TryFrom<PrivateKeyDocument> for PrivateKey {
