@@ -75,11 +75,16 @@ where
         parameters: &PublicKeyCredentialParameters,
         rp: &PublicKeyCredentialRpEntity,
         user_handle: &UserHandle,
+        discoverable: bool,
     ) -> Result<CredentialHandle, Self::Error> {
         let mut this = self.0.lock().unwrap();
         let key = PrivateKeyCredentialSource::generate(parameters, rp, user_handle, &this.rng)?;
         let handle = key.handle();
-        this.store.put_discoverable(key)?;
+        if discoverable {
+            this.store.put_discoverable(key)?;
+        } else {
+            todo!()
+        }
         Ok(handle)
     }
 

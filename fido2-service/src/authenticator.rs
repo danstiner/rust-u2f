@@ -80,6 +80,7 @@ pub trait CredentialStore {
         pub_key_cred_params: &PublicKeyCredentialParameters,
         rp: &PublicKeyCredentialRpEntity,
         user_handle: &UserHandle,
+        discoverable: bool,
     ) -> Result<CredentialHandle, Self::Error>;
 
     async fn attest(
@@ -121,9 +122,10 @@ impl<W: CredentialStore + ?Sized> CredentialStore for Box<W> {
         pub_key_cred_params: &PublicKeyCredentialParameters,
         rp: &PublicKeyCredentialRpEntity,
         user_handle: &UserHandle,
+        discoverable: bool,
     ) -> Result<CredentialHandle, Self::Error> {
         (**self)
-            .make_credential(pub_key_cred_params, rp, user_handle)
+            .make_credential(pub_key_cred_params, rp, user_handle, discoverable)
             .await
     }
 
@@ -271,7 +273,7 @@ where
             extensions: _,
             options,
             pin_uv_auth_param,
-            pin_uv_auth_protocol: _,
+            pin_uv_auth_protocol,
             enterprise_attestation,
         } = cmd;
         debug!(rp = ?rp, user = ?user, "make_credential");
@@ -281,7 +283,7 @@ where
 
         // 1. This authenticator does not support pinUvAuthToken or clientPin features
         // 2. This authenticator does not support pinUvAuthParam or pinUvAuthProtocol features
-        if pin_uv_auth_param.is_some() {
+        if pin_uv_auth_param.is_some() || pin_uv_auth_protocol.is_some() {
             return Err(Error::InvalidParameter);
         }
 
@@ -293,11 +295,16 @@ where
 
         // 4. Initialize both "uv" and "up" as false.
         let user_verified = false;
+        let mut user_present = false;
 
-        // 5. Process options parameter if present, treat any option keys that are not understood as absent.
-        if let Some(_options) = options {
-            // Note: As the specification defines normative behaviours for the "rk", "up", and "uv" option keys, they MUST be understood by all authenticators.
-            // TODO
+        // 5. Process options, treat any option keys that are not understood as absent.
+        // Note: As the specification defines normative behaviours for the "rk", "up", and "uv" option keys, they MUST be understood by all authenticators.
+        let options = options.unwrap_or_default();
+
+        // 5.3. If the "uv" option is true and the authenticator does not support a built-in
+        //      user verification method end the operation by returning CTAP2_ERR_INVALID_OPTION.
+        if options.require_user_verification {
+            return Err(Error::InvalidOption);
         }
 
         // 9. If the enterpriseAttestation parameter is present:
@@ -337,31 +344,33 @@ where
         // 13. If evidence of user interaction was provided as part of Step 11 (i.e., by invoking performBuiltInUv()):
         // TODO evidence of user interaction
         // Set the "up" bit to true in the response.
-        let user_present = self.presence.approve_make_credential(&rp).await?;
+
         // Go to Step 15
         // TODO
 
         // 14. If the "up" option is set to true:
+        if options.require_user_presence {
+            user_present = self.presence.approve_make_credential(&rp).await?;
 
-        // 15. If the extensions parameter is present:
+            if !user_present {
+                return Err(Error::OperationDenied);
+            }
+        }
+
+        // 15. If the extensions parameter is present process any extensions that this
+        //     authenticator supports, ignoring any that it does not support.
         // TODO
 
         // 16. Generate a new credential key pair for the algorithm chosen in step 3
-        // TODO
-
-        // 17. If the "rk" option is set to true:
-        // TODO
-
+        // 17. If the "rk" option is set to true the authenticator MUST create a discoverable credential. Store the user parameter along with the newly-created key pair.
         // 18. Otherwise, if the "rk" option is false: the authenticator MUST create a non-discoverable credential.
-        // TODO
-
         trace!("Make credential");
         let credential = self
             .credentials
-            .make_credential(pk_parameters, &rp, &user.id)
+            .make_credential(pk_parameters, &rp, &user.id, options.discoverable)
             .await?;
 
-        // 19. Generate an attestation statement for the newly-created credential using clientDataHash, taking into account the value of the enterpriseAttestation parameter, if present, as described above in Step 9.
+        // 19. Generate an attestation statement for the newly-created credential using clientDataHash.
         trace!("Generate attestation statement");
         let (auth_data, att_stmt) = self
             .credentials
@@ -501,9 +510,9 @@ where
 mod tests {
     use async_trait::async_trait;
     use fido2_api::{
-        AttestationStatement, AttestedCredentialData, CredentialId, PublicKeyCredentialRpEntity,
-        PublicKeyCredentialType, PublicKeyCredentialUserEntity, RelyingPartyIdentifier, Sha256,
-        UserHandle,
+        AttestationStatement, AttestedCredentialData, CredentialId, MakeCredentialOptions,
+        PublicKeyCredentialRpEntity, PublicKeyCredentialType, PublicKeyCredentialUserEntity,
+        RelyingPartyIdentifier, Sha256, UserHandle,
     };
     use std::collections::HashMap;
     use std::io;
@@ -563,7 +572,11 @@ mod tests {
                     }],
                     exclude_list: None,
                     extensions: None,
-                    options: None,
+                    options: Some(MakeCredentialOptions {
+                        discoverable: true,
+                        require_user_presence: true,
+                        require_user_verification: false,
+                    }),
                     pin_uv_auth_param: None,
                     pin_uv_auth_protocol: None,
                     enterprise_attestation: None,

@@ -46,11 +46,17 @@ pub enum Error {
     #[error("Invalid parameter")]
     InvalidParameter,
 
+    #[error("Invalid option")]
+    InvalidOption,
+
     #[error("Unspecified")]
     Unspecified,
 
     #[error("No credentials")]
     NoCredentials,
+
+    #[error("Operation Denined")]
+    OperationDenied,
 
     #[error(transparent)]
     Other(Box<dyn std::error::Error>),
@@ -61,9 +67,11 @@ impl From<Error> for StatusCode {
         match error {
             Error::Io(_) => StatusCode::Other,
             Error::UnsupportedAlgorithm => StatusCode::UnsupportedAlgorithm,
+            Error::InvalidOption => StatusCode::InvalidOption,
             Error::InvalidParameter => StatusCode::InvalidParameter,
             Error::Unspecified => StatusCode::Other,
             Error::NoCredentials => StatusCode::NoCredentials,
+            Error::OperationDenied => StatusCode::OperationDenied,
             Error::Other(_) => StatusCode::Other,
         }
     }
