@@ -240,3 +240,49 @@ impl PrivateKeyDocument {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn credential_public_key() {
+        let rng = ring::rand::SystemRandom::new();
+        let private_key: PrivateKey = PrivateKeyDocument::generate_es256(&rng)
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        let public_key = private_key.credential_public_key();
+
+        let mut public_key_bytes = Vec::new();
+        public_key_bytes.push(0x04); // uncompressed
+        public_key_bytes.extend_from_slice(&public_key.x);
+        public_key_bytes.extend_from_slice(&public_key.y);
+        assert_eq!(
+            &public_key_bytes,
+            private_key.public_key_document().as_ref()
+        );
+
+        // Assert the public key can be used to verify a signature from the private key
+        let message = b"message";
+
+        let mut public_key_bytes = Vec::new();
+        public_key_bytes.push(0x04); // uncompressed
+        public_key_bytes.extend_from_slice(&public_key.x);
+        public_key_bytes.extend_from_slice(&public_key.y);
+        assert_eq!(
+            &public_key_bytes,
+            private_key.public_key_document().as_ref()
+        );
+        let unparsed_public_key = ring::signature::UnparsedPublicKey::new(
+            &ring::signature::ECDSA_P256_SHA256_ASN1,
+            &public_key_bytes,
+        );
+
+        let signature = private_key.sign(&rng, message).unwrap();
+        assert!(unparsed_public_key
+            .verify(message, signature.as_ref())
+            .is_ok());
+    }
+}
