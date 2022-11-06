@@ -8,7 +8,7 @@ use fido2_api::{
     Aaguid, AttestationCertificate, AttestationStatement, AttestedCredentialData,
     AuthenticatorData, PackedAttestationStatement, PublicKeyCredentialDescriptor,
     PublicKeyCredentialParameters, PublicKeyCredentialRpEntity, RelyingPartyIdentifier, Sha256,
-    UserHandle,
+    Signature, UserHandle,
 };
 use std::sync::Mutex;
 
@@ -19,6 +19,8 @@ pub trait CredentialStorage {
         &mut self,
         credential: PrivateKeyCredentialSource,
     ) -> Result<(), Self::Error>;
+
+    fn put_specific(&mut self, credential: PrivateKeyCredentialSource) -> Result<(), Self::Error>;
 
     fn get(
         &self,
@@ -83,7 +85,7 @@ where
         if discoverable {
             this.store.put_discoverable(key)?;
         } else {
-            todo!()
+            this.store.put_specific(key)?;
         }
         Ok(handle)
     }
@@ -136,17 +138,17 @@ where
 
     async fn assert(
         &self,
-        rp_id: &RelyingPartyIdentifier,
+        _rp_id: &RelyingPartyIdentifier,
         credential_handle: &CredentialHandle,
         client_data_hash: &Sha256,
         user_present: bool,
         user_verified: bool,
-    ) -> Result<(AuthenticatorData, fido2_api::Signature), Self::Error> {
+    ) -> Result<(AuthenticatorData, Signature), Self::Error> {
         let this = self.0.lock().unwrap();
         if let Some(key) = this.store.get(credential_handle)? {
             let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
-                rp_id_hash: Sha256::digest(rp_id.as_bytes()),
+                rp_id_hash: Sha256::digest(credential_handle.rp.id.as_bytes()),
                 user_present,
                 user_verified,
                 sign_count: 2,

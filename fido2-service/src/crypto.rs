@@ -132,6 +132,7 @@ impl PrivateKey {
                     x: [0u8; 32],
                     y: [0u8; 32],
                 };
+                assert_eq!(key_pair.public_key().as_ref()[0], 0x04);
                 public_key
                     .x
                     .copy_from_slice(&key_pair.public_key().as_ref()[1..33]);
@@ -151,7 +152,7 @@ impl TryFrom<PrivateKeyDocument> for PrivateKey {
         Ok(match document {
             PrivateKeyDocument::ES256 { pkcs8_bytes } => {
                 PrivateKey::ES256(signature::EcdsaKeyPair::from_pkcs8(
-                    &signature::ECDSA_P256_SHA256_FIXED_SIGNING,
+                    &signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                     &pkcs8_bytes,
                 )?)
             }
@@ -224,7 +225,7 @@ impl PrivateKeyDocument {
     pub fn generate_es256(rng: &dyn rand::SecureRandom) -> Result<Self, Unspecified> {
         Ok(Self::ES256 {
             pkcs8_bytes: signature::EcdsaKeyPair::generate_pkcs8(
-                &signature::ECDSA_P256_SHA256_FIXED_SIGNING,
+                &signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                 rng,
             )?
             .as_ref()

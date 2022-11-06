@@ -61,6 +61,23 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
         Ok(())
     }
 
+    fn put_specific(
+        &mut self,
+        credential: fido2_service::PrivateKeyCredentialSource,
+    ) -> Result<(), Self::Error> {
+        let collection = self.collection()?;
+
+        let secret = serde_json::to_string(&credential)?;
+        let _item = collection.create_item(
+            &format!("FIDO2 credential for {}", credential.rp),
+            Attributes::new_specific_credential(&credential).get(),
+            secret.as_bytes(),
+            true,
+            "application/json",
+        )?;
+        Ok(())
+    }
+
     fn get(
         &self,
         credential_handle: &CredentialHandle,
@@ -253,6 +270,7 @@ impl Attributes {
     fn discoverable_search(rp_id: &RelyingPartyIdentifier) -> Self {
         let mut attributes = Attributes::base();
         attributes.insert("rp_id", rp_id.to_string());
+        attributes.insert("discoverable", "true".to_string());
         attributes
     }
 
@@ -260,11 +278,28 @@ impl Attributes {
         let mut attributes = Attributes::base();
         attributes.insert("rp_id", rp_id.to_string());
         attributes.insert("user_handle", base64::encode(user_handle.as_bytes()));
+        attributes.insert("discoverable", "true".to_string());
         attributes
     }
 
     fn handle_search(handle: &CredentialHandle) -> Self {
-        Attributes::specific_search(&handle.rp.id, &handle.descriptor)
+        let mut attributes = Attributes::base();
+        attributes.insert("rp_id", handle.rp.id.to_string());
+        attributes.insert(
+            "credential_id",
+            base64::encode(handle.descriptor.id.as_bytes()),
+        );
+        attributes.insert("credential_type", handle.descriptor.type_.to_string());
+        attributes
+    }
+
+    fn new_specific_credential(credential: &PrivateKeyCredentialSource) -> Self {
+        let mut attributes = Self::specific_search(&credential.rp.id, &credential.descriptor());
+        attributes.insert(
+            "user_handle",
+            base64::encode(credential.user_handle.as_bytes()),
+        );
+        attributes
     }
 
     fn specific_search(
@@ -275,6 +310,7 @@ impl Attributes {
         attributes.insert("rp_id", rp_id.to_string());
         attributes.insert("credential_id", base64::encode(descriptor.id.as_bytes()));
         attributes.insert("credential_type", descriptor.type_.to_string());
+        attributes.insert("discoverable", "false".to_string());
         attributes
     }
 

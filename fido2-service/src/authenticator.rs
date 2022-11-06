@@ -28,10 +28,17 @@ use crate::Error;
 #[async_trait(?Send)]
 pub trait UserPresence {
     type Error;
+
     async fn approve_make_credential(
         &self,
         rp: &PublicKeyCredentialRpEntity,
     ) -> Result<bool, Self::Error>;
+
+    async fn approve_get_assertion(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+    ) -> Result<bool, Self::Error>;
+
     async fn wink(&self) -> Result<(), Self::Error>;
 }
 
@@ -44,6 +51,13 @@ impl<U: UserPresence + ?Sized> UserPresence for Box<U> {
         rp: &PublicKeyCredentialRpEntity,
     ) -> Result<bool, Self::Error> {
         (**self).approve_make_credential(rp).await
+    }
+
+    async fn approve_get_assertion(
+        &self,
+        rp_id: &RelyingPartyIdentifier,
+    ) -> Result<bool, Self::Error> {
+        (**self).approve_get_assertion(rp_id).await
     }
 
     async fn wink(&self) -> Result<(), Self::Error> {
@@ -404,8 +418,10 @@ where
         // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-getAssert-authnr-alg
 
         // 3. Create a new authenticatorGetAssertion response structure and initialize both its "uv" bit and "up" bit as false.
-        let user_present = false;
+        let mut user_present = false;
         let user_verified = false;
+
+        // 4. If the options parameter is present, process all option keys and values present in the parameter. Treat any option keys that are not understood as absent.
 
         // 7. Locate all credentials that are eligible for retrieval.
         let located_credentials = if let Some(ref allow_list) = allow_list {
@@ -459,13 +475,26 @@ where
             return Err(Error::NoCredentials);
         }
 
+        // 9. If the "up" option is set to true or not present:
+        if true {
+            user_present = self.presence.approve_get_assertion(&rp_id).await?;
+
+            if !user_present {
+                return Err(Error::OperationDenied);
+            }
+        }
+
         let credential_handle = if allow_list.is_some() {
             // 11. If the allowList parameter is present select any credential from the applicable credentials list
             info!("Selecting credential from allow list");
             applicable_credentials.into_iter().next().unwrap()
         }
         // 12. If allowList is not present, order the applicable credentials by create time, most recent first
-        else if !user_verified && !user_present {
+        else if applicable_credentials.len() == 1 {
+            // 12.1.If numberOfCredentials is one: Select that credential.
+            trace!("Selelecting single applicable credential");
+            applicable_credentials.into_iter().next().unwrap()
+        } else if !user_verified && !user_present {
             // 12.2. If the authenticator does not have a display, or the authenticator does have a display and the "uv" and "up" options are false:
             // 12.2.1. Remember the authenticatorGetAssertion parameters.
             // 12.2.2. Create a credential counter (credentialCounter) and set it to 1. This counter signifies the next credential to be returned by the authenticator, assuming zero-based indexing.
@@ -612,7 +641,7 @@ mod tests {
                     // Verify attestation
                     let x5c = statement.x5c.unwrap();
                     let peer_public_key = ring::signature::UnparsedPublicKey::new(
-                        &ring::signature::ECDSA_P256_SHA256_FIXED,
+                        &ring::signature::ECDSA_P256_SHA256_ASN1,
                         &x5c.attestation_certificate,
                     );
                     peer_public_key
@@ -636,7 +665,7 @@ mod tests {
                 result.auth_data.rp_id_hash,
                 Sha256::digest("example.com".as_bytes())
             );
-            assert_eq!(result.auth_data.user_present, false);
+            assert_eq!(result.auth_data.user_present, true);
             assert_eq!(result.auth_data.user_verified, false);
             assert_eq!(result.auth_data.sign_count, 2);
 
@@ -644,7 +673,7 @@ mod tests {
             let mut message = result.auth_data.to_bytes();
             message.extend_from_slice(client_data_hash.as_ref());
             let peer_public_key = ring::signature::UnparsedPublicKey::new(
-                &ring::signature::ECDSA_P256_SHA256_FIXED,
+                &ring::signature::ECDSA_P256_SHA256_ASN1,
                 &credential_public_key,
             );
             peer_public_key
@@ -732,13 +761,15 @@ mod tests {
     }
 
     struct FakeUserPresence {
-        pub should_make_credential: bool,
+        pub allow_make_credential: bool,
+        pub allow_get_assertion: bool,
     }
 
     impl FakeUserPresence {
         fn always_approve() -> FakeUserPresence {
             FakeUserPresence {
-                should_make_credential: true,
+                allow_make_credential: true,
+                allow_get_assertion: true,
             }
         }
     }
@@ -751,7 +782,14 @@ mod tests {
             &self,
             _: &PublicKeyCredentialRpEntity,
         ) -> Result<bool, Self::Error> {
-            Ok(self.should_make_credential)
+            Ok(self.allow_make_credential)
+        }
+
+        async fn approve_get_assertion(
+            &self,
+            _: &RelyingPartyIdentifier,
+        ) -> Result<bool, Self::Error> {
+            Ok(self.allow_get_assertion)
         }
 
         async fn wink(&self) -> Result<(), Self::Error> {
@@ -803,6 +841,14 @@ mod tests {
                         rp: credential.rp.clone(),
                     },
                 );
+            self.keys.insert(credential.id.clone(), credential);
+            Ok(())
+        }
+
+        fn put_specific(
+            &mut self,
+            credential: PrivateKeyCredentialSource,
+        ) -> Result<(), Self::Error> {
             self.keys.insert(credential.id.clone(), credential);
             Ok(())
         }
