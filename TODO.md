@@ -1,3 +1,10 @@
 TODO
-- [ ] kill uhid device when connection from userspace dies
-- [ ] handle bogus app id's by requiring an approval per spec
+- [ ] Rename to reflect FIDO2 support
+- [ ] Backwards compatability with U2F protocol and rust-u2f generated keys
+- [ ] Support hmac-secret extension as required for FIDO_2_1 version authenticators
+- [ ] Include the clientPin option ID or the uv option ID (or both), with the value true, in the authenticatorGetInfo response’s options member if the rk option ID has the value true, as required for FIDO_2_1 version authenticators. Also include the pinUvAuthToken option ID with the value true in the authenticatorGetInfo response’s options member if either the clientPin or uv option IDs have the value true. Also include an array element with the value 2 in the authenticatorGetInfo response’s pinUvAuthProtocols member (i.e. support PIN/UV auth protocol two) if it includes any values at all.
+- [ ] Either include the credMgmt option ID with the value true in the authenticatorGetInfo response’s options member, or support all the same functionality via a built-in UI, if the rk option ID has the value true. as required for FIDO_2_1 version authenticators
+- [ ] Destroy uhid device when connection from userspace dies
+- [ ] Handle bogus U2F app id's by requiring an approval per spec
+- [ ] Generate self-signed x509 attestation certificates with https://docs.rs/rcgen/0.10.0/rcgen/index.html or https://docs.rs/x509-certificate/latest/x509_certificate/index.html
+- [ ] Support TPM2 key store using https://docs.rs/tss-esapi/7.1.0/tss_esapi/
