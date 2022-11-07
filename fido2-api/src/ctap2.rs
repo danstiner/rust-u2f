@@ -247,11 +247,7 @@ impl<C> minicbor::Encode<C> for MakeCredentialResponse {
         e.encode(&self.auth_data)?;
 
         e.u8(0x03)?;
-        match &self.att_stmt {
-            AttestationStatement::Packed(statement) => {
-                e.encode(statement)?;
-            }
-        }
+        e.encode(&self.att_stmt)?;
 
         Ok(())
     }

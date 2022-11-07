@@ -41,10 +41,6 @@ impl PublicKeyCredentialSource {
         self.private_key.sign(rng, &message)
     }
 
-    pub(crate) fn alg(&self) -> COSEAlgorithmIdentifier {
-        self.private_key.alg()
-    }
-
     pub(crate) fn credential_public_key(&self) -> CredentialPublicKey {
         self.private_key.credential_public_key()
     }
@@ -88,10 +84,6 @@ impl AttestationSource {
         message.extend_from_slice(client_data_hash.as_ref());
         self.private_key.sign(rng, &message)
     }
-
-    pub(crate) fn public_key_document(&self) -> PublicKeyDocument {
-        self.private_key.public_key_document()
-    }
 }
 
 enum PrivateKey {
@@ -108,6 +100,7 @@ impl PrivateKey {
         }
     }
 
+    #[cfg(test)]
     fn public_key_document(&self) -> PublicKeyDocument {
         match self {
             PrivateKey::ES256(key_pair) => {

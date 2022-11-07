@@ -1,14 +1,13 @@
 use crate::{
     authenticator::CredentialHandle,
-    crypto::{AttestationSource, PrivateKeyCredentialSource, PublicKeyCredentialSource},
+    crypto::{PrivateKeyCredentialSource, PublicKeyCredentialSource},
     CredentialStore,
 };
 use async_trait::async_trait;
 use fido2_api::{
-    Aaguid, AttestationCertificate, AttestationStatement, AttestedCredentialData,
-    AuthenticatorData, PackedAttestationStatement, PublicKeyCredentialDescriptor,
-    PublicKeyCredentialParameters, PublicKeyCredentialRpEntity, RelyingPartyIdentifier, Sha256,
-    Signature, UserHandle,
+    Aaguid, AttestationStatement, AttestedCredentialData, AuthenticatorData,
+    PublicKeyCredentialDescriptor, PublicKeyCredentialParameters, PublicKeyCredentialRpEntity,
+    RelyingPartyIdentifier, Sha256, Signature, UserHandle,
 };
 use std::sync::Mutex;
 
@@ -42,18 +41,8 @@ pub trait CredentialStorage {
 pub struct SoftwareCryptoStore<S>(Mutex<Data<S>>);
 
 impl<S> SoftwareCryptoStore<S> {
-    pub fn new(
-        store: S,
-        aaguid: Aaguid,
-        attestation_source: AttestationSource,
-        rng: ring::rand::SystemRandom,
-    ) -> Self {
-        Self(Mutex::new(Data {
-            aaguid,
-            rng,
-            store,
-            attestation_source,
-        }))
+    pub fn new(store: S, aaguid: Aaguid, rng: ring::rand::SystemRandom) -> Self {
+        Self(Mutex::new(Data { aaguid, rng, store }))
     }
 }
 
@@ -61,7 +50,6 @@ pub(crate) struct Data<S> {
     aaguid: Aaguid,
     rng: ring::rand::SystemRandom,
     store: S,
-    attestation_source: AttestationSource,
 }
 
 #[async_trait(?Send)]
@@ -94,7 +82,7 @@ where
         &self,
         rp_id: &fido2_api::RelyingPartyIdentifier,
         credential_handle: &CredentialHandle,
-        client_data_hash: &fido2_api::Sha256,
+        _client_data_hash: &fido2_api::Sha256,
         user_present: bool,
         user_verified: bool,
     ) -> Result<(AuthenticatorData, AttestationStatement), Self::Error> {
@@ -112,25 +100,7 @@ where
                     credential_public_key: key.credential_public_key(),
                 }]),
             };
-            let signature = this
-                .attestation_source
-                .sign(&auth_data, client_data_hash, &this.rng)
-                .unwrap();
-            Ok((
-                auth_data,
-                AttestationStatement::Packed(PackedAttestationStatement {
-                    alg: key.alg(),
-                    sig: signature,
-                    x5c: Some(AttestationCertificate {
-                        attestation_certificate: this
-                            .attestation_source
-                            .public_key_document()
-                            .as_ref()
-                            .to_vec(),
-                        ca_certificate_chain: vec![],
-                    }),
-                }),
-            ))
+            Ok((auth_data, AttestationStatement::None))
         } else {
             todo!("error")
         }

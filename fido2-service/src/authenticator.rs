@@ -552,7 +552,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        crypto::{AttestationSource, PrivateKeyCredentialSource},
+        crypto::PrivateKeyCredentialSource,
         storage::{CredentialStorage, SoftwareCryptoStore},
     };
 
@@ -627,19 +627,19 @@ mod tests {
             let data = result.auth_data.attested_credential_data.clone();
             let attested_credential: AttestedCredentialData =
                 data.unwrap().first().unwrap().clone();
+
+            // Store credential public key for verfiying assertions later
+            credential_public_key = Vec::new();
+            credential_public_key.push(4u8);
+            credential_public_key.extend_from_slice(&attested_credential.credential_public_key.x);
+            credential_public_key.extend_from_slice(&attested_credential.credential_public_key.y);
+
+            // Verify attestation
             let mut message = result.auth_data.to_bytes();
             message.extend_from_slice(client_data_hash.as_ref());
             match result.att_stmt {
                 AttestationStatement::Packed(statement) => {
                     assert_eq!(statement.alg, COSEAlgorithmIdentifier::ES256);
-
-                    // Store credential public key for verfiying assertions later
-                    credential_public_key = Vec::new();
-                    credential_public_key.push(4u8);
-                    credential_public_key
-                        .extend_from_slice(&attested_credential.credential_public_key.x);
-                    credential_public_key
-                        .extend_from_slice(&attested_credential.credential_public_key.y);
 
                     // Verify attestation
                     let x5c = statement.x5c.unwrap();
@@ -651,6 +651,7 @@ mod tests {
                         .verify(&message, statement.sig.as_ref())
                         .unwrap();
                 }
+                AttestationStatement::None => {}
             };
         }
 
@@ -814,7 +815,6 @@ mod tests {
                     keys: HashMap::new(),
                 },
                 FAKE_AAGUID,
-                AttestationSource::generate(&rng).unwrap(),
                 rng,
             )
         }

@@ -650,13 +650,31 @@ impl<C> Encode<C> for EllipticCurve {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AttestationStatement {
+    /// https://www.w3.org/TR/webauthn-2/#sctn-packed-attestation
     Packed(PackedAttestationStatement),
+
+    /// https://www.w3.org/TR/webauthn-2/#sctn-none-attestation
+    None,
 }
 
 impl AttestationStatement {
     pub fn format(&self) -> &str {
         match self {
             AttestationStatement::Packed(_) => "packed",
+            AttestationStatement::None => "none",
+        }
+    }
+}
+
+impl<C> Encode<C> for AttestationStatement {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        match self {
+            AttestationStatement::Packed(statement) => e.encode(statement)?.ok(),
+            AttestationStatement::None => e.map(0)?.ok(),
         }
     }
 }

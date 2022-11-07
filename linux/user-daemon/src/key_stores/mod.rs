@@ -1,5 +1,5 @@
 use crate::AAGUID;
-use fido2_service::{AttestationSource, CredentialStore, Unspecified};
+use fido2_service::{CredentialStore, Unspecified};
 use thiserror::Error;
 use tracing::info;
 
@@ -35,7 +35,6 @@ pub fn build() -> Result<Box<dyn CredentialStore<Error = Error>>, Error> {
     Ok(Box::new(fido2_service::SoftwareCryptoStore::new(
         keyring::Keyring::new()?,
         AAGUID,
-        AttestationSource::generate(&rng)?, // TODO store attestation instead of regenerating
         rng,
     )))
 }
