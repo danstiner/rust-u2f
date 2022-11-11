@@ -1,8 +1,9 @@
 use super::Error;
 use async_trait::async_trait;
-use fido2_api::{PublicKeyCredentialDescriptor, RelyingPartyIdentifier, UserHandle};
+use fido2_api::{PublicKeyCredentialDescriptor, RelyingPartyIdentifier, Sha256, UserHandle};
 use fido2_service::{CredentialHandle, PrivateKeyCredentialSource};
 use secret_service::EncryptionType;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -26,7 +27,9 @@ impl Keyring<secret_service::SecretService<'_>> {
 impl<S: SecretService> Keyring<S> {
     fn collection(&self) -> Result<<S as SecretService>::Collection<'_>, Error> {
         let collection = self.service.get_default_collection()?;
-        unlock_if_locked(&collection)?;
+        if collection.is_locked()? {
+            collection.unlock()?;
+        }
         Ok(collection)
     }
 }
@@ -81,15 +84,31 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
     fn get(
         &self,
         credential_handle: &CredentialHandle,
-    ) -> Result<Option<fido2_service::PrivateKeyCredentialSource>, Self::Error> {
+    ) -> Result<Option<PrivateKeyCredentialSource>, Self::Error> {
         let collection = self.collection()?;
         let item = collection.find_item(Attributes::handle_search(credential_handle))?;
         if let Some(item) = item {
             let secret = item.get_secret()?;
-            Ok(Some(serde_json::from_slice(&secret)?))
-        } else {
-            Ok(None)
+            return Ok(Some(serde_json::from_slice(&secret)?));
         }
+
+        // Legacy U2F support
+        let item = collection.find_item(Attributes::u2f_handle_search(credential_handle))?;
+        if let Some(item) = item {
+            let secret = item.get_secret()?;
+            let secret: LegacyU2FSecret = serde_json::from_slice(&secret)?;
+            return Ok(Some(todo!(
+                "PrivateKeyCredentialSource 
+                type_: todo!(),
+                id: todo!(\"secret.application_key.handle\"),
+                rp: todo!(),
+                user_handle: UserHandle::new(todo!()),
+                private_key_document: todo!(),
+            "
+            )));
+        }
+
+        Ok(None)
     }
 
     fn list_discoverable(
@@ -314,6 +333,20 @@ impl Attributes {
         attributes
     }
 
+    fn u2f_handle_search(handle: &CredentialHandle) -> Self {
+        let mut attributes = Attributes::new();
+        attributes.insert("application", "com.github.danstiner.rust-u2f".to_string());
+        attributes.insert(
+            "u2f_app_id_hash",
+            base64::encode(Sha256::digest(handle.rp.id.as_bytes()).as_ref()),
+        );
+        attributes.insert(
+            "u2f_key_handle",
+            base64::encode(handle.descriptor.id.as_bytes()),
+        );
+        attributes
+    }
+
     fn base() -> Self {
         let mut attributes = Attributes::new();
         attributes.insert("application", "com.github.danstiner.rust-fido".to_string());
@@ -326,11 +359,17 @@ impl Attributes {
     }
 }
 
-fn unlock_if_locked<C: Collection>(collection: &C) -> Result<(), Error> {
-    if collection.is_locked()? {
-        collection.unlock()?;
-    }
-    Ok(())
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct LegacyU2FSecret {
+    application_key: ApplicationKey,
+    counter: u32,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ApplicationKey {
+    // pub application: AppId,
+    // pub handle: KeyHandle,
+    // key: U2FPrivateKeyDocument,
 }
 
 #[cfg(test)]
@@ -435,6 +474,60 @@ mod tests {
         assert!(result.is_some());
     }
 
+    /// If an authenticator supports both CTAP1/U2F and CTAP2 then a credential created using
+    /// CTAP1/U2F MUST be assertable over CTAP2. (Credentials created over CTAP1/U2F MUST NOT be discoverable credentials though.)
+    /// Using the CTAP2 authenticatorGetAssertion Command with CTAP1/U2F authenticators, this means
+    /// that an authenticator MUST accept, over CTAP2, the credential ID of a credential that was
+    /// created using U2F where the application parameter at the time of creation was the
+    /// SHA-256 digest of the RP ID that is given at assertion time.
+    #[test]
+    fn get_with_preexisting_u2f_credential() {
+        let mut keyring = keyring();
+
+        let u2f_key_handle_str = "9Fyey17JWZQ9XR6OFgDEpkJ0cDAImCQeyGbDA1CWboo+qeu9wIIlA8ilqSGMDMd+VqmRTkDUqF2+aYJqjahtr2rgNqC8BnCfYbwYk/NtggzOqiShdqmGh8GEq5cnqtcxAcIaEb1wX4uEoYiRHxrvjo3N8B97arLemjnq0Dii/3nFjzuSIkGzTAF5VRzzstop8WMFWxBVc2Vkv+6wdx7AG+QSo8kt3EtIuIr9m5neXNKHJEHdsaCgjvTqkVwpUXo6sGe+pznO8rhviRDQLCuq1LkSTpHMXqa6AwT+E6UDLVIDfeF9uRVGG2epzEAc54xmNSNDNoB6FcgcmXJLl26g";
+        let credential_id = base64::decode(u2f_key_handle_str).unwrap();
+
+        let mut attributes = HashMap::new();
+        attributes.insert(
+            "application".to_string(),
+            "com.github.danstiner.rust-u2f".to_string(),
+        );
+        attributes.insert("u2f_key_handle".to_string(), u2f_key_handle_str.to_string());
+        attributes.insert("u2f_app_id".to_string(), "demo.yubico.com".to_string());
+        attributes.insert("times_used".to_string(), "1".to_string());
+        attributes.insert(
+            "u2f_app_id_hash".to_string(),
+            "xGzvgq0bVGR3WR0Aiwh1nsPm0uy085R0v+ppaZJdA7c=".to_string(),
+        );
+        attributes.insert("date_registered".to_string(), "1652250189".to_string());
+
+        keyring.service.add_item(ItemData {
+            label: "Universal 2nd Factor token for demo.yubico.com".to_string(),
+            secret: b"{\"application_key\":{\"application\":\"xGzvgq0bVGR3WR0Aiwh1nsPm0application_keyuy085R0v+ppaZJdA7c=\",\"handle\":\"9Fyey17JWZQ9XR6OFgDEpkJ0cDAImCQeyGbDA1CWboo+qeu9wIIlA8ilqSGMDMd+VqmRTkDUqF2+aYJqjahtr2rgNqC8BnCfYbwYk/NtggzOqiShdqmGh8GEq5cnqtcxAcIaEb1wX4uEoYiRHxrvjo3N8B97arLemjnq0Dii/3nFjzuSIkGzTAF5VRzzstop8WMFWxBVc2Vkv+6wdx7AG+QSo8kt3EtIuIr9m5neXNKHJEHdsaCgjvTqkVwpUXo6sGe+pznO8rhviRDQLCuq1LkSTpHMXqa6AwT+E6UDLVIDfeF9uRVGG2epzEAc54xmNSNDNoB6FcgcmXJLl26g\",\"key\":\"LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUZGdlJsTVBIZ04vMU5JWGNzMzNKbDgyTVQxYmxTZ1N4Qk9GNndhaHVsaURvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFcklxMktvNGRYZmpHWmNpYzJjZ0NnYm9vUWVRWUM0UHJSWEMvQ2duUVhoL1FNUTNKQzcxeQpIVzZYMUNtU0VnbWhWL3NxQUhxN1c5NGVFOHBQUi9mOXBBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=\"},\"counter\":1}".to_vec(),
+            content_type: "application/json".to_string(),
+            attributes,
+            created: UNIX_EPOCH + Duration::from_secs(1_000_000_000),
+            deleted: false,
+        });
+
+        let key_handle = CredentialHandle {
+            descriptor: PublicKeyCredentialDescriptor {
+                type_: PublicKeyCredentialType::PublicKey,
+                id: CredentialId::new(&credential_id),
+            },
+            protection: KeyProtection {
+                is_user_verification_required: false,
+                is_user_verification_optional_with_allow_list: false,
+            },
+            rp: PublicKeyCredentialRpEntity {
+                id: RelyingPartyIdentifier::new("demo.yubico.com".to_string()),
+                name: "YubicoDemo".to_string(),
+            },
+        };
+
+        assert!(keyring.get(&key_handle).unwrap().is_some());
+    }
+
     lazy_static! {
         static ref PARAMETERS: PublicKeyCredentialParameters = PublicKeyCredentialParameters {
             alg: COSEAlgorithmIdentifier::ES256,
@@ -463,6 +556,10 @@ mod tests {
     impl FakeSecretService {
         fn new() -> Self {
             Self(RefCell::new(vec![]))
+        }
+
+        fn add_item(&mut self, item: ItemData) {
+            self.0.borrow_mut().push(Rc::new(RefCell::new(item)));
         }
     }
 

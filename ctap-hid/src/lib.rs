@@ -5,7 +5,7 @@ mod protocol;
 mod request;
 mod response;
 mod server;
-mod u2f;
+pub mod u2f;
 
 use bitflags::bitflags;
 use lazy_static::lazy_static;
