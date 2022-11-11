@@ -81,18 +81,20 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
         Ok(())
     }
 
-    fn get(
+    fn get_and_increment_sign_count(
         &self,
         credential_handle: &CredentialHandle,
     ) -> Result<Option<PrivateKeyCredentialSource>, Self::Error> {
         let collection = self.collection()?;
+
+        // Try to find an item based on the credential handle
         let item = collection.find_item(Attributes::handle_search(credential_handle))?;
         if let Some(item) = item {
             let secret = item.get_secret()?;
             return Ok(Some(serde_json::from_slice(&secret)?));
         }
 
-        // Legacy U2F support
+        // Fallback for legacy U2F registrations done with rust-u2f
         let item = collection.find_item(Attributes::u2f_handle_search(credential_handle))?;
         if let Some(item) = item {
             let secret = item.get_secret()?;
@@ -400,7 +402,10 @@ mod tests {
             rp: RP.clone(),
         };
 
-        assert!(keyring.get(&key_handle).unwrap().is_none());
+        assert!(keyring
+            .get_and_increment_sign_count(&key_handle)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -470,7 +475,7 @@ mod tests {
 
         store.put_discoverable(key.clone()).unwrap();
 
-        let result = store.get(&handle).unwrap();
+        let result = store.get_and_increment_sign_count(&handle).unwrap();
         assert!(result.is_some());
     }
 
@@ -525,7 +530,10 @@ mod tests {
             },
         };
 
-        assert!(keyring.get(&key_handle).unwrap().is_some());
+        assert!(keyring
+            .get_and_increment_sign_count(&key_handle)
+            .unwrap()
+            .is_some());
     }
 
     lazy_static! {

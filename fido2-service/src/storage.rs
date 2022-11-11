@@ -21,7 +21,7 @@ pub trait CredentialStorage {
 
     fn put_specific(&mut self, credential: PrivateKeyCredentialSource) -> Result<(), Self::Error>;
 
-    fn get(
+    fn get_and_increment_sign_count(
         &self,
         credential_handle: &CredentialHandle,
     ) -> Result<Option<PrivateKeyCredentialSource>, Self::Error>;
@@ -87,7 +87,7 @@ where
         user_verified: bool,
     ) -> Result<(AuthenticatorData, AttestationStatement), Self::Error> {
         let this = self.0.lock().unwrap();
-        if let Some(key) = this.store.get(credential_handle)? {
+        if let Some(key) = this.store.get_and_increment_sign_count(credential_handle)? {
             let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
                 rp_id_hash: Sha256::digest(rp_id.as_bytes()),
@@ -115,7 +115,7 @@ where
         user_verified: bool,
     ) -> Result<(AuthenticatorData, Signature), Self::Error> {
         let this = self.0.lock().unwrap();
-        if let Some(key) = this.store.get(credential_handle)? {
+        if let Some(key) = this.store.get_and_increment_sign_count(credential_handle)? {
             let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
                 rp_id_hash: Sha256::digest(credential_handle.rp.id.as_bytes()),

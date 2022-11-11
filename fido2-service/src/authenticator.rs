@@ -856,7 +856,7 @@ mod tests {
             Ok(())
         }
 
-        fn get(
+        fn get_and_increment_sign_count(
             &self,
             credential_handle: &CredentialHandle,
         ) -> Result<Option<PrivateKeyCredentialSource>, Self::Error> {
