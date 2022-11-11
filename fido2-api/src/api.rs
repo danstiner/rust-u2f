@@ -22,6 +22,7 @@ pub trait AuthenticatorAPI {
         cmd: MakeCredentialCommand,
     ) -> Result<MakeCredentialResponse, Self::Error>;
 
+    /// If an authenticator supports both CTAP1/U2F and CTAP2 then a credential created using CTAP1/U2F MUST be assertable over CTAP2. (Credentials created over CTAP1/U2F MUST NOT be discoverable credentials though.) From § 10.3 Using the CTAP2 authenticatorGetAssertion Command with CTAP1/U2F authenticators, this means that an authenticator MUST accept, over CTAP2, the credential ID of a credential that was created using U2F where the application parameter at the time of creation was the SHA-256 digest of the RP ID that is given at assertion time.
     /// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorGetAssertion
     async fn get_assertion(
         &self,
