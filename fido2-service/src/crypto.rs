@@ -175,6 +175,7 @@ pub struct PrivateKeyCredentialSource {
     pub id: CredentialId,
     pub rp: PublicKeyCredentialRpEntity,
     pub user_handle: UserHandle,
+    pub sign_count: u32,
     private_key_document: PrivateKeyDocument,
 }
 
@@ -195,6 +196,7 @@ impl PrivateKeyCredentialSource {
             rp: rp.clone(),
             user_handle: user_handle.clone(),
             private_key_document,
+            sign_count: 0,
         })
     }
 

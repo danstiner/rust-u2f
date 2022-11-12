@@ -82,7 +82,7 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
     }
 
     fn get_and_increment_sign_count(
-        &self,
+        &mut self,
         credential_handle: &CredentialHandle,
     ) -> Result<Option<PrivateKeyCredentialSource>, Self::Error> {
         let collection = self.collection()?;
@@ -98,7 +98,7 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
         let item = collection.find_item(Attributes::u2f_handle_search(credential_handle))?;
         if let Some(item) = item {
             let secret = item.get_secret()?;
-            let secret: LegacyU2FSecret = serde_json::from_slice(&secret)?;
+            let _secret: LegacyU2FSecret = serde_json::from_slice(&secret)?;
             return Ok(Some(todo!(
                 "PrivateKeyCredentialSource 
                 type_: todo!(),
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn get_with_empty_store_is_none() {
-        let keyring = keyring();
+        let mut keyring = keyring();
         let key_handle = CredentialHandle {
             descriptor: PublicKeyCredentialDescriptor {
                 type_: PublicKeyCredentialType::PublicKey,

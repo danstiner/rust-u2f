@@ -22,7 +22,7 @@ pub trait CredentialStorage {
     fn put_specific(&mut self, credential: PrivateKeyCredentialSource) -> Result<(), Self::Error>;
 
     fn get_and_increment_sign_count(
-        &self,
+        &mut self,
         credential_handle: &CredentialHandle,
     ) -> Result<Option<PrivateKeyCredentialSource>, Self::Error>;
 
@@ -86,14 +86,15 @@ where
         user_present: bool,
         user_verified: bool,
     ) -> Result<(AuthenticatorData, AttestationStatement), Self::Error> {
-        let this = self.0.lock().unwrap();
+        let mut this = self.0.lock().unwrap();
         if let Some(key) = this.store.get_and_increment_sign_count(credential_handle)? {
+            let sign_count = key.sign_count;
             let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
                 rp_id_hash: Sha256::digest(rp_id.as_bytes()),
                 user_present,
                 user_verified,
-                sign_count: 1, // TODO increment use counter
+                sign_count,
                 attested_credential_data: Some(vec![AttestedCredentialData {
                     aaguid: this.aaguid,
                     credential_id: credential_handle.descriptor.id.clone(),
@@ -114,17 +115,17 @@ where
         user_present: bool,
         user_verified: bool,
     ) -> Result<(AuthenticatorData, Signature), Self::Error> {
-        let this = self.0.lock().unwrap();
+        let mut this = self.0.lock().unwrap();
         if let Some(key) = this.store.get_and_increment_sign_count(credential_handle)? {
+            let sign_count = key.sign_count;
             let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
                 rp_id_hash: Sha256::digest(credential_handle.rp.id.as_bytes()),
                 user_present,
                 user_verified,
-                sign_count: 2,
+                sign_count: sign_count,
                 attested_credential_data: None,
             };
-            // TODO increment use counter
             let signature = key.sign(&auth_data, client_data_hash, &this.rng).unwrap();
             Ok((auth_data, signature))
         } else {
