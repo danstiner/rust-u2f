@@ -70,11 +70,11 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
     ) -> Result<(), Self::Error> {
         let collection = self.collection()?;
 
-        let secret = serde_json::to_string(&credential)?;
+        let secret = serde_json::to_vec(&credential)?;
         let _item = collection.create_item(
             &format!("FIDO2 credential for {}", credential.rp),
             Attributes::new_specific_credential(&credential).get(),
-            secret.as_bytes(),
+            &secret,
             true,
             "application/json",
         )?;
@@ -91,7 +91,10 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
         let item = collection.find_item(Attributes::handle_search(credential_handle))?;
         if let Some(item) = item {
             let secret = item.get_secret()?;
-            return Ok(Some(serde_json::from_slice(&secret)?));
+            let mut secret: PrivateKeyCredentialSource = serde_json::from_slice(&secret)?;
+            secret.sign_count += 1;
+            item.set_secret(&serde_json::to_vec(&secret)?, "application/json")?;
+            return Ok(Some(secret));
         }
 
         // Fallback for legacy U2F registrations done with rust-u2f
@@ -248,6 +251,8 @@ pub(crate) trait Item {
 
     fn get_created(&self) -> Result<SystemTime, secret_service::Error>;
 
+    fn set_secret(&self, secret: &[u8], content_type: &str) -> Result<(), secret_service::Error>;
+
     fn delete(&self) -> Result<(), secret_service::Error>;
 }
 
@@ -258,6 +263,10 @@ impl Item for secret_service::Item<'_> {
 
     fn get_created(&self) -> Result<SystemTime, secret_service::Error> {
         Ok(UNIX_EPOCH + Duration::from_secs(self.get_created()?))
+    }
+
+    fn set_secret(&self, secret: &[u8], content_type: &str) -> Result<(), secret_service::Error> {
+        self.set_secret(secret, content_type)
     }
 
     fn delete(&self) -> Result<(), secret_service::Error> {
@@ -462,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn put_discoverable_then_get_returns_credential() {
+    fn put_discoverable_then_get_returns_credential_and_increments() {
         let mut store = keyring();
         let key = PrivateKeyCredentialSource::generate(
             &PARAMETERS,
@@ -475,8 +484,19 @@ mod tests {
 
         store.put_discoverable(key.clone()).unwrap();
 
-        let result = store.get_and_increment_sign_count(&handle).unwrap();
-        assert!(result.is_some());
+        // First get
+        let result = store
+            .get_and_increment_sign_count(&handle)
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.sign_count, 1);
+
+        // Second get
+        let result = store
+            .get_and_increment_sign_count(&handle)
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.sign_count, 2);
     }
 
     /// If an authenticator supports both CTAP1/U2F and CTAP2 then a credential created using
@@ -656,6 +676,17 @@ mod tests {
 
         fn get_created(&self) -> Result<SystemTime, secret_service::Error> {
             Ok(self.0.as_ref().borrow().created)
+        }
+
+        fn set_secret(
+            &self,
+            secret: &[u8],
+            content_type: &str,
+        ) -> Result<(), secret_service::Error> {
+            let mut this = self.0.as_ref().borrow_mut();
+            this.secret = secret.to_owned();
+            this.content_type = content_type.to_owned();
+            Ok(())
         }
 
         fn delete(&self) -> Result<(), secret_service::Error> {
