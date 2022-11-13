@@ -1,5 +1,5 @@
 TODO
-- [ ] Signed counters
+- [X] Sign counters
 - [ ] Rename to reflect FIDO2 support
 - [ ] Backwards compatability with U2F protocol and rust-u2f generated keys
 - [ ] Support hmac-secret extension as required for FIDO_2_1 version authenticators
