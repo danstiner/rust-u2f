@@ -151,7 +151,10 @@ where
     }
 
     fn list_supported_algorithms(&self) -> Vec<PublicKeyCredentialParameters> {
-        vec![PublicKeyCredentialParameters::es256()]
+        vec![
+            PublicKeyCredentialParameters::es256(),
+            PublicKeyCredentialParameters::es384(),
+        ]
     }
 }
 

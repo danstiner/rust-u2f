@@ -12,7 +12,7 @@ use crate::{Aaguid, Sha256};
 pub enum COSEAlgorithmIdentifier {
     ES256 = -7, // ECDSA w/ SHA-256, first default option
     EdDSA = -8,
-    ES384 = -35,
+    ES384 = -35, // ECDSA w/ SHA-384
     ES512 = -36,
     PS256 = -37,
     RS256 = -257,
@@ -121,6 +121,13 @@ impl PublicKeyCredentialParameters {
     pub fn es256() -> Self {
         Self {
             alg: COSEAlgorithmIdentifier::ES256,
+            type_: PublicKeyCredentialType::PublicKey,
+        }
+    }
+
+    pub fn es384() -> Self {
+        Self {
+            alg: COSEAlgorithmIdentifier::ES384,
             type_: PublicKeyCredentialType::PublicKey,
         }
     }
@@ -607,16 +614,11 @@ pub struct AttestedCredentialData {
 #[derive(Debug, PartialEq, Eq, Clone)]
 // #[cbor(map)]
 pub struct CredentialPublicKey {
-    // #[n(0x01)]
     pub kty: KeyType,
-    // #[n(0x03)]
     pub alg: COSEAlgorithmIdentifier,
-    // #[n(0x20)]
     pub crv: EllipticCurve,
-    // #[n(0x21)]
-    pub x: [u8; 32],
-    // #[n(0x22)]
-    pub y: [u8; 32],
+    pub x: Vec<u8>,
+    pub y: Vec<u8>,
 }
 
 impl<C> Encode<C> for CredentialPublicKey {
@@ -669,6 +671,9 @@ impl<C> Encode<C> for KeyType {
 pub enum EllipticCurve {
     /// NIST P-256 also known as secp256r1, uses KeyType::EC2
     P256 = 1,
+
+    /// NIST P-384 also known as secp384r1, uses KeyType::EC2
+    P384 = 2,
 }
 
 impl<C> Encode<C> for EllipticCurve {

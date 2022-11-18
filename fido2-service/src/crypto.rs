@@ -89,12 +89,17 @@ impl AttestationSource {
 
 enum PrivateKey {
     ES256(signature::EcdsaKeyPair),
+    ES384(signature::EcdsaKeyPair),
 }
 
 impl PrivateKey {
     fn sign(&self, rng: &dyn rand::SecureRandom, message: &[u8]) -> Result<Signature, Unspecified> {
         match self {
             PrivateKey::ES256(key_pair) => match key_pair.sign(rng, message) {
+                Ok(signature) => Ok(Signature::new(signature.as_ref())),
+                Err(err) => Err(err),
+            },
+            PrivateKey::ES384(key_pair) => match key_pair.sign(rng, message) {
                 Ok(signature) => Ok(Signature::new(signature.as_ref())),
                 Err(err) => Err(err),
             },
@@ -107,34 +112,55 @@ impl PrivateKey {
             PrivateKey::ES256(key_pair) => {
                 PublicKeyDocument(key_pair.public_key().as_ref().to_vec())
             }
+            PrivateKey::ES384(key_pair) => {
+                PublicKeyDocument(key_pair.public_key().as_ref().to_vec())
+            }
         }
     }
 
     fn alg(&self) -> COSEAlgorithmIdentifier {
         match self {
             PrivateKey::ES256(_) => COSEAlgorithmIdentifier::ES256,
+            PrivateKey::ES384(_) => COSEAlgorithmIdentifier::ES384,
         }
     }
 
     fn credential_public_key(&self) -> CredentialPublicKey {
         match self {
             PrivateKey::ES256(key_pair) => {
-                let mut public_key = CredentialPublicKey {
+                let mut x = [0u8; 32];
+                let mut y = [0u8; 32];
+
+                get_public_numbers_es256(key_pair, &mut x, &mut y);
+
+                CredentialPublicKey {
                     kty: KeyType::EC2,
                     alg: self.alg(),
                     crv: EllipticCurve::P256,
-                    x: [0u8; 32],
-                    y: [0u8; 32],
-                };
-                get_public_numbers(key_pair, &mut public_key.x, &mut public_key.y);
-                public_key
+                    x: x.to_vec(),
+                    y: y.to_vec(),
+                }
+            }
+            PrivateKey::ES384(key_pair) => {
+                let mut x = [0u8; 48];
+                let mut y = [0u8; 48];
+
+                get_public_numbers_es384(key_pair, &mut x, &mut y);
+
+                CredentialPublicKey {
+                    kty: KeyType::EC2,
+                    alg: self.alg(),
+                    crv: EllipticCurve::P384,
+                    x: x.to_vec(),
+                    y: y.to_vec(),
+                }
             }
         }
     }
 }
 
-/// Extract public numbers from a EcdsaKeyPair.
-fn get_public_numbers(key_pair: &EcdsaKeyPair, x: &mut [u8; 32], y: &mut [u8; 32]) {
+/// Extract public numbers from a ES256 EcdsaKeyPair.
+fn get_public_numbers_es256(key_pair: &EcdsaKeyPair, x: &mut [u8; 32], y: &mut [u8; 32]) {
     // The public key is encoded in uncompressed form using the Octet-String-to-Elliptic-Curve-Point
     // algorithm in [SEC 1: Elliptic Curve Cryptography, Version 2.0](http://www.secg.org/sec1-v2.pdf).
     let public = key_pair.public_key().as_ref();
@@ -146,6 +172,19 @@ fn get_public_numbers(key_pair: &EcdsaKeyPair, x: &mut [u8; 32], y: &mut [u8; 32
     y.copy_from_slice(&public[33..65]);
 }
 
+/// Extract public numbers from a P256 EcdsaKeyPair.
+fn get_public_numbers_es384(key_pair: &EcdsaKeyPair, x: &mut [u8; 48], y: &mut [u8; 48]) {
+    // The public key is encoded in uncompressed form using the Octet-String-to-Elliptic-Curve-Point
+    // algorithm in [SEC 1: Elliptic Curve Cryptography, Version 2.0](http://www.secg.org/sec1-v2.pdf).
+    let public = key_pair.public_key().as_ref();
+
+    // Assert uncompressed encoding form
+    assert_eq!(public[0], 0x04);
+
+    x.copy_from_slice(&public[1..49]);
+    y.copy_from_slice(&public[49..97]);
+}
+
 impl TryFrom<PrivateKeyDocument> for PrivateKey {
     type Error = Unspecified;
 
@@ -154,6 +193,12 @@ impl TryFrom<PrivateKeyDocument> for PrivateKey {
             PrivateKeyDocument::ES256 { pkcs8_bytes } => {
                 PrivateKey::ES256(signature::EcdsaKeyPair::from_pkcs8(
                     &signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+                    &pkcs8_bytes,
+                )?)
+            }
+            PrivateKeyDocument::ES384 { pkcs8_bytes } => {
+                PrivateKey::ES384(signature::EcdsaKeyPair::from_pkcs8(
+                    &signature::ECDSA_P384_SHA384_ASN1_SIGNING,
                     &pkcs8_bytes,
                 )?)
             }
@@ -193,7 +238,8 @@ impl PrivateKeyCredentialSource {
     ) -> Result<Self, Unspecified> {
         let private_key_document = match parameters.alg {
             COSEAlgorithmIdentifier::ES256 => PrivateKeyDocument::generate_es256(rng),
-            _ => todo!("error that indicated unsupported algorithm"),
+            COSEAlgorithmIdentifier::ES384 => PrivateKeyDocument::generate_es384(rng),
+            _ => todo!("error that indicates unsupported algorithm"),
         }?;
         Ok(Self {
             type_: parameters.type_.clone(),
@@ -231,6 +277,10 @@ pub enum PrivateKeyDocument {
         #[serde_as(as = "Base64")]
         pkcs8_bytes: Vec<u8>,
     },
+    ES384 {
+        #[serde_as(as = "Base64")]
+        pkcs8_bytes: Vec<u8>,
+    },
 }
 
 impl PrivateKeyDocument {
@@ -238,6 +288,17 @@ impl PrivateKeyDocument {
         Ok(Self::ES256 {
             pkcs8_bytes: signature::EcdsaKeyPair::generate_pkcs8(
                 &signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+                rng,
+            )?
+            .as_ref()
+            .to_vec(),
+        })
+    }
+
+    pub fn generate_es384(rng: &dyn rand::SecureRandom) -> Result<Self, Unspecified> {
+        Ok(Self::ES384 {
+            pkcs8_bytes: signature::EcdsaKeyPair::generate_pkcs8(
+                &signature::ECDSA_P384_SHA384_ASN1_SIGNING,
                 rng,
             )?
             .as_ref()
