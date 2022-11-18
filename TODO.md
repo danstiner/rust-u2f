@@ -1,10 +1,8 @@
 TODO
-- [X] Sign counters
 - [ ] Backwards compatability with U2F protocol and rust-u2f generated keys
 - [ ] Support hmac-secret extension as required for FIDO_2_1 version authenticators
 - [ ] Base64 encode bytes in keyring
 - [ ] Include the clientPin option ID or the uv option ID (or both), with the value true, in the authenticatorGetInfo response’s options member if the rk option ID has the value true, as required for FIDO_2_1 version authenticators. Also include the pinUvAuthToken option ID with the value true in the authenticatorGetInfo response’s options member if either the clientPin or uv option IDs have the value true. Also include an array element with the value 2 in the authenticatorGetInfo response’s pinUvAuthProtocols member (i.e. support PIN/UV auth protocol two) if it includes any values at all.
-- [ ] Either include the credMgmt option ID with the value true in the authenticatorGetInfo response’s options member, or support all the same functionality via a built-in UI, if the rk option ID has the value true. as required for FIDO_2_1 version authenticators
 - [ ] Rename to reflect FIDO2 support
 - [ ] Destroy uhid device when connection from userspace dies
 - [ ] Handle bogus U2F app id's by requiring an approval per spec
