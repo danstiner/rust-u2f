@@ -91,7 +91,7 @@ where
             let sign_count = key.sign_count;
             let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
-                rp_id_hash: Sha256::digest(rp_id.as_bytes()),
+                rp_id_hash: Sha256::digest(rp_id.as_ref()),
                 user_present,
                 user_verified,
                 sign_count,
@@ -120,7 +120,7 @@ where
             let sign_count = key.sign_count;
             let key: PublicKeyCredentialSource = key.try_into().unwrap();
             let auth_data = AuthenticatorData {
-                rp_id_hash: Sha256::digest(credential_handle.rp.id.as_bytes()),
+                rp_id_hash: Sha256::digest(credential_handle.rp.id.as_ref()),
                 user_present,
                 user_verified,
                 sign_count: sign_count,

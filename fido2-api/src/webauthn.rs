@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use byteorder::{BigEndian, WriteBytesExt};
 use minicbor::{Decode, Encode};
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use crate::{Aaguid, Sha256};
 
@@ -175,7 +175,9 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialParameters {
 /// https://www.w3.org/TR/webauthn-2/#enumdef-publickeycredentialtype
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum PublicKeyCredentialType {
+    #[serde(rename = "public-key")]
     PublicKey,
+    #[serde(skip)]
     Unknown(String),
 }
 
@@ -188,17 +190,24 @@ impl fmt::Display for PublicKeyCredentialType {
     }
 }
 
+impl FromStr for PublicKeyCredentialType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "public-key" => Ok(PublicKeyCredentialType::PublicKey),
+            s => Ok(PublicKeyCredentialType::Unknown(s.to_owned())),
+        }
+    }
+}
+
 impl<C> Encode<C> for PublicKeyCredentialType {
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
         _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        match self {
-            PublicKeyCredentialType::PublicKey => e.str("public-key")?,
-            PublicKeyCredentialType::Unknown(s) => e.str(s)?,
-        };
-        Ok(())
+        e.str(&self.to_string())?.ok()
     }
 }
 
@@ -207,9 +216,10 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
         d: &mut minicbor::Decoder<'b>,
         _ctx: &mut C,
     ) -> Result<Self, minicbor::decode::Error> {
-        match d.str()? {
-            "public-key" => Ok(PublicKeyCredentialType::PublicKey),
-            type_ => Ok(PublicKeyCredentialType::Unknown(type_.to_owned())),
+        if let Ok(r) = Self::from_str(d.str()?) {
+            Ok(r)
+        } else {
+            Err(todo!())
         }
     }
 }
@@ -381,10 +391,6 @@ impl UserHandle {
         assert!(id.len() <= 64);
         UserHandle(id)
     }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_ref()
-    }
 }
 
 impl<C> Encode<C> for UserHandle {
@@ -396,12 +402,27 @@ impl<C> Encode<C> for UserHandle {
         e.bytes(&self.0)?.ok()
     }
 }
+
 impl<'b, C> Decode<'b, C> for UserHandle {
     fn decode(
         d: &mut minicbor::Decoder<'b>,
         _ctx: &mut C,
     ) -> Result<Self, minicbor::decode::Error> {
         Ok(Self(d.bytes()?.to_vec()))
+    }
+}
+
+impl AsRef<[u8]> for UserHandle {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl TryFrom<Vec<u8>> for UserHandle {
+    type Error = ();
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Ok(UserHandle::new(value))
     }
 }
 
@@ -413,10 +434,6 @@ pub struct CredentialId(Vec<u8>);
 impl CredentialId {
     pub fn new(value: &[u8]) -> Self {
         CredentialId(value.to_vec())
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_ref()
     }
 }
 
@@ -436,6 +453,20 @@ impl<'b, C> Decode<'b, C> for CredentialId {
         _ctx: &mut C,
     ) -> Result<Self, minicbor::decode::Error> {
         Ok(Self(d.bytes()?.to_vec()))
+    }
+}
+
+impl AsRef<[u8]> for CredentialId {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl TryFrom<Vec<u8>> for CredentialId {
+    type Error = ();
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Ok(CredentialId(value))
     }
 }
 
@@ -465,15 +496,17 @@ impl RelyingPartyIdentifier {
     pub fn new(id: String) -> Self {
         Self(id)
     }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_bytes()
-    }
 }
 
 impl fmt::Display for RelyingPartyIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl AsRef<[u8]> for RelyingPartyIdentifier {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }
 
@@ -515,12 +548,12 @@ impl AuthenticatorData {
         buf.write_u32::<BigEndian>(self.sign_count).unwrap();
         if let Some(ref attested_credential_data) = self.attested_credential_data {
             for attested in attested_credential_data {
-                buf.extend_from_slice(attested.aaguid.as_bytes());
+                buf.extend_from_slice(attested.aaguid.as_ref());
                 buf.write_u16::<BigEndian>(
-                    attested.credential_id.as_bytes().len().try_into().unwrap(),
+                    attested.credential_id.as_ref().len().try_into().unwrap(),
                 )
                 .unwrap();
-                buf.extend_from_slice(attested.credential_id.as_bytes());
+                buf.extend_from_slice(attested.credential_id.as_ref());
                 minicbor::encode(&attested.credential_public_key, &mut buf).unwrap();
             }
         }

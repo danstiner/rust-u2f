@@ -64,12 +64,6 @@ pub struct VersionInfo {
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Aaguid(pub uuid::Uuid);
 
-impl Aaguid {
-    pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_bytes()
-    }
-}
-
 impl<C> Encode<C> for Aaguid {
     fn encode<W: minicbor::encode::Write>(
         &self,
@@ -77,6 +71,12 @@ impl<C> Encode<C> for Aaguid {
         _ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
         e.bytes(self.0.as_bytes())?.ok()
+    }
+}
+
+impl AsRef<[u8]> for Aaguid {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }
 

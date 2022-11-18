@@ -290,9 +290,9 @@ impl Attributes {
             Self::discoverable_user_search(&credential.rp.id, &credential.user_handle);
         attributes.insert(
             "user_handle",
-            base64::encode(credential.user_handle.as_bytes()),
+            base64::encode(credential.user_handle.as_ref()),
         );
-        attributes.insert("credential_id", base64::encode(credential.id.as_bytes()));
+        attributes.insert("credential_id", base64::encode(credential.id.as_ref()));
         attributes.insert("credential_type", credential.type_.to_string());
         attributes
     }
@@ -307,7 +307,7 @@ impl Attributes {
     fn discoverable_user_search(rp_id: &RelyingPartyIdentifier, user_handle: &UserHandle) -> Self {
         let mut attributes = Attributes::base();
         attributes.insert("rp_id", rp_id.to_string());
-        attributes.insert("user_handle", base64::encode(user_handle.as_bytes()));
+        attributes.insert("user_handle", base64::encode(user_handle.as_ref()));
         attributes.insert("discoverable", "true".to_string());
         attributes
     }
@@ -317,7 +317,7 @@ impl Attributes {
         attributes.insert("rp_id", handle.rp.id.to_string());
         attributes.insert(
             "credential_id",
-            base64::encode(handle.descriptor.id.as_bytes()),
+            base64::encode(handle.descriptor.id.as_ref()),
         );
         attributes.insert("credential_type", handle.descriptor.type_.to_string());
         attributes
@@ -327,7 +327,7 @@ impl Attributes {
         let mut attributes = Self::specific_search(&credential.rp.id, &credential.descriptor());
         attributes.insert(
             "user_handle",
-            base64::encode(credential.user_handle.as_bytes()),
+            base64::encode(credential.user_handle.as_ref()),
         );
         attributes
     }
@@ -338,7 +338,7 @@ impl Attributes {
     ) -> Self {
         let mut attributes = Attributes::base();
         attributes.insert("rp_id", rp_id.to_string());
-        attributes.insert("credential_id", base64::encode(descriptor.id.as_bytes()));
+        attributes.insert("credential_id", base64::encode(descriptor.id.as_ref()));
         attributes.insert("credential_type", descriptor.type_.to_string());
         attributes.insert("discoverable", "false".to_string());
         attributes
@@ -349,11 +349,11 @@ impl Attributes {
         attributes.insert("application", "com.github.danstiner.rust-u2f".to_string());
         attributes.insert(
             "u2f_app_id_hash",
-            base64::encode(Sha256::digest(handle.rp.id.as_bytes()).as_ref()),
+            base64::encode(Sha256::digest(handle.rp.id.as_ref()).as_ref()),
         );
         attributes.insert(
             "u2f_key_handle",
-            base64::encode(handle.descriptor.id.as_bytes()),
+            base64::encode(handle.descriptor.id.as_ref()),
         );
         attributes
     }

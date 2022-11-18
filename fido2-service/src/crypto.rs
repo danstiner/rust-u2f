@@ -9,6 +9,7 @@ use ring::{
     signature::{self, EcdsaKeyPair, KeyPair},
 };
 use serde::{Deserialize, Serialize};
+use serde_with::{base64::Base64, serde_as, DisplayFromStr};
 
 use crate::{CredentialHandle, KeyProtection};
 
@@ -168,12 +169,16 @@ impl AsRef<[u8]> for PublicKeyDocument {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PrivateKeyCredentialSource {
     #[serde(alias = "type")]
+    #[serde_as(as = "DisplayFromStr")]
     pub type_: PublicKeyCredentialType,
+    #[serde_as(as = "Base64")]
     pub id: CredentialId,
     pub rp: PublicKeyCredentialRpEntity,
+    #[serde_as(as = "Base64")]
     pub user_handle: UserHandle,
     pub sign_count: u32,
     private_key_document: PrivateKeyDocument,
@@ -219,9 +224,13 @@ impl PrivateKeyCredentialSource {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Clone)]
 pub enum PrivateKeyDocument {
-    ES256 { pkcs8_bytes: Vec<u8> },
+    ES256 {
+        #[serde_as(as = "Base64")]
+        pkcs8_bytes: Vec<u8>,
+    },
 }
 
 impl PrivateKeyDocument {

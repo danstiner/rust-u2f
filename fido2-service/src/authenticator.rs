@@ -703,7 +703,7 @@ mod tests {
 
         assert_eq!(
             response.auth_data.rp_id_hash,
-            Sha256::digest(rp_id.as_bytes())
+            Sha256::digest(rp_id.as_ref())
         );
         assert_eq!(response.auth_data.user_present, true);
         assert_eq!(response.auth_data.user_verified, false);
