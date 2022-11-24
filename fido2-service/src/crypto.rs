@@ -226,7 +226,7 @@ pub struct PrivateKeyCredentialSource {
     #[serde_as(as = "Base64")]
     pub user_handle: UserHandle,
     pub sign_count: u32,
-    private_key_document: PrivateKeyDocument,
+    pub private_key_document: PrivateKeyDocument,
 }
 
 impl PrivateKeyCredentialSource {

@@ -1,10 +1,17 @@
 use super::Error;
 use async_trait::async_trait;
-use fido2_api::{PublicKeyCredentialDescriptor, RelyingPartyIdentifier, Sha256, UserHandle};
-use fido2_service::{CredentialHandle, PrivateKeyCredentialSource};
+use fido2_api::{
+    PublicKeyCredentialDescriptor, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
+    RelyingPartyIdentifier, Sha256, UserHandle,
+};
+use fido2_service::{CredentialHandle, PrivateKeyCredentialSource, PrivateKeyDocument};
+use p256::pkcs8::{DecodePrivateKey, EncodePrivateKey};
 use secret_service::EncryptionType;
 use serde::{Deserialize, Serialize};
+use serde_with::base64::Base64;
+use serde_with::serde_as;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Store keys to a keyring service running in the user's login session.
@@ -101,16 +108,21 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
         let item = collection.find_item(Attributes::u2f_handle_search(credential_handle))?;
         if let Some(item) = item {
             let secret = item.get_secret()?;
-            let _secret: LegacyU2FSecret = serde_json::from_slice(&secret)?;
-            return Ok(Some(todo!(
-                "PrivateKeyCredentialSource 
-                type_: todo!(),
-                id: todo!(\"secret.application_key.handle\"),
-                rp: todo!(),
-                user_handle: UserHandle::new(todo!()),
-                private_key_document: todo!(),
-            "
-            )));
+            let mut secret: LegacyU2FSecret = serde_json::from_slice(&secret)?;
+            secret.counter += 1;
+            // todo save updated secret
+            return Ok(Some(PrivateKeyCredentialSource {
+                type_: PublicKeyCredentialType::PublicKey,
+                id: secret.application_key.handle.try_into().unwrap(),
+                rp: PublicKeyCredentialRpEntity {
+                    id: RelyingPartyIdentifier::new("".to_owned()), // todo what to put here, we only have the rp id hash
+                    name: "".to_owned(),
+                },
+                user_handle: UserHandle::new(vec![0]), // todo what to put here, we only have the user's public key
+                sign_count: secret.counter,
+                private_key_document: decode_sec1_pem_encoded_p256_key(&secret.application_key.key)
+                    .unwrap(),
+            }));
         }
 
         Ok(None)
@@ -371,16 +383,40 @@ impl Attributes {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct LegacyU2FSecret {
-    application_key: ApplicationKey,
+struct LegacyU2FSecret {
+    application_key: U2FApplicationKey,
     counter: u32,
 }
 
+#[serde_as]
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct ApplicationKey {
-    // pub application: AppId,
-    // pub handle: KeyHandle,
-    // key: U2FPrivateKeyDocument,
+struct U2FApplicationKey {
+    #[serde_as(as = "Base64")]
+    pub application: Vec<u8>,
+    #[serde_as(as = "Base64")]
+    pub handle: Vec<u8>,
+    #[serde_as(as = "Base64")]
+    key: Vec<u8>,
+}
+
+// Decode a Sec1-encoded plaintext private key; as specified in RFC 5915
+// U2F keys were generated with openssl EcKey and group X9_62_PRIME256V1 (aka secp256r1, prime256v1, NIST P-256)
+fn decode_sec1_pem_encoded_p256_key(value: &[u8]) -> Result<PrivateKeyDocument, ()> {
+    let value = std::str::from_utf8(value).unwrap();
+    let key = p256::SecretKey::from_sec1_pem(value).unwrap();
+    Ok(PrivateKeyDocument::ES256 {
+        pkcs8_bytes: key.to_pkcs8_der().unwrap().as_bytes().to_vec(),
+    })
+}
+
+fn encode_sec1_pem_p256_key(document: &PrivateKeyDocument) -> Result<Vec<u8>, ()> {
+    match document {
+        PrivateKeyDocument::ES256 { pkcs8_bytes } => {
+            let key = p256::SecretKey::from_pkcs8_der(&pkcs8_bytes).unwrap();
+            Ok(key.to_pem(Default::default()).unwrap().as_bytes().to_vec())
+        }
+        _ => todo!(),
+    }
 }
 
 #[cfg(test)]

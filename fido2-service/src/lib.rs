@@ -27,7 +27,7 @@ use thiserror::Error;
 use tracing::error;
 
 // TODO hack
-pub use crate::crypto::{AttestationSource, PrivateKeyCredentialSource};
+pub use crate::crypto::{AttestationSource, PrivateKeyCredentialSource, PrivateKeyDocument};
 pub use crate::storage::{CredentialStorage, SoftwareCryptoStore};
 pub use ring::error::Unspecified;
 
