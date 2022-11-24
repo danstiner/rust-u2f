@@ -5,7 +5,7 @@ use fido2_api::{
     RelyingPartyIdentifier, Sha256, UserHandle,
 };
 use fido2_service::{CredentialHandle, PrivateKeyCredentialSource, PrivateKeyDocument};
-use p256::pkcs8::{DecodePrivateKey, EncodePrivateKey};
+use p256::pkcs8::EncodePrivateKey;
 use secret_service::EncryptionType;
 use serde::{Deserialize, Serialize};
 use serde_with::base64::Base64;
@@ -407,16 +407,6 @@ fn decode_sec1_pem_encoded_p256_key(value: &[u8]) -> Result<PrivateKeyDocument, 
     Ok(PrivateKeyDocument::ES256 {
         pkcs8_bytes: key.to_pkcs8_der().unwrap().as_bytes().to_vec(),
     })
-}
-
-fn encode_sec1_pem_p256_key(document: &PrivateKeyDocument) -> Result<Vec<u8>, ()> {
-    match document {
-        PrivateKeyDocument::ES256 { pkcs8_bytes } => {
-            let key = p256::SecretKey::from_pkcs8_der(&pkcs8_bytes).unwrap();
-            Ok(key.to_pem(Default::default()).unwrap().as_bytes().to_vec())
-        }
-        _ => todo!(),
-    }
 }
 
 #[cfg(test)]
