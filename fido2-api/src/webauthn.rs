@@ -226,7 +226,7 @@ impl<'b, C> Decode<'b, C> for PublicKeyCredentialType {
         if let Ok(r) = Self::from_str(d.str()?) {
             Ok(r)
         } else {
-            Err(todo!())
+            todo!("Err")
         }
     }
 }

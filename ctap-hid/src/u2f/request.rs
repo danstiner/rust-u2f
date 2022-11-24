@@ -35,7 +35,7 @@ pub enum Request {
 
 impl Request {
     /// Only supports Extended Length Encoding
-    pub fn decode(data: &[u8]) -> Result<Request, ()> {
+    pub fn decode(data: &[u8]) -> Result<Request, std::io::Error> {
         let mut reader = Cursor::new(data);
 
         // CLA: Reserved to be used by the underlying transport protocol
@@ -95,7 +95,7 @@ impl Request {
                 }
                 value
             }
-            _ => return Err(()),
+            _ => todo!("return Err(())"),
         };
 
         // TODO If the instruction is not expected to yield any response bytes, L e may be omitted. O

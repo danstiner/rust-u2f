@@ -123,7 +123,7 @@ where
                 rp_id_hash: Sha256::digest(credential_handle.rp.id.as_ref()),
                 user_present,
                 user_verified,
-                sign_count: sign_count,
+                sign_count,
                 attested_credential_data: None,
             };
             let signature = key.sign(&auth_data, client_data_hash, &this.rng).unwrap();
