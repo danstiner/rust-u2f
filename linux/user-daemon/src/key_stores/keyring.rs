@@ -110,7 +110,7 @@ impl<S: SecretService> fido2_service::CredentialStorage for Keyring<S> {
             let secret = item.get_secret()?;
             let mut secret: LegacyU2FSecret = serde_json::from_slice(&secret)?;
             secret.counter += 1;
-            // todo save updated secret
+            item.set_secret(&serde_json::to_vec(&secret)?, "application/json")?;
             return Ok(Some(PrivateKeyCredentialSource {
                 type_: PublicKeyCredentialType::PublicKey,
                 id: secret.application_key.handle.try_into().unwrap(),
