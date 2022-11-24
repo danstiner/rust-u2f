@@ -123,8 +123,8 @@ where
                 let info = self.0.get_info()?;
                 Response::GetInfo(info)
             }
-            Command::Unrecognized(_) => {
-                todo!("Unrecognized command type")
+            Command::Unrecognized(cmd) => {
+                todo!("Unrecognized command type: {cmd}")
             }
         };
         trace!("response: {:?}", response);
