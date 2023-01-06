@@ -19,7 +19,7 @@ serde = "1.0.99"
 serde_derive = "1.0.99"
 take_mut = "0.2.2"
 thiserror = "1.0"
-tokio = { version = "1.13.0", features = ["full"] }
+tokio = { version = "1.18.4", features = ["full"] }
 tokio-serde = { version = "0.8", features = ["bincode"] }
 tokio-util = { version = "0.7.1", features = ["full"] }
 tower = "0.4"
