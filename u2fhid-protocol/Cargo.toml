@@ -21,5 +21,5 @@ path = "../u2f-core"
 
 [dev-dependencies]
 rand = "0.8.4"
-tokio = "1.13.0"
+tokio = "1.18.5"
 tokio-stream = "0.1.8"
