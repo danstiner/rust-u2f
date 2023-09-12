@@ -7,8 +7,9 @@ members = [
     "linux/system-daemon",
     "linux/test-authenticator",
     "u2f-core",
-    "u2fhid-protocol"
+    "u2fhid-protocol",
 ]
+resolver = '2'
 
 [profile.release]
 lto = true

@@ -87,15 +87,14 @@ async fn main() {
         .arg(Arg::new(SOCKET_PATH_ARG)
             .short('s')
             .long("socket")
-            .takes_value(true)
+            .default_value(softu2f_system_daemon::DEFAULT_SOCKET_PATH)
+            .value_parser(clap::builder::NonEmptyStringValueParser::new())
+            .action(clap::ArgAction::Set)
             .help("Bind to specified socket path instead of file-descriptor from systemd"))
         .after_help("By default expects to be run via systemd as root and passed a socket file-descriptor to listen on.")
         .get_matches();
 
-    let system_daemon_socket = Path::new(
-        args.value_of(SOCKET_PATH_ARG)
-            .unwrap_or(softu2f_system_daemon::DEFAULT_SOCKET_PATH),
-    );
+    let socket_path = Path::new(args.get_one::<String>(SOCKET_PATH_ARG).expect("default"));
 
     if libsystemd::logging::connected_to_journal() {
         tracing_subscriber::registry()
@@ -107,12 +106,12 @@ async fn main() {
 
     info!(version = VERSION, "Starting rust-u2f user daemon");
 
-    if let Err(ref err) = run(system_daemon_socket).await {
+    if let Err(ref err) = run(socket_path).await {
         error!("Error encountered, exiting: {}", err);
     }
 }
 
-async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
+async fn run(socket_path: &Path) -> Result<(), Error> {
     let config = config::Config::load()?;
     let user_presence = NotificationUserPresence::new();
     let attestation = u2f_core::self_signed_attestation();
@@ -121,11 +120,11 @@ async fn run(system_daemon_socket: &Path) -> Result<(), Error> {
 
     let u2f_service = U2fService::new(secrets, crypto, user_presence);
 
-    let stream = UnixStream::connect(system_daemon_socket)
+    let stream = UnixStream::connect(socket_path)
         .await
         .map_err(|error| Error::Connect {
             error,
-            socket_path: system_daemon_socket.to_owned(),
+            socket_path: socket_path.to_owned(),
         })?;
 
     require_root(stream.peer_cred()?)?;
