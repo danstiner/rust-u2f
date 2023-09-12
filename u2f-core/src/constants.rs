@@ -17,7 +17,7 @@ pub(crate) const AUTH_ENFORCE: u8 = 0x03; // Enforce user presence and sign
 pub(crate) const AUTH_CHECK_ONLY: u8 = 0x07; // Check only
 pub(crate) const AUTH_DONT_ENFORCE: u8 = 0x08; // Don't enforce user presence and sign
 
-pub(crate) const DEFAULT_KEY_HANDLE_LEN: usize = 255;
+pub(crate) const DEFAULT_KEY_HANDLE_LEN: usize = 64;
 pub(crate) const MAX_KEY_HANDLE_LEN: usize = 255;
 
 #[cfg(test)]
