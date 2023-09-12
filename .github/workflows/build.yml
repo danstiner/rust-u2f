@@ -57,3 +57,9 @@ jobs:
 
       - name: Run package.sh script
         run: ./package.sh ${{matrix.base}} ${{matrix.image}} ${{matrix.tag}}
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist
+          path: dist
