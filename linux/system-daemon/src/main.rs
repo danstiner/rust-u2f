@@ -66,12 +66,13 @@ async fn main() {
         .arg(Arg::new(PATH_ARG)
             .short('s')
             .long("socket")
-            .takes_value(true)
+            .value_parser(clap::builder::NonEmptyStringValueParser::new())
+            .action(clap::ArgAction::Set)
             .help("Bind to specified socket path instead of file-descriptor from systemd"))
         .after_help("By default expects to be run via systemd as root and passed a socket file-descriptor to listen on.")
         .get_matches();
 
-    let socket_path = args.value_of(PATH_ARG);
+    let socket_path = args.get_one::<String>(PATH_ARG);
 
     if libsystemd::logging::connected_to_journal() {
         tracing_subscriber::registry()
@@ -88,14 +89,14 @@ async fn main() {
     }
 }
 
-async fn run(socket_path: Option<&str>) -> Result<(), Error> {
-    let socket = socket_listener(socket_path)?;
+async fn run(socket_path: Option<&String>) -> Result<(), Error> {
+    let socket = build_socket(socket_path)?;
     let handler = ConnectionHandler::new();
 
     SocketServer::serve(socket, handler).await
 }
 
-fn socket_listener(socket_path: Option<&str>) -> Result<UnixListener, Error> {
+fn build_socket(socket_path: Option<&String>) -> Result<UnixListener, Error> {
     if let Some(socket_path) = socket_path {
         UnixListener::bind(socket_path).map_err(Error::Io)
     } else {
