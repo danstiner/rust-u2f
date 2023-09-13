@@ -30,8 +30,8 @@ cp ../../target/release/softu2f-system-daemon %{_tmppath}
 strip %{_tmppath}/softu2f-system-daemon
 
 %install
-install -d %{buildroot}%{_libexecdir}/softu2f
-install -m 755 %{_tmppath}/softu2f-system-daemon %{buildroot}%{_libexecdir}/softu2f/system-daemon
+install -d %{buildroot}%{_exec_prefix}/lib/softu2f
+install -m 755 %{_tmppath}/softu2f-system-daemon %{buildroot}%{_exec_prefix}/lib/softu2f/system-daemon
 install -d %{buildroot}%{_unitdir}
 install -m 644 %{SOURCE0} %{buildroot}%{_unitdir}/softu2f.service
 install -m 644 %{SOURCE1} %{buildroot}%{_unitdir}/softu2f.socket
@@ -54,7 +54,7 @@ install -m 644 softu2f-tmpfiles.conf %{buildroot}%{_tmpfilesdir}/softu2f.conf
 
 %files
 %defattr(-,root,root,-)
-%{_libexecdir}/softu2f/system-daemon
+%{_exec_prefix}/lib/softu2f/system-daemon
 %{_unitdir}/softu2f.service
 %{_unitdir}/softu2f.socket
 %{_prefix}/lib/systemd/system-preset/95-softu2f.preset
