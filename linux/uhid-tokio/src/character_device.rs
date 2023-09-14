@@ -63,7 +63,7 @@ impl futures::AsyncRead for CharacterDevice {
         loop {
             match this.state {
                 State::Ready(ref mut prev_read) => {
-                    if prev_read.len() > 0 {
+                    if !prev_read.is_empty() {
                         // Return leftover bytes from a previous read
                         let n = cmp::min(prev_read.len(), buf.len());
                         let mut remaining = prev_read.split_off(n);
@@ -78,7 +78,8 @@ impl futures::AsyncRead for CharacterDevice {
                         let file = Arc::clone(this.file);
                         let mut read = vec![0u8; buf.len()];
                         *this.state = State::Reading(task::spawn_blocking(move || {
-                            (&*file).read(&mut read)?;
+                            let read_size = (&*file).read(&mut read)?;
+                            // read.truncate(read_size);
                             Ok(read)
                         }));
                     }
@@ -111,7 +112,7 @@ impl futures::AsyncWrite for CharacterDevice {
     ) -> Poll<io::Result<usize>> {
         trace!("CharacterDevice::write; buf.len:{}", buf.len());
         // TODO: Async writes
-        let file = Arc::clone(&mut self.project().file);
+        let file = Arc::clone(self.project().file);
         Poll::Ready((&*file).write(buf))
     }
 

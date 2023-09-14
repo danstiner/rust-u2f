@@ -94,7 +94,7 @@ enum LockState {
 impl LockState {
     fn lock(&mut self, _duration: Duration, channel_id: ChannelId) -> io::Result<()> {
         *self = LockState::Locked {
-            channel_id: channel_id,
+            channel_id,
             // timeout: Timeout::new(duration, handle)?,
         };
         Ok(())
@@ -174,7 +174,7 @@ where
                         StateTransition {
                             new_state: State::Idle,
                             output: Some(Response {
-                                channel_id: channel_id,
+                                channel_id,
                                 message: result,
                             }),
                         }
@@ -262,10 +262,10 @@ where
                 StateTransition {
                     new_state: State::Receive(ReceiveState {
                         buffer: data.to_vec(),
-                        channel_id: channel_id,
-                        command: command,
+                        channel_id,
+                        command,
                         next_sequence_number: 0,
-                        payload_len: payload_len,
+                        payload_len,
                         // packet_timeout: Timeout::new(packet_timeout_duration(),)?,
                         // transaction_timeout: Timeout::new(
                         //     transaction_timeout_duration(),
@@ -287,7 +287,7 @@ where
                     StateTransition {
                         new_state: State::Idle,
                         output: Some(Response {
-                            channel_id: channel_id,
+                            channel_id,
                             message: ResponseMessage::Error {
                                 code: ErrorCode::InvalidMessageSequencing,
                             },
@@ -298,7 +298,7 @@ where
                     StateTransition {
                         new_state: State::Receive(receive),
                         output: Some(Response {
-                            channel_id: channel_id,
+                            channel_id,
                             message: ResponseMessage::Error {
                                 code: ErrorCode::ChannelBusy,
                             },
@@ -318,7 +318,7 @@ where
                     StateTransition {
                         new_state: State::Receive(receive),
                         output: Some(Response {
-                            channel_id: channel_id,
+                            channel_id,
                             message: ResponseMessage::Error {
                                 code: ErrorCode::ChannelBusy,
                             },
@@ -328,7 +328,7 @@ where
                     StateTransition {
                         new_state: State::Idle,
                         output: Some(Response {
-                            channel_id: channel_id,
+                            channel_id,
                             message: ResponseMessage::Error {
                                 code: ErrorCode::InvalidMessageSequencing,
                             },
@@ -394,7 +394,7 @@ where
                         Ok(message) => {
                             let response_future = self.handle_request(Request {
                                 channel_id: receive.channel_id,
-                                message: message,
+                                message,
                             });
                             let dispatch_state = DispatchState {
                                 channel_id: receive.channel_id,
@@ -459,7 +459,7 @@ where
 
     fn error_output(error_code: ErrorCode, channel_id: ChannelId) -> Response {
         Response {
-            channel_id: channel_id,
+            channel_id,
             message: ResponseMessage::Error { code: error_code },
         }
     }
@@ -493,7 +493,7 @@ where
                             ..
                         } => Ok(ResponseMessage::Init {
                             nonce,
-                            new_channel_id: new_channel_id,
+                            new_channel_id,
                             u2fhid_protocol_version: U2FHID_PROTOCOL_VERSION,
                             major_device_version_number: device_version_major,
                             minor_device_version_number: device_version_minor,
@@ -506,7 +506,7 @@ where
             }
             RequestMessage::Ping { data } => {
                 debug!(len = data.len(), "RequestMessage::Ping");
-                Box::pin(future::ok(ResponseMessage::Pong { data: data }))
+                Box::pin(future::ok(ResponseMessage::Pong { data }))
             }
             RequestMessage::Wink => self.dispatch(u2f_core::Request::Wink),
             RequestMessage::Lock { lock_time } => {
@@ -627,7 +627,7 @@ mod tests {
 
     //     let res = state_machine
     //         .accept_packet(Packet::Initialization {
-    //             channel_id: channel_id,
+    //             channel_id,
     //             command: Command::Ping,
     //             data: packet_data,
     //             payload_len: packet_data_len,

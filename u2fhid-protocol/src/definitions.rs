@@ -7,7 +7,6 @@ use thiserror::Error;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use serde_derive::{Deserialize, Serialize};
-use u2f_core;
 
 pub const U2FHID_PROTOCOL_VERSION: u8 = 2;
 
@@ -47,7 +46,7 @@ pub struct ChannelId(pub u32);
 
 impl ChannelId {
     pub fn checked_add(self, number: u32) -> Option<ChannelId> {
-        self.0.checked_add(number).map(|id| ChannelId(id))
+        self.0.checked_add(number).map(ChannelId)
     }
 
     pub fn write<W: WriteBytesExt>(&self, write: &mut W) {
@@ -124,9 +123,9 @@ pub enum Packet {
 
 impl Packet {
     pub fn channel_id(&self) -> ChannelId {
-        match self {
-            &Packet::Initialization { channel_id, .. } => channel_id,
-            &Packet::Continuation { channel_id, .. } => channel_id,
+        match *self {
+            Packet::Initialization { channel_id, .. } => channel_id,
+            Packet::Continuation { channel_id, .. } => channel_id,
         }
     }
 
@@ -203,10 +202,7 @@ impl Packet {
                 bytes.write_u16::<BigEndian>(*payload_len).unwrap();
 
                 // 7      (s-7)  DATA     Payload data (s is equal to the fixed packet size)
-                bytes.extend_from_slice(&data);
-                for _ in data.len()..INITIAL_PACKET_DATA_LEN {
-                    bytes.push(0u8);
-                }
+                bytes.extend_from_slice(data);
             }
             Packet::Continuation {
                 channel_id,
@@ -222,13 +218,13 @@ impl Packet {
                 bytes.push(*sequence_number);
 
                 // 5      (s-5)  DATA     Payload data (s is equal to the fixed packet size)
-                bytes.extend_from_slice(&data);
-                for _ in data.len()..CONTINUATION_PACKET_DATA_LEN {
-                    bytes.push(0u8);
-                }
+                bytes.extend_from_slice(data);
             }
         }
-        assert_eq!(bytes.len(), HID_REPORT_LEN);
+
+        // Zero-fill remainder of packet
+        bytes.resize(HID_REPORT_LEN, 0u8);
+
         bytes
     }
 }
@@ -254,14 +250,14 @@ impl RequestMessage {
         command: &Command,
         data: &[u8],
     ) -> Result<RequestMessage, RequestMessageDecodeError> {
-        match command {
-            &Command::Msg => Ok(RequestMessage::EncapsulatedRequest {
+        match *command {
+            Command::Msg => Ok(RequestMessage::EncapsulatedRequest {
                 data: data.to_vec(),
             }),
-            &Command::Ping => Ok(RequestMessage::Ping {
+            Command::Ping => Ok(RequestMessage::Ping {
                 data: data.to_vec(),
             }),
-            &Command::Init => {
+            Command::Init => {
                 if data.len() != COMMAND_INIT_DATA_LEN {
                     Err(RequestMessageDecodeError::PayloadLength {
                         expected_len: COMMAND_INIT_DATA_LEN,
@@ -269,12 +265,12 @@ impl RequestMessage {
                     })
                 } else {
                     let mut nonce = [0u8; COMMAND_INIT_DATA_LEN];
-                    nonce.copy_from_slice(&data[..]);
+                    nonce.copy_from_slice(data);
                     Ok(RequestMessage::Init { nonce })
                 }
             }
-            &Command::Wink => Ok(RequestMessage::Wink),
-            &Command::Lock => {
+            Command::Wink => Ok(RequestMessage::Wink),
+            Command::Lock => {
                 if data.len() != COMMAND_WINK_DATA_LEN {
                     Err(RequestMessageDecodeError::PayloadLength {
                         expected_len: COMMAND_WINK_DATA_LEN,
@@ -286,11 +282,11 @@ impl RequestMessage {
                     })
                 }
             }
-            &Command::Sync => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
-            &Command::Error => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
-            &Command::Vendor { .. } => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
+            Command::Sync => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
+            Command::Error => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
+            Command::Vendor { .. } => Err(RequestMessageDecodeError::UnsupportedCommand(*command)),
 
-            &Command::Unknown { .. } => {
+            Command::Unknown { .. } => {
                 // The Fido v2.0 specification is backwards compatible with U2F
                 // authenticators if they responded to unknown messages with
                 // the error message InvalidCommand (0x01).
@@ -324,7 +320,7 @@ impl Response {
         let channel_id = self.channel_id;
         match &self.message {
             ResponseMessage::EncapsulatedResponse { data } => {
-                encode_response(channel_id, Command::Msg, &data)
+                encode_response(channel_id, Command::Msg, data)
             }
             ResponseMessage::Init {
                 nonce,
@@ -346,7 +342,7 @@ impl Response {
                 assert_eq!(data.len(), 17);
                 encode_response(channel_id, Command::Init, &data)
             }
-            ResponseMessage::Pong { data } => encode_response(channel_id, Command::Ping, &data),
+            ResponseMessage::Pong { data } => encode_response(channel_id, Command::Ping, data),
             ResponseMessage::Error { code } => {
                 let data = vec![code.to_byte()];
                 encode_response(channel_id, Command::Error, &data)

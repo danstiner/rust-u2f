@@ -10,7 +10,7 @@ pub struct PublicKey(EcKey<Public>);
 impl PublicKey {
     pub(crate) fn from_key(key: &PrivateKey) -> PublicKey {
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
-        PublicKey(EcKey::from_public_key(&group, &key.0.public_key()).unwrap())
+        PublicKey(EcKey::from_public_key(&group, key.0.public_key()).unwrap())
     }
 
     /// Raw ANSI X9.62 formatted Elliptic Curve public key [SEC1].

@@ -160,7 +160,7 @@ impl InputEvent {
                 country,
                 data,
             } => {
-                event.type_ = sys::uhid_event_type_UHID_CREATE2 as u32;
+                event.type_ = sys::uhid_event_type_UHID_CREATE2;
                 unsafe {
                     let payload = &mut event.u.create2;
                     copy_as_cstr(name, &mut payload.name)?;
@@ -175,17 +175,17 @@ impl InputEvent {
                 }
             }
             InputEvent::Destroy => {
-                event.type_ = sys::uhid_event_type_UHID_DESTROY as u32;
+                event.type_ = sys::uhid_event_type_UHID_DESTROY;
             }
             InputEvent::Input { data } => {
-                event.type_ = sys::uhid_event_type_UHID_INPUT2 as u32;
+                event.type_ = sys::uhid_event_type_UHID_INPUT2;
                 unsafe {
                     let payload = &mut event.u.input2;
                     payload.size = copy_bytes_sized(data, &mut payload.data)? as u16;
                 }
             }
             InputEvent::GetReportReply { err, data, .. } => {
-                event.type_ = sys::uhid_event_type_UHID_GET_REPORT_REPLY as u32;
+                event.type_ = sys::uhid_event_type_UHID_GET_REPORT_REPLY;
                 unsafe {
                     let payload = &mut event.u.get_report_reply;
                     payload.err = err;
@@ -193,7 +193,7 @@ impl InputEvent {
                 }
             }
             InputEvent::SetReportReply { err, .. } => {
-                event.type_ = sys::uhid_event_type_UHID_SET_REPORT_REPLY as u32;
+                event.type_ = sys::uhid_event_type_UHID_SET_REPORT_REPLY;
                 unsafe {
                     let payload = &mut event.u.set_report_reply;
                     payload.err = err;
@@ -293,7 +293,7 @@ fn decode_event(event: sys::uhid_event) -> Result<OutputEvent, StreamError> {
 }
 
 fn to_uhid_event_type(value: u32) -> Option<sys::uhid_event_type> {
-    let last_valid_value = sys::uhid_event_type_UHID_SET_REPORT_REPLY as u32;
+    let last_valid_value = sys::uhid_event_type_UHID_SET_REPORT_REPLY;
     if value <= last_valid_value {
         Some(value)
     } else {
