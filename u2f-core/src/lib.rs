@@ -170,8 +170,8 @@ pub struct Authentication {
 
 #[derive(Debug, Error)]
 pub enum AuthenticateError {
-    #[error("Approval required")]
-    ApprovalRequired,
+    #[error("Approval denied")]
+    ApprovalDenied,
 
     #[error("Invalid key handle")]
     InvalidKeyHandle,
@@ -185,8 +185,8 @@ pub enum AuthenticateError {
 
 #[derive(Debug, Error)]
 pub enum RegisterError {
-    #[error("Approval required")]
-    ApprovalRequired,
+    #[error("Approval denied")]
+    ApprovalDenied,
 
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
@@ -318,9 +318,9 @@ where
                         })
                     }
                     Err(err) => match err {
-                        AuthenticateError::ApprovalRequired => {
-                            info!("TestOfUserPresenceNotSatisfied");
-                            Ok(Response::TestOfUserPresenceNotSatisfied)
+                        AuthenticateError::ApprovalDenied => {
+                            info!("Authentication was not approved by user");
+                            Ok(Response::ApprovalDenied)
                         }
                         AuthenticateError::InvalidKeyHandle => {
                             info!("InvalidKeyHandle");
@@ -378,9 +378,9 @@ where
                 })
             }
             Err(err) => match err {
-                RegisterError::ApprovalRequired => {
+                RegisterError::ApprovalDenied => {
                     info!("Registration was not approved by user");
-                    Ok(Response::TestOfUserPresenceNotSatisfied)
+                    Ok(Response::ApprovalDenied)
                 }
                 RegisterError::Io(err) => Err(err),
                 RegisterError::Signing(_) => {
@@ -423,14 +423,15 @@ where
             .retrieve_application_key(&application, &key_handle)?
             .ok_or(AuthenticateError::InvalidKeyHandle)?;
 
-        let user_present = self
+        if !self
             .presence
             .approve_authentication(&application_key.application)
-            .await?;
-
-        if !user_present {
-            return Err(AuthenticateError::ApprovalRequired);
+            .await?
+        {
+            return Err(AuthenticateError::ApprovalDenied);
         }
+
+        let user_present = true;
 
         let counter = self
             .secrets
@@ -462,10 +463,8 @@ where
     ) -> Result<Registration, RegisterError> {
         debug!("register");
 
-        let user_present = self.presence.approve_registration(&application).await?;
-
-        if !user_present {
-            return Err(RegisterError::ApprovalRequired);
+        if !self.presence.approve_registration(&application).await? {
+            return Err(RegisterError::ApprovalDenied);
         }
 
         let application_key = match self.crypto.generate_application_key(&application) {
@@ -779,7 +778,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
         assert_matches!(
             u2f.authenticate(application, challenge, registration.key_handle)
                 .await,
-            Err(AuthenticateError::ApprovalRequired)
+            Err(AuthenticateError::ApprovalDenied)
         );
     }
 
@@ -798,7 +797,7 @@ AwEHoUQDQgAEryDZdIOGjRKLLyG6Mkc4oSVUDBndagZDDbdwLcUdNLzFlHx/yqYl
 
         assert_matches!(
             u2f.register(application, challenge).await,
-            Err(RegisterError::ApprovalRequired)
+            Err(RegisterError::ApprovalDenied)
         );
     }
 

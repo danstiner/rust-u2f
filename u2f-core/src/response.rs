@@ -31,6 +31,7 @@ pub enum Response {
     },
     DidWink,
     TestOfUserPresenceNotSatisfied,
+    ApprovalDenied,
     InvalidKeyHandle,
     UnknownError,
     Bogus,
@@ -105,7 +106,14 @@ impl Response {
             }
             Response::TestOfUserPresenceNotSatisfied => {
                 // Status word [2 bytes]
-                StatusCode::TestOfUserPresenceNotSatisfied.write(&mut bytes);
+                StatusCode::TestOfUserPresenceNotSatisfied.write(&mut bytes)
+            }
+            Response::ApprovalDenied => {
+                // Hardware U2F keys do not have an explicit denial response, instead simulate
+                // a denial by pretending the requested key handle does not exist.
+
+                // Status word [2 bytes]
+                StatusCode::InvalidKeyHandle.write(&mut bytes);
             }
             Response::InvalidKeyHandle => {
                 // Status word [2 bytes]
