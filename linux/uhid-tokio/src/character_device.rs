@@ -79,7 +79,7 @@ impl futures::AsyncRead for CharacterDevice {
                         let mut read = vec![0u8; buf.len()];
                         *this.state = State::Reading(task::spawn_blocking(move || {
                             let read_size = (&*file).read(&mut read)?;
-                            // read.truncate(read_size);
+                            read.truncate(read_size);
                             Ok(read)
                         }));
                     }

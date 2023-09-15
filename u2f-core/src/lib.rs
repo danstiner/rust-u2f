@@ -636,7 +636,7 @@ mod tests {
         fn get_and_increment_counter(
             &self,
             application: &AppId,
-            handle: &KeyHandle,
+            _handle: &KeyHandle,
         ) -> Result<Counter, io::Error> {
             let mut borrow = self.0.lock().unwrap();
             if let Some(counter) = borrow.counters.get_mut(application) {
