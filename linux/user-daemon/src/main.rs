@@ -31,7 +31,7 @@ use clap::{Arg, Command};
 use futures::{ready, Sink, SinkExt, Stream, StreamExt};
 use pin_project::pin_project;
 use thiserror::Error;
-use tokio::net::{unix::UCred, UnixStream};
+use tokio::net::UnixStream;
 use tokio_serde::formats::Bincode;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{debug, error, info, warn};
@@ -127,8 +127,6 @@ async fn run(socket_path: &Path) -> Result<(), Error> {
             socket_path: socket_path.to_owned(),
         })?;
 
-    require_root(stream.peer_cred()?)?;
-
     let length_delimited = Framed::new(stream, LengthDelimitedCodec::new());
     let mut system_socket: SocketTransport =
         tokio_serde::Framed::new(length_delimited, Bincode::default());
@@ -137,18 +135,6 @@ async fn run(socket_path: &Path) -> Result<(), Error> {
     debug!("UHID device created with id: {}", uhid_device.id);
 
     U2fHidServer::new(Pipe::new(system_socket, SocketToHid), u2f_service).await
-}
-
-fn require_root(peer: UCred) -> Result<(), Error> {
-    if peer.uid() != 0 {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "Expected socket peer to be running as root user",
-        )
-        .into())
-    } else {
-        Ok(())
-    }
 }
 
 type SocketTransport = tokio_serde::Framed<
