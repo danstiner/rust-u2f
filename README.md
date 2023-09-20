@@ -22,7 +22,8 @@ After installing, test your new virtual U2F device on a site supporting it such 
 
 ### Arch
 
-Install the AUR package maintained by [@grawity](https://github.com/grawity): https://aur.archlinux.org/packages/softu2f/
+Install the AUR package maintained by [@grawity](https://github.com/grawity) that tracks releases: https://aur.archlinux.org/packages/softu2f/,
+or the AUR package maintained by [@1ace](https://github.com/1ace) that tracks the latest git version: https://aur.archlinux.org/packages/softu2f-git/
 
 Then enable and start the installed services:
 ```bash
