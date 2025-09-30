@@ -49,7 +49,16 @@ impl NotificationUserPresence {
             .timeout(*TIMEOUT);
 
         let mut apply_workaround = false;
-        let server_info = notify_rust::get_server_information().unwrap();
+        let server_info = match notify_rust::get_server_information() {
+            Ok(info) => info,
+            Err(e) => {
+                debug!("Failed to get server information: {}", e);
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to get server information: {}", e),
+                ));
+            }
+        };
         if let Some(version) = WORKAROUND_SERVERS.get(server_info.name.as_str()) {
             if version == &server_info.version {
                 debug!(
@@ -69,7 +78,16 @@ impl NotificationUserPresence {
             notification.action("deny", "Deny");
         }
 
-        let notify_handle = notification.show().unwrap();
+        let notify_handle = match notification.show() {
+            Ok(handle) => handle,
+            Err(e) => {
+                debug!("Failed to show notification: {}", e);
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to show notification: {}", e),
+                ));
+            }
+        };
 
         let mut action = String::new();
         notify_handle.wait_for_action(|a| action = a.to_owned());
@@ -91,13 +109,13 @@ impl NotificationUserPresence {
 #[async_trait]
 impl UserPresence for NotificationUserPresence {
     async fn approve_registration(&self, application: &AppId) -> Result<bool, io::Error> {
-        let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
+        let site_name = try_reverse_app_id(application).unwrap_or_else(|| String::from("site"));
         let message = format!("Register {}", site_name);
         self.test_user_presence(message).await
     }
 
     async fn approve_authentication(&self, application: &AppId) -> Result<bool, io::Error> {
-        let site_name = try_reverse_app_id(application).unwrap_or(String::from("site"));
+        let site_name = try_reverse_app_id(application).unwrap_or_else(|| String::from("site"));
         let message = format!("Authenticate {}", site_name);
         self.test_user_presence(message).await
     }

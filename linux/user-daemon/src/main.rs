@@ -94,12 +94,24 @@ async fn main() {
         .after_help("By default expects to be run via systemd as root and passed a socket file-descriptor to listen on.")
         .get_matches();
 
-    let socket_path = Path::new(args.get_one::<String>(SOCKET_PATH_ARG).expect("default"));
+    let socket_path = match args.get_one::<String>(SOCKET_PATH_ARG) {
+        Some(path) => Path::new(path),
+        None => {
+            error!("No socket path provided in arguments");
+            return;
+        }
+    };
 
     if libsystemd::logging::connected_to_journal() {
-        tracing_subscriber::registry()
-            .with(tracing_journald::layer().expect("Unable to connect to journald socket"))
-            .init();
+        match tracing_journald::layer() {
+            Ok(layer) => {
+                tracing_subscriber::registry().with(layer).init();
+            }
+            Err(e) => {
+                error!("Unable to connect to journald socket: {}", e);
+                tracing_subscriber::fmt::init();
+            }
+        }
     } else {
         tracing_subscriber::fmt::init();
     }
